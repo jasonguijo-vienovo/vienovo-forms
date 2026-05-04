@@ -95,9 +95,11 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   function collectValues() {
     var values = {};
     var labels = {};
-    var controls = document.querySelectorAll("input[name], select[name], textarea[name]");
+    var controls = document.querySelectorAll(
+      "input[name], input[id], select[name], select[id], textarea[name], textarea[id]"
+    );
     Array.prototype.forEach.call(controls, function (control) {
-      var name = control.name;
+      var name = control.name || control.id;
       if (!name || ["submit", "button", "reset", "image"].indexOf((control.type || "").toLowerCase()) >= 0) {
         return;
       }
