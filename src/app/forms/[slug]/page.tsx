@@ -84,8 +84,13 @@ export default async function ImportedFormPage({
                 <p>
                   Discovered sheet tabs: <code>{runtime.sheetNames.join(", ") || "none"}</code>
                 </p>
+                <p className="font-medium text-gray-700">Explicit bindings</p>
                 <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
 {JSON.stringify(runtime.spreadsheetBindings, null, 2) || "{}"}
+                </pre>
+                <p className="font-medium text-gray-700">Auto-detected bindings</p>
+                <pre className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
+{JSON.stringify(runtime.autoDetectedBindings, null, 2) || "{}"}
                 </pre>
               </div>
             )}

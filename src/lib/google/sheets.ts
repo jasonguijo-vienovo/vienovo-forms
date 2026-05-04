@@ -113,13 +113,22 @@ export async function listSpreadsheetSheets(spreadsheetId: string): Promise<stri
     .filter(Boolean);
 }
 
-export async function readSpreadsheetRange(spreadsheetId: string, range: string): Promise<string[]> {
+export async function readSpreadsheetMatrix(
+  spreadsheetId: string,
+  range: string
+): Promise<string[][]> {
   const res = await authorizedSheetsFetch(
     `spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}`
   );
   const json = (await res.json()) as { values?: string[][] };
 
-  return (json.values ?? [])
+  return (json.values ?? []).map((row) => row.map((cell) => String(cell ?? "").trim()));
+}
+
+export async function readSpreadsheetRange(spreadsheetId: string, range: string): Promise<string[]> {
+  const values = await readSpreadsheetMatrix(spreadsheetId, range);
+
+  return values
     .map((row) => String(row?.[0] ?? "").trim())
     .filter(Boolean);
 }
