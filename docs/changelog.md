@@ -20,6 +20,8 @@
 - Added generic imported-form routes at `/forms/[slug]`.
 - Imported forms can now render a usable runtime for end users instead of staying as admin-only metadata.
 - Imported forms now preserve the original imported HTML/CSS layout more closely while still submitting through the app.
+- Switched imported form rendering to a sandboxed original-HTML frame so legacy Apps Script layout and client-side dropdown behavior can run closer to the deployed original.
+- Added a submit bridge from the legacy HTML frame back into the app request database.
 - Imported form submissions now save into the app request system and open on the normal request detail page.
 - Added request detail support for imported-form field display.
 - Added imported-form reference numbering and request model support.

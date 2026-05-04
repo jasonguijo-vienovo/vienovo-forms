@@ -30,6 +30,45 @@ function collectFieldValue(field: ImportedFieldDefinition, formData: FormData) {
   return String(formData.get(field.name) ?? "").trim();
 }
 
+function humanize(input: string) {
+  return input
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function normalizePayloadValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? "").trim()).filter(Boolean);
+  }
+  if (value == null) return "";
+  return String(value).trim();
+}
+
+function parseFramePayload(formData: FormData) {
+  const raw = String(formData.get("__payload") ?? "").trim();
+  if (!raw) return null;
+
+  const parsed = JSON.parse(raw) as {
+    values?: Record<string, unknown>;
+    labels?: Record<string, unknown>;
+  };
+  const values = Object.fromEntries(
+    Object.entries(parsed.values ?? {})
+      .map(([key, value]) => [key.trim(), normalizePayloadValue(value)])
+      .filter(([key]) => key)
+  );
+  const labels = Object.fromEntries(
+    Object.entries(parsed.labels ?? {})
+      .map(([key, value]) => [key.trim(), String(value ?? "").replace(/\s+/g, " ").trim()])
+      .filter(([key, value]) => key && value)
+  );
+
+  return { values, labels };
+}
+
 function isFieldMissing(field: ImportedFieldDefinition, value: unknown) {
   if (!field.required) return false;
   if (Array.isArray(value)) return value.length === 0;
@@ -128,12 +167,23 @@ export async function submitImportedForm(slug: string, formData: FormData) {
   const values: Record<string, unknown> = {};
   const labels: Record<string, string> = {};
   const missing: string[] = [];
+  const framePayload = parseFramePayload(formData);
 
   for (const field of runtime.fields) {
-    const value = collectFieldValue(field, formData);
+    const value = framePayload
+      ? normalizePayloadValue(framePayload.values[field.name])
+      : collectFieldValue(field, formData);
     values[field.name] = value;
-    labels[field.name] = field.label;
+    labels[field.name] = framePayload?.labels[field.name] || field.label;
     if (isFieldMissing(field, value)) missing.push(field.label);
+  }
+
+  if (framePayload) {
+    for (const [name, value] of Object.entries(framePayload.values)) {
+      if (name in values) continue;
+      values[name] = value;
+      labels[name] = framePayload.labels[name] || humanize(name);
+    }
   }
 
   if (missing.length > 0) {

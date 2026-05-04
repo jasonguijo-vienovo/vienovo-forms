@@ -7,6 +7,7 @@ import { hydrateImportedFormRuntime } from "@/lib/imported-forms";
 import { safeAuth } from "@/lib/safe-auth";
 import { FormImport } from "@/models/FormImport";
 import { submitImportedForm } from "./actions";
+import { ImportedFormFrame } from "./imported-form-frame";
 
 export default async function ImportedFormPage({
   params,
@@ -91,21 +92,11 @@ export default async function ImportedFormPage({
                 No supported fields were found in the imported HTML yet.
               </div>
             ) : (
-              <form action={submitAction} className="space-y-4">
-                <div
-                  className="imported-form-original"
-                  dangerouslySetInnerHTML={{ __html: runtime.hydratedHtml }}
-                />
-
-                <div className="pt-4 flex justify-end">
-                  <button
-                    type="submit"
-                    className="bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold px-8 py-2.5 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition"
-                  >
-                    Submit Request
-                  </button>
-                </div>
-              </form>
+              <ImportedFormFrame
+                htmlSource={imported.htmlSource ?? ""}
+                fields={runtime.fields}
+                submitAction={submitAction}
+              />
             )}
           </div>
         </div>
