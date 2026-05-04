@@ -19,6 +19,7 @@
 ### Imported form runtime
 - Added generic imported-form routes at `/forms/[slug]`.
 - Imported forms can now render a usable runtime for end users instead of staying as admin-only metadata.
+- Imported forms now preserve the original imported HTML/CSS layout more closely while still submitting through the app.
 - Imported form submissions now save into the app request system and open on the normal request detail page.
 - Added request detail support for imported-form field display.
 - Added imported-form reference numbering and request model support.
@@ -28,6 +29,8 @@
 - Imported forms can now load dropdown options from Sheets.
 - Added explicit `spreadsheetBindings` JSON support for forced field-to-range mappings.
 - Added automatic spreadsheet scanning by sheet tabs and header rows.
+- Improved spreadsheet scanning to look across the first rows for headers instead of assuming only row 1.
+- Added a clearer Vercel credential warning when the local service-account key file is missing.
 - Added admin-side spreadsheet scan preview so imports show detected tabs, field mappings, and warnings.
 - Added optional write-back of imported submissions into Google Sheets response tabs.
 - Added response export configuration on the importer page, including a target response tab name.

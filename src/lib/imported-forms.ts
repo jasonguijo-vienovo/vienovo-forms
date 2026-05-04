@@ -35,6 +35,7 @@ export type ImportedFormRuntime = {
   sheetNames: string[];
   spreadsheetBindings: Record<string, string>;
   autoDetectedBindings: Record<string, string>;
+  hydratedHtml: string;
 };
 
 function decodeHtml(value: string) {
@@ -75,6 +76,51 @@ function parseAttributes(source: string) {
     attrs[key] = decodeHtml(value);
   }
   return attrs;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function extractBodyHtml(htmlSource: string) {
+  const headStyles = [...htmlSource.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/gi)]
+    .map((match) => match[0])
+    .join("\n");
+  const body = htmlSource.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1];
+  return `${headStyles}\n${body ?? htmlSource}`;
+}
+
+function hydrateOriginalHtml(htmlSource: string, fields: ImportedFieldDefinition[]) {
+  const fieldsByName = new Map(fields.map((field) => [field.name, field]));
+  const bodyHtml = extractBodyHtml(htmlSource)
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*[^\s>]+/gi, "")
+    .replace(/\s+(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, "")
+    .replace(/<form\b[^>]*>/gi, "")
+    .replace(/<\/form>/gi, "");
+
+  return bodyHtml.replace(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi, (full, attrsSource) => {
+    const attrs = parseAttributes(attrsSource ?? "");
+    const name = attrs.name || attrs.id;
+    const field = name ? fieldsByName.get(name) : null;
+    if (!field?.options?.length) return full;
+
+    const requiredOption = field.required ? "" : `<option value="">-- Select --</option>`;
+    const options = field.options
+      .map(
+        (option) =>
+          `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`
+      )
+      .join("");
+    return `<select${attrsSource}>${requiredOption}${options}</select>`;
+  });
 }
 
 export function parseSpreadsheetBindings(raw: unknown): Record<string, string> {
@@ -127,7 +173,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
       if (!name) continue;
       fields.push({
         name,
-        label: labelsByFor.get(attrs.id || name) || humanize(name),
+        label: labelsByFor.get(attrs.id || name) || attrs["aria-label"] || attrs["data-label"] || humanize(name),
         type: "textarea",
         required: attrs.required === "true",
         placeholder: attrs.placeholder || "",
@@ -149,7 +195,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
       }
       fields.push({
         name,
-        label: labelsByFor.get(attrs.id || name) || humanize(name),
+        label: labelsByFor.get(attrs.id || name) || attrs["aria-label"] || attrs["data-label"] || humanize(name),
         type: "select",
         required: attrs.required === "true",
         options,
@@ -174,7 +220,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
           radioGroups.get(name) ||
           {
             name,
-            label: labelsByFor.get(name) || humanize(name),
+            label: labelsByFor.get(name) || attrs["aria-label"] || attrs["data-label"] || humanize(name),
             type: "radio" as const,
             required: attrs.required === "true",
             options: [],
@@ -193,7 +239,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
           checkboxGroups.get(name) ||
           {
             name,
-            label: labelsByFor.get(name) || humanize(name),
+            label: labelsByFor.get(name) || attrs["aria-label"] || attrs["data-label"] || humanize(name),
             type: "checkbox-group" as const,
             required: attrs.required === "true",
             options: [],
@@ -213,7 +259,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
 
       fields.push({
         name,
-        label: labelsByFor.get(attrs.id || name) || humanize(name),
+        label: labelsByFor.get(attrs.id || name) || attrs["aria-label"] || attrs["data-label"] || humanize(name),
         type: safeType,
         required: attrs.required === "true",
         placeholder: attrs.placeholder || "",
@@ -230,6 +276,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
     sheetNames: [],
     spreadsheetBindings: {},
     autoDetectedBindings: {},
+    hydratedHtml: "",
   };
 }
 
@@ -248,6 +295,35 @@ function columnLetter(index: number) {
   return out;
 }
 
+function headerMatches(header: string, candidates: string[]) {
+  const normalizedHeader = normalizeKey(header);
+  if (!normalizedHeader) return false;
+  return candidates.some(
+    (candidate) =>
+      candidate === normalizedHeader ||
+      candidate.includes(normalizedHeader) ||
+      normalizedHeader.includes(candidate)
+  );
+}
+
+function findOptionsRangeFromPreview(
+  sheetPreviews: Map<string, string[][]>,
+  candidates: string[]
+) {
+  for (const [sheetName, rows] of sheetPreviews.entries()) {
+    const maxHeaderRows = Math.min(rows.length, 10);
+    for (let rowIndex = 0; rowIndex < maxHeaderRows; rowIndex += 1) {
+      const headerRow = rows[rowIndex] ?? [];
+      const columnIndex = headerRow.findIndex((header) => headerMatches(header, candidates));
+      if (columnIndex >= 0) {
+        const column = columnLetter(columnIndex);
+        return `${sheetName}!${column}${rowIndex + 2}:${column}`;
+      }
+    }
+  }
+  return "";
+}
+
 export async function hydrateImportedFormRuntime(opts: {
   htmlSource: string;
   spreadsheetId?: string;
@@ -257,6 +333,7 @@ export async function hydrateImportedFormRuntime(opts: {
   const spreadsheetId = String(opts.spreadsheetId ?? "").trim();
   const bindings = parseSpreadsheetBindings(opts.spreadsheetBindings);
   runtime.spreadsheetBindings = bindings;
+  runtime.hydratedHtml = hydrateOriginalHtml(opts.htmlSource, runtime.fields);
 
   if (!spreadsheetId) {
     return runtime;
@@ -297,19 +374,8 @@ export async function hydrateImportedFormRuntime(opts: {
       if (explicitRange) {
         values = await getOptions(toRange(explicitRange));
       } else {
-        const candidates = [field.name, field.label].map(normalizeKey);
-        let matchedRange = "";
-
-        for (const [sheetName, rows] of sheetPreviews.entries()) {
-          const headerRow = rows[0] ?? [];
-          const matchedHeaderIndex = headerRow.findIndex((header) =>
-            candidates.includes(normalizeKey(header))
-          );
-          if (matchedHeaderIndex >= 0) {
-            matchedRange = `${sheetName}!${columnLetter(matchedHeaderIndex)}2:${columnLetter(matchedHeaderIndex)}`;
-            break;
-          }
-        }
+        const candidates = [field.name, field.label].map(normalizeKey).filter(Boolean);
+        let matchedRange = findOptionsRangeFromPreview(sheetPreviews, candidates);
 
         if (!matchedRange) {
           const matchedSheet = sheetNames.find((sheet) => candidates.includes(normalizeKey(sheet)));
@@ -321,21 +387,6 @@ export async function hydrateImportedFormRuntime(opts: {
         if (matchedRange) {
           autoDetectedBindings[field.name] = matchedRange;
           values = await getOptions(matchedRange);
-        } else {
-          for (const [sheetName, rows] of sheetPreviews.entries()) {
-            const headerRow = rows[0] ?? [];
-            if (headerRow.length <= 1) continue;
-            const columnIndex = headerRow.findIndex((header) =>
-              normalizeKey(field.label).includes(normalizeKey(header)) ||
-              normalizeKey(header).includes(normalizeKey(field.label))
-            );
-            if (columnIndex >= 0) {
-              const range = `${sheetName}!${columnLetter(columnIndex)}2:${columnLetter(columnIndex)}`;
-              autoDetectedBindings[field.name] = range;
-              values = await getOptions(range);
-              break;
-            }
-          }
         }
       }
     } catch (error) {
@@ -355,5 +406,6 @@ export async function hydrateImportedFormRuntime(opts: {
     sheetNames,
     spreadsheetBindings: bindings,
     autoDetectedBindings,
+    hydratedHtml: hydrateOriginalHtml(opts.htmlSource, runtime.fields),
   };
 }
