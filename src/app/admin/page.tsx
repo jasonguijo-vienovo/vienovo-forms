@@ -34,30 +34,40 @@ export default async function AdminOverviewPage() {
   ).length;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Admin overview</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Start imports, publish forms, maintain dropdowns, and seed reference data.
-        </p>
+    <div className="admin-page">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="section-eyebrow">Admin control center</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">Overview</h1>
+          <p className="mt-1 text-sm text-surface-muted">
+            Import forms, publish request flows, maintain dropdowns, and seed reference data.
+          </p>
+        </div>
+        <Link href="/admin/form-imports" className="btn-primary w-full sm:w-auto">
+          <FileInput className="h-4 w-4" />
+          Import Form
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Live forms" value={liveFormCount} tone="ok" />
         <Stat label="Import drafts" value={importedDraftCount} />
         <Stat label="Dropdown values" value={lookupCount} />
         <Stat
-          label="Approver emails to review"
+          label="Approver review"
           value={approverNeedsReview}
           tone={approverNeedsReview > 0 ? "warn" : "ok"}
         />
       </div>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-        <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
-          Main workflow
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <section className="admin-panel overflow-hidden">
+        <div className="border-b border-surface-border px-5 py-4">
+          <h2 className="text-base font-semibold text-surface-text">Main workflow</h2>
+          <p className="mt-1 text-sm text-surface-muted">
+            The operational path follows import, review, sync, publish, then notification control.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
           <AdminCard
             href="/admin/form-imports"
             icon={<FileInput className="h-5 w-5" />}
@@ -97,22 +107,22 @@ export default async function AdminOverviewPage() {
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-        <div className="flex items-start gap-3">
-          <div className="rounded-lg bg-brand-50 p-2 text-brand-700">
-            <Send className="h-5 w-5" />
+      <section className="admin-panel p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+              <Send className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-surface-text">Seed initial data</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-surface-muted">
+                Loads departments, airports, airlines, baggage options, and the approver roster. It also
+                syncs imported-form dropdowns and detected approver or processor people. Safe to re-run;
+                existing entries are not overwritten.
+              </p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
-              Seed initial data
-            </h2>
-            <p className="text-sm text-gray-500 mb-4 leading-relaxed">
-              Loads departments, airports, airlines, baggage options, and the approver roster. It
-              also syncs imported-form dropdowns and any detected approver or processor people.
-              Safe to re-run; existing entries are not overwritten.
-            </p>
-            <SeedButton />
-          </div>
+          <SeedButton />
         </div>
       </section>
     </div>
@@ -131,17 +141,14 @@ function AdminCard({
   description: string;
 }) {
   return (
-    <Link
-      href={href}
-      className="group rounded-xl border border-brand-100 bg-brand-50/30 p-4 transition hover:border-brand-300 hover:bg-brand-50"
-    >
+    <Link href={href} className="group border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="rounded-lg bg-white p-2 text-brand-700 ring-1 ring-brand-100 transition group-hover:ring-brand-300">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100 transition group-hover:ring-brand-300">
           {icon}
         </div>
         <div>
-          <p className="font-semibold text-gray-800">{title}</p>
-          <p className="text-sm text-gray-500 mt-1 leading-relaxed">{description}</p>
+          <p className="font-semibold text-surface-text">{title}</p>
+          <p className="mt-1 text-sm leading-6 text-surface-muted">{description}</p>
         </div>
       </div>
     </Link>
@@ -159,14 +166,14 @@ function Stat({
 }) {
   const valueClass =
     tone === "warn" && value > 0
-      ? "text-amber-600"
+      ? "text-amber-700"
       : tone === "ok"
-        ? "text-green-700"
-        : "text-gray-800";
+        ? "text-brand-700"
+        : "text-surface-text";
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</p>
-      <p className={`text-3xl font-bold mt-1 ${valueClass}`}>{value}</p>
+    <div className="admin-panel p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-2 text-3xl font-semibold ${valueClass}`}>{value}</p>
     </div>
   );
 }

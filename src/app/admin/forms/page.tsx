@@ -26,11 +26,12 @@ export default async function AdminFormsPage() {
   const hasOnlyBuiltIns = importedCount === 0 && forms.every((form) => form.source === "native");
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Forms registry</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <p className="section-eyebrow">Form operations</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">Forms registry</h1>
+          <p className="mt-1 text-sm text-surface-muted">
             Control which forms are live for requesters, admin-only, hidden, or shown in the navbar.
           </p>
         </div>
@@ -47,7 +48,7 @@ export default async function AdminFormsPage() {
       </div>
 
       {hasOnlyBuiltIns ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold mb-1">Registry is running in safe mode</p>
           <p>
             Only the built-in forms are showing right now. If you expected imported forms here,
@@ -56,33 +57,33 @@ export default async function AdminFormsPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Live to users" value={liveCount} tone="ok" />
         <Stat label="Published" value={publishedCount} />
         <Stat label="Draft" value={draftCount} />
         <Stat label="Imported" value={importedCount} />
       </div>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3">
+      <section className="admin-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-surface-border px-5 py-4">
+          <h2 className="text-base font-semibold text-surface-text">
             All forms
           </h2>
           <span className="text-xs text-gray-400">{forms.length} entries</span>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 p-5">
           {forms.map((form) => {
             const liveForUsers = isLiveForRequesters(form);
             const implementedRoute = form.isImplemented && form.routePath;
             const sourceExists = form.source === "native" || importedSlugSet.has(form.slug);
 
             return (
-              <article key={form.slug} className="rounded-xl border border-brand-100 bg-white p-4">
+              <article key={form.slug} className="border border-surface-border bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-lg font-semibold text-gray-800">{form.name}</h3>
+                      <h3 className="text-lg font-semibold text-surface-text">{form.name}</h3>
                       <Badge tone={liveForUsers ? "ok" : "warn"}>
                         {liveForUsers ? "live" : "not live"}
                       </Badge>
@@ -90,10 +91,10 @@ export default async function AdminFormsPage() {
                       <Badge tone="neutral">{form.source}</Badge>
                       {form.visibility === "admin" ? <Badge tone="warn">admin only</Badge> : null}
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="mt-1 text-sm text-surface-muted">
                       Slug: <code>{form.slug}</code>
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="mt-1 text-xs text-surface-muted">
                       Route: <code>{form.routePath}</code>
                     </p>
                   </div>
@@ -195,7 +196,7 @@ export default async function AdminFormsPage() {
                         className="field-input"
                       />
                     </Field>
-                    <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                    <div className="border border-surface-border bg-slate-50 p-4">
                       <p className="text-sm font-semibold text-gray-800 mb-3">Display controls</p>
                       <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
                         <input
@@ -218,7 +219,7 @@ export default async function AdminFormsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
+                  <div className="border border-surface-border bg-slate-50 p-4 text-sm text-surface-muted">
                     <p className="font-semibold text-gray-800 mb-1">Requester visibility rule</p>
                     <p>
                       Users see this form only when it is published, visible to everyone, available,
@@ -236,7 +237,7 @@ export default async function AdminFormsPage() {
                         </span>
                       }
                       pendingLabel="Saving..."
-                      className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      className="btn-primary"
                     />
                   </div>
                 </form>
@@ -254,7 +255,7 @@ export default async function AdminFormsPage() {
                         </span>
                       }
                       pendingLabel="Hiding..."
-                      className="bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      className="border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
                     />
                   </form>
                   {form.source === "imported" ? (
@@ -270,7 +271,7 @@ export default async function AdminFormsPage() {
                           </span>
                         }
                         pendingLabel="Deleting..."
-                        className="bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                        className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                       />
                     </form>
                   ) : null}
@@ -302,7 +303,7 @@ function LinkButton({ href, children }: { href: string; children: React.ReactNod
   return (
     <Link
       href={href}
-      className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+      className="btn-secondary"
     >
       {children}
     </Link>
@@ -319,20 +320,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok" }) {
-  const valueClass = tone === "ok" ? "text-green-700" : "text-gray-800";
+  const valueClass = tone === "ok" ? "text-brand-700" : "text-surface-text";
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</p>
-      <p className={`text-3xl font-bold mt-1 ${valueClass}`}>{value}</p>
+    <div className="admin-panel p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-2 text-3xl font-semibold ${valueClass}`}>{value}</p>
     </div>
   );
 }
 
 function StatusMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-brand-100 bg-brand-50/40 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">{label}</p>
-      <p className="text-sm font-bold text-gray-800">{value}</p>
+    <div className="border border-surface-border bg-slate-50 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wider text-surface-muted font-semibold">{label}</p>
+      <p className="text-sm font-bold text-surface-text">{value}</p>
     </div>
   );
 }
