@@ -56,6 +56,37 @@ function bindingsFromFormData(formData: FormData) {
   }
 }
 
+async function ensureImportedRegistryEntry(imported: {
+  _id: unknown;
+  slug: string;
+  name: string;
+  notes?: string;
+}) {
+  await FormDefinition.updateOne(
+    { slug: imported.slug },
+    {
+      $set: {
+        slug: imported.slug,
+        name: imported.name,
+        routePath: `/forms/${imported.slug}`,
+        source: "imported",
+        importSourceId: imported._id,
+        notes: imported.notes || "",
+      },
+      $setOnInsert: {
+        description: "Imported legacy form draft. Review and implement before publishing.",
+        status: "draft",
+        visibility: "admin",
+        availability: "coming-soon",
+        isImplemented: true,
+        showInNavbar: false,
+        sortOrder: 1000,
+      },
+    },
+    { upsert: true }
+  );
+}
+
 export async function createFormImport(formData: FormData) {
   const { email, session } = await requireAdmin();
   await connectMongo();
@@ -90,27 +121,7 @@ export async function createFormImport(formData: FormData) {
     summary: summarize(htmlSource, appsScriptSource),
   });
 
-  await FormDefinition.updateOne(
-    { slug: created.slug },
-    {
-      $setOnInsert: {
-        slug: created.slug,
-        name: created.name,
-        description: "Imported legacy form draft. Review and implement before publishing.",
-        routePath: `/forms/${created.slug}`,
-        source: "imported",
-        status: "draft",
-        visibility: "admin",
-        availability: "coming-soon",
-        isImplemented: true,
-        showInNavbar: false,
-        sortOrder: 1000,
-        importSourceId: created._id,
-        notes: created.notes || "",
-      },
-    },
-    { upsert: true }
-  );
+  await ensureImportedRegistryEntry(created);
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
@@ -153,8 +164,10 @@ export async function publishFormImport(formData: FormData) {
   ).lean();
   if (!imported) return;
 
+  await ensureImportedRegistryEntry(imported);
+
   await FormDefinition.updateOne(
-    { importSourceId: id },
+    { slug: imported.slug },
     {
       $set: {
         name: imported.name,
@@ -173,6 +186,22 @@ export async function publishFormImport(formData: FormData) {
   revalidatePath("/admin/forms");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
+}
+
+export async function createMissingRegistryEntry(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+
+  const id = s(formData, "id");
+  if (!id) return;
+
+  const imported = await FormImport.findById(id).lean();
+  if (!imported) return;
+
+  await ensureImportedRegistryEntry(imported);
+
+  revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/forms");
 }
 
 export async function updateFormImportStatus(formData: FormData) {

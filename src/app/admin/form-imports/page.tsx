@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
 import {
+  createMissingRegistryEntry,
   createFormImport,
   publishFormImport,
   updateFormImportConfig,
@@ -214,6 +215,7 @@ export default async function FormImportsPage() {
           <div className="space-y-4">
             {imports.map((item) => {
               const runtime = runtimePreviewBySlug.get(item.slug);
+              const definition = definitionBySlug.get(item.slug);
               return (
                 <article key={String(item._id)} className="rounded-xl border border-brand-100 p-4 bg-white">
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -265,6 +267,17 @@ export default async function FormImportsPage() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
+                    {!definition ? (
+                      <form action={createMissingRegistryEntry}>
+                        <input type="hidden" name="id" value={String(item._id)} />
+                        <button
+                          type="submit"
+                          className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                        >
+                          Create registry entry
+                        </button>
+                      </form>
+                    ) : null}
                     <form action={publishFormImport}>
                       <input type="hidden" name="id" value={String(item._id)} />
                       <button
@@ -296,7 +309,7 @@ export default async function FormImportsPage() {
                     <TargetStructure slug={item.slug} compact />
                   </div>
 
-                  {definitionBySlug.get(item.slug) ? (
+                  {definition ? (
                     <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
                       <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-2">
                         Registry visibility
@@ -307,28 +320,36 @@ export default async function FormImportsPage() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
                         <Metric
                           label="Publish status"
-                          valueText={String(definitionBySlug.get(item.slug)?.status ?? "draft")}
+                          valueText={String(definition?.status ?? "draft")}
                         />
                         <Metric
                           label="Visibility"
-                          valueText={String(definitionBySlug.get(item.slug)?.visibility ?? "admin")}
+                          valueText={String(definition?.visibility ?? "admin")}
                         />
                         <Metric
                           label="Availability"
-                          valueText={String(
-                            definitionBySlug.get(item.slug)?.availability ?? "coming-soon"
-                          )}
+                          valueText={String(definition?.availability ?? "coming-soon")}
                         />
                         <Metric
                           label="Implemented"
-                          valueText={definitionBySlug.get(item.slug)?.isImplemented ? "Yes" : "No"}
+                          valueText={definition?.isImplemented ? "Yes" : "No"}
                         />
                       </div>
                       <p className="text-xs text-gray-500 mt-3">
                         Manage dashboard visibility and publishing in <code>/admin/forms</code>.
                       </p>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <p className="font-semibold mb-1">Registry entry missing</p>
+                      <p>
+                        This imported draft does not have a linked forms-registry record yet, so it
+                        will not appear in <code>/admin/forms</code>. Use{" "}
+                        <strong>Create registry entry</strong> or <strong>Publish for users</strong>{" "}
+                        above to repair it.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
                     <p className="text-xs font-bold tracking-[0.1em] uppercase text-gray-500 mb-3">
