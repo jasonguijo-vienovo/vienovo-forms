@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
+import { BUILTIN_FORMS } from "@/lib/form-definitions";
 import { parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 import { FormDefinition } from "@/models/FormDefinition";
@@ -56,6 +57,8 @@ function bindingsFromFormData(formData: FormData) {
   }
 }
 
+const RESERVED_NATIVE_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
+
 async function ensureImportedRegistryEntry(imported: {
   _id: unknown;
   slug: string;
@@ -93,6 +96,12 @@ export async function createFormImport(formData: FormData) {
 
   const name = s(formData, "name");
   if (!name) throw new Error("Form name is required.");
+  const requestedSlug = slugify(s(formData, "slug")) || slugify(name);
+  if (RESERVED_NATIVE_SLUGS.has(requestedSlug)) {
+    throw new Error(
+      `The slug "${requestedSlug}" is reserved by an existing built-in form. Use a different slug.`
+    );
+  }
 
   const htmlSource = await readTextInput(formData, "htmlFile", "htmlSource");
   const appsScriptSource = await readTextInput(formData, "gsFile", "appsScriptSource");
@@ -106,7 +115,7 @@ export async function createFormImport(formData: FormData) {
 
   const created = await FormImport.create({
     name,
-    slug: slugify(s(formData, "slug")) || slugify(name),
+    slug: requestedSlug,
     sourceType: "google-apps-script",
     spreadsheetId: s(formData, "spreadsheetId"),
     spreadsheetBindings: bindingsFromFormData(formData),

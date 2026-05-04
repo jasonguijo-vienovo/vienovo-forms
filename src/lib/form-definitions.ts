@@ -22,7 +22,7 @@ export type AppFormDefinition = {
   _id?: string;
 };
 
-const BUILTIN_FORMS: AppFormDefinition[] = [
+export const BUILTIN_FORMS: AppFormDefinition[] = [
   {
     slug: "travel-booking",
     name: "Travel Booking",
@@ -108,20 +108,19 @@ async function syncBuiltInForms() {
           $setOnInsert: {
             slug: form.slug,
             source: form.source,
-            status: form.status,
-            visibility: form.visibility,
-            availability: form.availability,
-            isImplemented: form.isImplemented,
-            showInNavbar: form.showInNavbar,
-            sortOrder: form.sortOrder,
-            routePath: form.routePath,
-            notes: form.notes,
           },
           $set: {
             name: form.name,
             description: form.description,
             routePath: form.routePath,
             source: form.source,
+            status: form.status,
+            visibility: form.visibility,
+            availability: form.availability,
+            isImplemented: form.isImplemented,
+            showInNavbar: form.showInNavbar,
+            sortOrder: form.sortOrder,
+            notes: form.notes,
           },
         },
         { upsert: true }
