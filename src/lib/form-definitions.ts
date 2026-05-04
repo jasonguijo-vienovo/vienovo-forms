@@ -157,6 +157,16 @@ export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition
   return loadAllFromDb();
 }
 
+export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefinition | null> {
+  try {
+    const forms = await loadAllFromDb();
+    return forms.find((form) => form.slug === slug) ?? null;
+  } catch (error) {
+    console.error("Form registry lookup failed:", error);
+    return fallbackForms().find((form) => form.slug === slug) ?? null;
+  }
+}
+
 export async function getCatalogForms(opts?: {
   includeAdminOnly?: boolean;
   includeDrafts?: boolean;

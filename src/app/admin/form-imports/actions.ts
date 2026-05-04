@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
+import { parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 import { FormDefinition } from "@/models/FormDefinition";
 
@@ -39,6 +40,17 @@ function summarize(htmlSource: string, appsScriptSource: string) {
   };
 }
 
+function bindingsFromFormData(formData: FormData) {
+  const raw = s(formData, "spreadsheetBindings");
+  if (!raw) return {};
+
+  try {
+    return parseSpreadsheetBindings(raw);
+  } catch {
+    throw new Error("Spreadsheet bindings must be valid JSON.");
+  }
+}
+
 export async function createFormImport(formData: FormData) {
   const { email, session } = await requireAdmin();
   await connectMongo();
@@ -61,6 +73,7 @@ export async function createFormImport(formData: FormData) {
     slug: slugify(s(formData, "slug")) || slugify(name),
     sourceType: "google-apps-script",
     spreadsheetId: s(formData, "spreadsheetId"),
+    spreadsheetBindings: bindingsFromFormData(formData),
     htmlSource,
     appsScriptSource,
     notes: s(formData, "notes"),
@@ -82,7 +95,7 @@ export async function createFormImport(formData: FormData) {
         status: "draft",
         visibility: "admin",
         availability: "coming-soon",
-        isImplemented: false,
+        isImplemented: true,
         showInNavbar: false,
         sortOrder: 1000,
         importSourceId: created._id,
@@ -94,6 +107,27 @@ export async function createFormImport(formData: FormData) {
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
+}
+
+export async function updateFormImportConfig(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+
+  const id = s(formData, "id");
+  if (!id) return;
+
+  await FormImport.updateOne(
+    { _id: id },
+    {
+      $set: {
+        spreadsheetId: s(formData, "spreadsheetId"),
+        spreadsheetBindings: bindingsFromFormData(formData),
+        notes: s(formData, "notes"),
+      },
+    }
+  );
+
+  revalidatePath("/admin/form-imports");
 }
 
 export async function updateFormImportStatus(formData: FormData) {

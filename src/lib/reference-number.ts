@@ -7,6 +7,7 @@ const PREFIX: Record<FormType, string> = {
   "reimbursement": "RB",
   "request-for-payment": "RFP",
   "cashiering": "CSH",
+  imported: "IMP",
 };
 
 export async function generateReferenceNo(formType: FormType): Promise<string> {

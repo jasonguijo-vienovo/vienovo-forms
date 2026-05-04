@@ -110,6 +110,20 @@ export function reimbursementFieldMap(formData: any): FieldMap {
   return map;
 }
 
+export function importedFieldMap(formData: any): FieldMap {
+  const labels: Record<string, string> = formData?.fieldLabels ?? {};
+  const values: Record<string, unknown> = formData?.values ?? {};
+  const map: FieldMap = {};
+
+  for (const [name, rawValue] of Object.entries(values)) {
+    const label = s(labels[name]) || name;
+    const value = Array.isArray(rawValue) ? rawValue.map((item) => s(item)).join(", ") : s(rawValue);
+    map[label] = value;
+  }
+
+  return map;
+}
+
 export function diffFields(prev: FieldMap, next: FieldMap): Record<string, FieldDiff> {
   const out: Record<string, FieldDiff> = {};
   const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);

@@ -1,7 +1,8 @@
 import { connectMongo } from "@/lib/db/mongo";
+import Link from "next/link";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
-import { createFormImport, updateFormImportStatus } from "./actions";
+import { createFormImport, updateFormImportConfig, updateFormImportStatus } from "./actions";
 
 export default async function FormImportsPage() {
   await connectMongo();
@@ -61,6 +62,15 @@ export default async function FormImportsPage() {
               name="spreadsheetId"
               placeholder="Optional. Needed if dropdowns or responses are sheet-driven."
               className="field-input"
+            />
+          </Field>
+
+          <Field label="Spreadsheet bindings JSON">
+            <textarea
+              name="spreadsheetBindings"
+              rows={6}
+              placeholder={`{\n  \"department\": \"Departments!A2:A\",\n  \"destination\": \"Airports!A2:A\"\n}`}
+              className="field-input font-mono text-xs"
             />
           </Field>
 
@@ -165,6 +175,12 @@ export default async function FormImportsPage() {
                       Spreadsheet ID:{" "}
                       <code>{item.spreadsheetId || "not provided"}</code>
                     </p>
+                    <p className="text-sm text-gray-500">
+                      Runtime URL:{" "}
+                      <Link href={`/forms/${item.slug}`} className="text-brand-700 underline">
+                        /forms/{item.slug}
+                      </Link>
+                    </p>
                     <p className="text-xs text-gray-400 mt-1">
                       Saved by {item.createdByName || item.createdByEmail || "unknown"} on{" "}
                       {new Date(item.createdAt).toLocaleString()}
@@ -242,6 +258,51 @@ export default async function FormImportsPage() {
                     </p>
                   </div>
                 ) : null}
+
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+                  <p className="text-xs font-bold tracking-[0.1em] uppercase text-gray-500 mb-3">
+                    Spreadsheet configuration
+                  </p>
+                  <form action={updateFormImportConfig} className="space-y-3">
+                    <input type="hidden" name="id" value={String(item._id)} />
+                    <Field label="Spreadsheet ID">
+                      <input
+                        name="spreadsheetId"
+                        defaultValue={item.spreadsheetId ?? ""}
+                        placeholder="Example: 1AbcDef..."
+                        className="field-input"
+                      />
+                    </Field>
+                    <Field label="Spreadsheet bindings JSON">
+                      <textarea
+                        name="spreadsheetBindings"
+                        rows={6}
+                        defaultValue={JSON.stringify(item.spreadsheetBindings ?? {}, null, 2)}
+                        className="field-input font-mono text-xs"
+                      />
+                    </Field>
+                    <Field label="Notes">
+                      <textarea
+                        name="notes"
+                        rows={3}
+                        defaultValue={item.notes ?? ""}
+                        className="field-input"
+                      />
+                    </Field>
+                    <p className="text-xs text-gray-500">
+                      Use JSON mapping when a dropdown should read from a specific range, for
+                      example <code>{`{"department":"Departments!A2:A"}`}</code>.
+                    </p>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      >
+                        Save spreadsheet config
+                      </button>
+                    </div>
+                  </form>
+                </div>
 
                 {item.notes ? (
                   <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">

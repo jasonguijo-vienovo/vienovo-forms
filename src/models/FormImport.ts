@@ -9,6 +9,7 @@ const formImportSchema = new Schema(
     slug: { type: String, required: true, trim: true, lowercase: true, index: true },
     sourceType: { type: String, default: "google-apps-script" },
     spreadsheetId: { type: String, default: "", trim: true },
+    spreadsheetBindings: { type: Schema.Types.Mixed, default: {} },
     htmlSource: { type: String, default: "" },
     appsScriptSource: { type: String, default: "" },
     notes: { type: String, default: "" },

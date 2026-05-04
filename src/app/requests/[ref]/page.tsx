@@ -7,6 +7,7 @@ import { RequestModel } from "@/models/Request";
 import { isAdminEmail } from "@/lib/admin";
 import {
   cashAdvanceFieldMap,
+  importedFieldMap,
   reimbursementFieldMap,
   travelBookingFieldMap,
 } from "@/lib/request-fields";
@@ -17,6 +18,7 @@ const FORM_LABELS: Record<string, string> = {
   "reimbursement": "Reimbursement",
   "request-for-payment": "Request for Payment",
   "cashiering": "Cashiering",
+  imported: "Imported Form",
 };
 
 const STATUS_TONES: Record<string, string> = {
@@ -24,6 +26,7 @@ const STATUS_TONES: Record<string, string> = {
   approved: "bg-green-100 text-green-800 border-green-200",
   rejected: "bg-red-100 text-red-800 border-red-200",
   returned: "bg-blue-100 text-blue-800 border-blue-200",
+  submitted: "bg-sky-100 text-sky-800 border-sky-200",
 };
 
 export default async function RequestDetailPage({
@@ -49,6 +52,7 @@ export default async function RequestDetailPage({
 
   const currentStep = doc.approvalChain.find((s) => s.step === doc.currentStep) ?? null;
   const isCurrentApprover = currentStep?.approverEmail === userEmail && currentStep?.status === "pending";
+  const hasEditableRuntime = ["travel-booking", "cash-advance", "reimbursement"].includes(doc.formType);
 
   const lastEdit = [...(doc.history ?? [])]
     .reverse()
@@ -63,7 +67,20 @@ export default async function RequestDetailPage({
         ? cashAdvanceFieldMap((doc as any).formData ?? {})
         : doc.formType === "reimbursement"
           ? reimbursementFieldMap((doc as any).formData ?? {})
-        : {};
+          : doc.formType === "imported"
+            ? importedFieldMap((doc as any).formData ?? {})
+          : {};
+
+  const formLabel =
+    doc.formType === "imported"
+      ? (doc as any).formData?.importedFormName || FORM_LABELS[doc.formType]
+      : FORM_LABELS[doc.formType] ?? doc.formType;
+  const headerSubtitle =
+    doc.status === "submitted" && doc.approvalChain.length === 0
+      ? "This imported form was received and saved in the system."
+      : currentStep?.approverName
+        ? `Pending approval from ${currentStep.approverName}`
+        : `Current status: ${doc.status}`;
 
   return (
     <>
@@ -87,11 +104,10 @@ export default async function RequestDetailPage({
               </svg>
             </div>
             <h1 className="text-xl font-bold text-white">
-              {FORM_LABELS[doc.formType] ?? doc.formType} submitted
+              {formLabel}
             </h1>
             <p className="text-green-100 text-sm mt-1">
-              Pending approval from{" "}
-              <strong>{doc.approvalChain[0]?.approverName}</strong>
+              {headerSubtitle}
             </p>
           </div>
           <div className="p-6">
@@ -128,49 +144,53 @@ export default async function RequestDetailPage({
               />
             </div>
 
-            <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-3">
-              Approval chain
-            </h2>
-            <ol className="space-y-2 mb-6">
-              {doc.approvalChain.map((step) => {
-                const isCurrent = step.step === doc.currentStep;
-                return (
-                  <li
-                    key={step.step}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${
-                      isCurrent
-                        ? "border-brand-300 bg-brand-50"
-                        : "border-gray-100"
-                    }`}
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                        step.status === "approved"
-                          ? "bg-green-600 text-white"
-                          : step.status === "rejected"
-                            ? "bg-red-600 text-white"
-                            : isCurrent
-                              ? "bg-brand-600 text-white"
-                              : "bg-gray-200 text-gray-500"
-                      }`}
-                    >
-                      {step.step}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">
-                        {step.approverName}
-                      </p>
-                      <p className="text-xs text-gray-500 capitalize">
-                        {step.role}
-                      </p>
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                      {step.status}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
+            {doc.approvalChain.length > 0 && (
+              <>
+                <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-3">
+                  Approval chain
+                </h2>
+                <ol className="space-y-2 mb-6">
+                  {doc.approvalChain.map((step) => {
+                    const isCurrent = step.step === doc.currentStep;
+                    return (
+                      <li
+                        key={step.step}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${
+                          isCurrent
+                            ? "border-brand-300 bg-brand-50"
+                            : "border-gray-100"
+                        }`}
+                      >
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                            step.status === "approved"
+                              ? "bg-green-600 text-white"
+                              : step.status === "rejected"
+                                ? "bg-red-600 text-white"
+                                : isCurrent
+                                  ? "bg-brand-600 text-white"
+                                  : "bg-gray-200 text-gray-500"
+                          }`}
+                        >
+                          {step.step}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">
+                            {step.approverName}
+                          </p>
+                          <p className="text-xs text-gray-500 capitalize">
+                            {step.role}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                          {step.status}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
+            )}
 
             {Object.keys(fieldMap).length > 0 && (
               <>
@@ -195,7 +215,7 @@ export default async function RequestDetailPage({
             )}
 
             <div className="flex gap-2">
-              {isOwner && doc.status === "pending" && (
+              {isOwner && doc.status === "pending" && hasEditableRuntime && (
                 <Link
                   href={`/requests/${doc.referenceNo}/edit`}
                   className="flex-1 text-center bg-white border border-brand-200 text-brand-700 font-semibold py-2.5 rounded-lg hover:bg-brand-50 transition"
