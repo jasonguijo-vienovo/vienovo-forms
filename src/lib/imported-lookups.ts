@@ -198,17 +198,23 @@ export async function syncImportedLookupsForAllImports() {
   let valuesSynced = 0;
   let peopleSynced = 0;
   let processorsSynced = 0;
+  const failures: string[] = [];
 
   for (const imported of imports) {
-    const result = await syncImportedLookupsForImport(String(imported._id));
-    if (result.categoriesSynced > 0 || result.peopleSynced > 0) {
-      importsSynced += 1;
-      categoriesSynced += result.categoriesSynced;
-      valuesSynced += result.valuesSynced;
-      peopleSynced += result.peopleSynced;
-      processorsSynced += result.processorsSynced;
+    try {
+      const result = await syncImportedLookupsForImport(String(imported._id));
+      if (result.categoriesSynced > 0 || result.peopleSynced > 0) {
+        importsSynced += 1;
+        categoriesSynced += result.categoriesSynced;
+        valuesSynced += result.valuesSynced;
+        peopleSynced += result.peopleSynced;
+        processorsSynced += result.processorsSynced;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown imported sync error.";
+      failures.push(message);
     }
   }
 
-  return { importsSynced, categoriesSynced, valuesSynced, peopleSynced, processorsSynced };
+  return { importsSynced, categoriesSynced, valuesSynced, peopleSynced, processorsSynced, failures };
 }

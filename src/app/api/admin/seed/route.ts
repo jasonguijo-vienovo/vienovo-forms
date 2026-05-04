@@ -4,6 +4,7 @@ import { Lookup, type LookupCategory } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { requireAdmin } from "@/lib/admin";
+import { syncImportedLookupsForAllImports } from "@/lib/imported-lookups";
 import {
   SEED_DEPARTMENTS,
   SEED_AIRPORTS,
@@ -17,7 +18,7 @@ import {
   SEED_APPROVERS,
 } from "@/lib/seed-data";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 async function seedCategory(category: LookupCategory, values: string[]) {
   let added = 0;
@@ -129,16 +130,32 @@ export async function POST() {
     reimbursementRoutesUpdated: 0,
     approvers: 0,
     approverRolesUpdated: 0,
-    importedSyncDeferred: 1,
+    importedDropdownImports: 0,
+    importedDropdownCategories: 0,
+    importedDropdownValues: 0,
+    importedPeople: 0,
+    importedProcessors: 0,
   };
 
-  const routeResult = await seedReimbursementRoutes();
+  const [routeResult, approverResult, importedLookupResult] = await Promise.all([
+    seedReimbursementRoutes(),
+    seedApprovers(),
+    syncImportedLookupsForAllImports(),
+  ]);
+
   result.reimbursementRoutes = routeResult.added;
   result.reimbursementRoutesUpdated = routeResult.updated;
-
-  const approverResult = await seedApprovers();
   result.approvers = approverResult.added;
   result.approverRolesUpdated = approverResult.rolesAdded;
+  result.importedDropdownImports = importedLookupResult.importsSynced;
+  result.importedDropdownCategories = importedLookupResult.categoriesSynced;
+  result.importedDropdownValues = importedLookupResult.valuesSynced;
+  result.importedPeople = importedLookupResult.peopleSynced;
+  result.importedProcessors = importedLookupResult.processorsSynced;
 
-  return NextResponse.json({ ok: true, added: result });
+  return NextResponse.json({
+    ok: true,
+    added: result,
+    warnings: importedLookupResult.failures,
+  });
 }
