@@ -4,7 +4,6 @@ import { Lookup, type LookupCategory } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { requireAdmin } from "@/lib/admin";
-import { syncImportedLookupsForAllImports } from "@/lib/imported-lookups";
 import {
   SEED_DEPARTMENTS,
   SEED_AIRPORTS,
@@ -17,6 +16,8 @@ import {
   SEED_REIMBURSEMENT_ROUTES,
   SEED_APPROVERS,
 } from "@/lib/seed-data";
+
+export const maxDuration = 60;
 
 async function seedCategory(category: LookupCategory, values: string[]) {
   let added = 0;
@@ -95,36 +96,40 @@ export async function POST() {
   await requireAdmin();
   await connectMongo();
 
+  const [
+    departments,
+    airports,
+    multiCityDeparture,
+    airlines,
+    baggage,
+    reimbursementCostCenter,
+    reimbursementFormType,
+    reimbursementLocation,
+  ] = await Promise.all([
+    seedCategory("department", SEED_DEPARTMENTS),
+    seedCategory("airport", SEED_AIRPORTS),
+    seedCategory("multiCityDeparture", SEED_DOMESTIC_AIRPORTS),
+    seedCategory("airline", SEED_AIRLINES),
+    seedCategory("baggage", SEED_BAGGAGE),
+    seedCategory("reimbursementCostCenter", SEED_REIMBURSEMENT_COST_CENTERS),
+    seedCategory("reimbursementFormType", SEED_REIMBURSEMENT_FORM_TYPES),
+    seedCategory("reimbursementLocation", SEED_REIMBURSEMENT_LOCATIONS),
+  ]);
+
   const result = {
-    departments: await seedCategory("department", SEED_DEPARTMENTS),
-    airports: await seedCategory("airport", SEED_AIRPORTS),
-    multiCityDeparture: await seedCategory(
-      "multiCityDeparture",
-      SEED_DOMESTIC_AIRPORTS
-    ),
-    airlines: await seedCategory("airline", SEED_AIRLINES),
-    baggage: await seedCategory("baggage", SEED_BAGGAGE),
-    reimbursementCostCenter: await seedCategory(
-      "reimbursementCostCenter",
-      SEED_REIMBURSEMENT_COST_CENTERS
-    ),
-    reimbursementFormType: await seedCategory(
-      "reimbursementFormType",
-      SEED_REIMBURSEMENT_FORM_TYPES
-    ),
-    reimbursementLocation: await seedCategory(
-      "reimbursementLocation",
-      SEED_REIMBURSEMENT_LOCATIONS
-    ),
+    departments,
+    airports,
+    multiCityDeparture,
+    airlines,
+    baggage,
+    reimbursementCostCenter,
+    reimbursementFormType,
+    reimbursementLocation,
     reimbursementRoutes: 0,
     reimbursementRoutesUpdated: 0,
     approvers: 0,
     approverRolesUpdated: 0,
-    importedDropdownImports: 0,
-    importedDropdownCategories: 0,
-    importedDropdownValues: 0,
-    importedPeople: 0,
-    importedProcessors: 0,
+    importedSyncDeferred: 1,
   };
 
   const routeResult = await seedReimbursementRoutes();
@@ -134,13 +139,6 @@ export async function POST() {
   const approverResult = await seedApprovers();
   result.approvers = approverResult.added;
   result.approverRolesUpdated = approverResult.rolesAdded;
-
-  const importedLookupResult = await syncImportedLookupsForAllImports();
-  result.importedDropdownImports = importedLookupResult.importsSynced;
-  result.importedDropdownCategories = importedLookupResult.categoriesSynced;
-  result.importedDropdownValues = importedLookupResult.valuesSynced;
-  result.importedPeople = importedLookupResult.peopleSynced;
-  result.importedProcessors = importedLookupResult.processorsSynced;
 
   return NextResponse.json({ ok: true, added: result });
 }

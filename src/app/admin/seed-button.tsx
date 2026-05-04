@@ -36,16 +36,21 @@ export function SeedButton() {
         disabled={loading}
         className="bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold px-5 py-2 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 text-sm"
       >
-        {loading ? "Seeding…" : "Run seed"}
+        {loading ? "Loading defaults..." : "Load defaults"}
       </button>
+
+      <p className="mt-2 text-xs text-surface-muted">
+        This loads built-in dropdowns, approvers, and reimbursement routing only. Imported form
+        spreadsheet sync stays in the importer where it can be run per form.
+      </p>
 
       {result?.ok && result.added && (
         <div className="mt-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-          <p className="font-semibold mb-1">Done.</p>
+          <p className="font-semibold mb-1">Defaults loaded.</p>
           <ul className="text-xs space-y-0.5">
             {Object.entries(result.added).map(([k, v]) => (
               <li key={k}>
-                <span className="font-mono">{k}</span>: +{v} added
+                <span className="font-mono">{k}</span>: +{String(v)} added
               </li>
             ))}
           </ul>

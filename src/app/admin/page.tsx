@@ -147,8 +147,8 @@ export default async function AdminOverviewPage() {
             <div>
               <p className="font-semibold text-surface-text">Seed default dropdowns and people</p>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-surface-muted">
-                Loads departments, airports, airlines, baggage options, approvers, and imported-form
-                sync candidates that have not been created yet.
+                Loads departments, airports, airlines, baggage options, approvers, and reimbursement
+                routes that have not been created yet.
               </p>
             </div>
           </div>
