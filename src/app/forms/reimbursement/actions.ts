@@ -179,6 +179,8 @@ export async function submitReimbursement(formData: FormData) {
 
   await RequestModel.create({
     formType: "reimbursement",
+    formSlug: "reimbursement",
+    formName: "Reimbursement",
     referenceNo,
     submittedBy: { email: submitterEmail, name: submitterName },
     formData: formDataObj,

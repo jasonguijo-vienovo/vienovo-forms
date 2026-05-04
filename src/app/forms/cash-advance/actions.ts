@@ -93,6 +93,8 @@ export async function submitCashAdvance(formData: FormData) {
 
   await RequestModel.create({
     formType: "cash-advance",
+    formSlug: "cash-advance",
+    formName: "Cash Advance",
     referenceNo,
     submittedBy: {
       email: submitterEmail,

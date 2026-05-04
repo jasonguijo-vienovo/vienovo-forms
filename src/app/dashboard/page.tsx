@@ -164,6 +164,7 @@ function EmptyState({ message }: { message: string }) {
 }
 
 function requestFormLabel(request: any) {
+  if (request.formName) return String(request.formName);
   if (request.formType === "imported") {
     return request.formData?.importedFormName || FORM_LABELS.imported;
   }

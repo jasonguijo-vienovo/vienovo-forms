@@ -116,6 +116,8 @@ export async function submitTravelBooking(formData: FormData) {
 
   await RequestModel.create({
     formType: "travel-booking",
+    formSlug: "travel-booking",
+    formName: "Travel Booking",
     referenceNo,
     submittedBy: {
       email: submitterEmail,

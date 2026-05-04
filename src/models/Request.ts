@@ -50,6 +50,8 @@ const historySchema = new Schema(
 const requestSchema = new Schema(
   {
     formType: { type: String, enum: FORM_TYPES, required: true, index: true },
+    formSlug: { type: String, default: "", lowercase: true, trim: true, index: true },
+    formName: { type: String, default: "", trim: true },
     referenceNo: { type: String, required: true, unique: true, index: true },
     requestNo: { type: String, default: "" },
     submittedBy: {
@@ -66,6 +68,7 @@ const requestSchema = new Schema(
 );
 
 requestSchema.index({ "submittedBy.email": 1, status: 1, createdAt: -1 });
+requestSchema.index({ formSlug: 1, createdAt: -1 });
 
 export type RequestDoc = InferSchemaType<typeof requestSchema> & { _id: mongoose.Types.ObjectId };
 

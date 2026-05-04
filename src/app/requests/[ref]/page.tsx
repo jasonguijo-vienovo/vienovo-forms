@@ -72,7 +72,9 @@ export default async function RequestDetailPage({
           : {};
 
   const formLabel =
-    doc.formType === "imported"
+    doc.formName
+      ? String(doc.formName)
+      : doc.formType === "imported"
       ? (doc as any).formData?.importedFormName || FORM_LABELS[doc.formType]
       : FORM_LABELS[doc.formType] ?? doc.formType;
   const headerSubtitle =

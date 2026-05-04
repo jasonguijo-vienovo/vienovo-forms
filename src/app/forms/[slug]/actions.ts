@@ -313,6 +313,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
 
     await RequestModel.create({
       formType: "imported",
+      formSlug: slug,
+      formName: imported.name,
       referenceNo,
       submittedBy: { email, name },
       formData: {
