@@ -6,10 +6,11 @@ export const FORM_TYPES = [
   "reimbursement",
   "request-for-payment",
   "cashiering",
+  "imported",
 ] as const;
 export type FormType = (typeof FORM_TYPES)[number];
 
-export const REQUEST_STATUSES = ["pending", "approved", "rejected", "returned"] as const;
+export const REQUEST_STATUSES = ["pending", "approved", "rejected", "returned", "submitted"] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
 export const APPROVAL_STEP_STATUSES = [
