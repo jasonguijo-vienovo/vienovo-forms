@@ -38,6 +38,7 @@ export default async function ImportedFormPage({
   if (!imported) notFound();
 
   const runtime = await hydrateImportedFormRuntime({
+    slug,
     htmlSource: imported.htmlSource ?? "",
     spreadsheetId: imported.spreadsheetId ?? "",
     spreadsheetBindings: imported.spreadsheetBindings ?? {},

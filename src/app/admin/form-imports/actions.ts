@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { BUILTIN_FORMS } from "@/lib/form-definitions";
+import { syncImportedLookupsForImport } from "@/lib/imported-lookups";
 import { parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 import { FormDefinition } from "@/models/FormDefinition";
@@ -304,5 +305,25 @@ export async function deleteFormImport(formData: FormData) {
   revalidatePath("/admin/forms");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
+  redirect(FORM_IMPORTS_PATH);
+}
+
+export async function syncImportedDropdowns(formData: FormData) {
+  await requireAdmin();
+  const id = s(formData, "id");
+  if (!id) return;
+
+  const result = await syncImportedLookupsForImport(id);
+  await setFlashToast({
+    tone: "success",
+    message:
+      result.categoriesSynced > 0
+        ? `${result.importName}: synced ${result.valuesSynced} dropdown values into Manage dropdowns.`
+        : `${result.importName}: no dropdown values were found to sync.`,
+  });
+
+  revalidatePath(FORM_IMPORTS_PATH);
+  revalidatePath("/admin/lookups");
+  revalidatePath("/admin");
   redirect(FORM_IMPORTS_PATH);
 }

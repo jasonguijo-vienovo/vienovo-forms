@@ -43,14 +43,26 @@ export async function Navbar({
             }))}
           />
           <ExternalNavLink href={HELP_DESK_URL}>Helpdesk</ExternalNavLink>
-          {showAdmin && adminShortcut ? (
-            <NavLink href={adminShortcut.href}>{adminShortcut.label}</NavLink>
-          ) : null}
-          {showAdmin && <NavLink href="/admin">Admin</NavLink>}
         </nav>
 
         {session?.user ? (
           <div className="flex items-center gap-3 text-sm">
+            {showAdmin && adminShortcut ? (
+              <Link
+                href={adminShortcut.href}
+                className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
+              >
+                {adminShortcut.label}
+              </Link>
+            ) : null}
+            {showAdmin ? (
+              <Link
+                href="/admin"
+                className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
+              >
+                Admin
+              </Link>
+            ) : null}
             <span className="hidden md:inline text-brand-100">{session.user.email}</span>
             <form
               action={async () => {

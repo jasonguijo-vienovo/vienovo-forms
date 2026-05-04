@@ -21,6 +21,9 @@
 - Hardened form re-import again so duplicate slug drafts are cleaned up and importer failures show a readable toast instead of a generic production 500.
 - Changed importer actions to redirect back to `/admin/form-imports` after save/update/delete so the page reloads with fresh data and visible feedback instead of silently resetting the form.
 - Moved the requester preview toggle into the top navbar on imported form pages for admins, beside the `Admin` link.
+- Made the admin/requester preview controls visible in the always-present right side of the navbar.
+- Added imported dropdown syncing into `Manage dropdowns`, grouped by imported form.
+- Updated `Run seed` on admin overview so it also syncs imported-form dropdown values into the lookup store.
 
 ### Dashboard
 - The dashboard now hides unavailable or coming-soon forms from normal users.

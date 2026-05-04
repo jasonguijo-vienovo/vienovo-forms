@@ -1,5 +1,6 @@
 import { connectMongo } from "@/lib/db/mongo";
-import { Lookup, LOOKUP_CATEGORIES } from "@/models/Lookup";
+import { Lookup, LOOKUP_CATEGORIES, parseImportedLookupCategory } from "@/models/Lookup";
+import { FormImport } from "@/models/FormImport";
 import LookupsClient, { type LookupAdminGroup } from "./LookupsClient";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -49,13 +50,22 @@ const FORM_GROUPS: Array<{
 
 export default async function LookupsPage() {
   await connectMongo();
-  const all = await Lookup.find({}).sort({ category: 1, sortOrder: 1 }).lean();
+  const [all, imports] = await Promise.all([
+    Lookup.find({}).sort({ category: 1, sortOrder: 1 }).lean(),
+    FormImport.find({}).select({ slug: 1, name: 1 }).lean(),
+  ]);
+  const importNameBySlugKey = new Map(
+    imports.map((item) => [item.slug.toLowerCase().replace(/[^a-z0-9]+/g, ""), item.name])
+  );
+  const dynamicCategories = [...new Set(all.map((item) => item.category))];
+  const allCategories = [...new Set([...LOOKUP_CATEGORIES, ...dynamicCategories])];
 
   const itemsByCategory: Record<
     string,
     Array<{ id: string; value: string; isActive: boolean }>
   > = {};
-  for (const cat of LOOKUP_CATEGORIES) itemsByCategory[cat] = [];
+  const categoryLabels: Record<string, string> = { ...CATEGORY_LABELS };
+  for (const cat of allCategories) itemsByCategory[cat] = [];
   for (const item of all) {
     if (itemsByCategory[item.category]) {
       itemsByCategory[item.category].push({
@@ -67,9 +77,27 @@ export default async function LookupsPage() {
   }
 
   const assigned = new Set(FORM_GROUPS.flatMap((g) => g.categories));
-  const otherCategories = LOOKUP_CATEGORIES.filter((c) => !assigned.has(c));
+  const importedGroups = new Map<string, string[]>();
+  for (const category of allCategories) {
+    const parsed = parseImportedLookupCategory(category);
+    if (!parsed) continue;
+    const categories = importedGroups.get(parsed.slugKey) ?? [];
+    categories.push(category);
+    importedGroups.set(parsed.slugKey, categories);
+    categoryLabels[category] = humanizeImportedField(parsed.fieldKey);
+  }
+
+  const otherCategories = allCategories.filter(
+    (c) => !assigned.has(c) && !parseImportedLookupCategory(c)
+  );
   const groupsToRender: LookupAdminGroup[] = [
     ...FORM_GROUPS,
+    ...[...importedGroups.entries()].map(([slugKey, categories]) => ({
+      key: `imported-${slugKey}`,
+      title: importNameBySlugKey.get(slugKey) || humanizeImportedField(slugKey),
+      description: "Imported dropdown values synced from legacy forms.",
+      categories,
+    })),
     ...(otherCategories.length
       ? [
           {
@@ -92,10 +120,17 @@ export default async function LookupsPage() {
       </div>
 
       <LookupsClient
-        categoryLabels={CATEGORY_LABELS}
+        categoryLabels={categoryLabels}
         groups={groupsToRender}
         itemsByCategory={itemsByCategory}
       />
     </div>
   );
+}
+
+function humanizeImportedField(input: string) {
+  return input
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }

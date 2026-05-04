@@ -2,15 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
-import { Lookup, LOOKUP_CATEGORIES, type LookupCategory } from "@/models/Lookup";
+import { Lookup, type LookupCategory } from "@/models/Lookup";
 import { requireAdmin } from "@/lib/admin";
 
 function parseCategory(value: FormDataEntryValue | null): LookupCategory {
   const v = String(value ?? "");
-  if (!LOOKUP_CATEGORIES.includes(v as LookupCategory)) {
+  if (!v.trim()) {
     throw new Error(`Invalid category: ${v}`);
   }
-  return v as LookupCategory;
+  return v.trim();
 }
 
 export async function addLookup(formData: FormData) {

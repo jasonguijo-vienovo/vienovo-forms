@@ -13,11 +13,26 @@ export const LOOKUP_CATEGORIES = [
   "reimbursementLiquidationType",
 ] as const;
 
-export type LookupCategory = (typeof LOOKUP_CATEGORIES)[number];
+export type BuiltInLookupCategory = (typeof LOOKUP_CATEGORIES)[number];
+export type LookupCategory = BuiltInLookupCategory | string;
+
+function normalizeLookupKey(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+export function importedLookupCategory(slug: string, fieldName: string) {
+  return `imported:${normalizeLookupKey(slug)}:${normalizeLookupKey(fieldName)}`;
+}
+
+export function parseImportedLookupCategory(category: string) {
+  const match = category.match(/^imported:([a-z0-9]+):([a-z0-9]+)$/);
+  if (!match) return null;
+  return { slugKey: match[1], fieldKey: match[2] };
+}
 
 const lookupSchema = new Schema(
   {
-    category: { type: String, enum: LOOKUP_CATEGORIES, required: true, index: true },
+    category: { type: String, required: true, index: true },
     value: { type: String, required: true, trim: true },
     sortOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },

@@ -1,4 +1,5 @@
 import { listSpreadsheetSheets, readSpreadsheetMatrix, readSpreadsheetRange } from "@/lib/google/sheets";
+import { loadImportedLookupOptions } from "@/lib/imported-lookup-store";
 
 export type ImportedFieldOption = {
   value: string;
@@ -325,17 +326,38 @@ function findOptionsRangeFromPreview(
 }
 
 export async function hydrateImportedFormRuntime(opts: {
+  slug?: string;
   htmlSource: string;
   spreadsheetId?: string;
   spreadsheetBindings?: unknown;
+  preferLookupOptions?: boolean;
 }) {
   const runtime = parseImportedFormHtml(opts.htmlSource);
   const spreadsheetId = String(opts.spreadsheetId ?? "").trim();
   const bindings = parseSpreadsheetBindings(opts.spreadsheetBindings);
+  const preferLookupOptions = opts.preferLookupOptions ?? true;
   runtime.spreadsheetBindings = bindings;
   runtime.hydratedHtml = hydrateOriginalHtml(opts.htmlSource, runtime.fields);
 
+  let importedLookupOptions = new Map<string, string[]>();
+  if (opts.slug && preferLookupOptions) {
+    try {
+      importedLookupOptions = await loadImportedLookupOptions(opts.slug);
+    } catch (error) {
+      runtime.warnings.push(
+        error instanceof Error ? error.message : "Failed to read imported dropdown values."
+      );
+    }
+  }
+
   if (!spreadsheetId) {
+    for (const field of runtime.fields) {
+      const syncedOptions = importedLookupOptions.get(normalizeKey(field.name));
+      if (syncedOptions?.length) {
+        field.options = syncedOptions.map((value) => ({ value, label: value }));
+      }
+    }
+    runtime.hydratedHtml = hydrateOriginalHtml(opts.htmlSource, runtime.fields);
     return runtime;
   }
 
@@ -366,6 +388,12 @@ export async function hydrateImportedFormRuntime(opts: {
 
   for (const field of runtime.fields) {
     if (!["select", "radio", "checkbox-group"].includes(field.type)) continue;
+
+    const syncedOptions = importedLookupOptions.get(normalizeKey(field.name));
+    if (syncedOptions?.length) {
+      field.options = syncedOptions.map((value) => ({ value, label: value }));
+      continue;
+    }
 
     const explicitRange = bindings[field.name] || bindings[normalizeKey(field.name)];
     let values: string[] = [];

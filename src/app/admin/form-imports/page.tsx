@@ -8,6 +8,7 @@ import {
   createFormImport,
   deleteFormImport,
   publishFormImport,
+  syncImportedDropdowns,
   updateFormImportConfig,
   updateFormImportStatus,
 } from "./actions";
@@ -25,6 +26,7 @@ export default async function FormImportsPage() {
     imports.map(async (item) => {
       try {
         const runtime = await hydrateImportedFormRuntime({
+          slug: item.slug,
           htmlSource: item.htmlSource ?? "",
           spreadsheetId: item.spreadsheetId ?? "",
           spreadsheetBindings: item.spreadsheetBindings ?? {},
@@ -295,6 +297,15 @@ export default async function FormImportsPage() {
                     >
                       Open forms registry
                     </Link>
+                    <form action={syncImportedDropdowns}>
+                      <input type="hidden" name="id" value={String(item._id)} />
+                      <button
+                        type="submit"
+                        className="bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      >
+                        Sync dropdowns
+                      </button>
+                    </form>
                     <form action={deleteFormImport}>
                       <input type="hidden" name="id" value={String(item._id)} />
                       <button

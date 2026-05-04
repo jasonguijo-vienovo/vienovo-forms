@@ -1,6 +1,6 @@
 import { connectMongo } from "@/lib/db/mongo";
-import { Lookup } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
+import { Lookup } from "@/models/Lookup";
 import { SeedButton } from "./seed-button";
 
 export default async function AdminOverviewPage() {
@@ -37,7 +37,8 @@ export default async function AdminOverviewPage() {
         </h2>
         <p className="text-sm text-gray-500 mb-4 leading-relaxed">
           Loads departments, airports, airlines, baggage options, and the
-          approver roster from the confirmed lookup values. Safe to re-run —
+          approver roster from the confirmed lookup values. It also syncs
+          imported-form dropdowns into Manage dropdowns. Safe to re-run -
           existing entries are not overwritten.
         </p>
         <SeedButton />
@@ -55,13 +56,10 @@ function Stat({
   value: number;
   tone?: "ok" | "warn";
 }) {
-  const valueClass =
-    tone === "warn" && value > 0 ? "text-amber-600" : "text-gray-800";
+  const valueClass = tone === "warn" && value > 0 ? "text-amber-600" : "text-gray-800";
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
-        {label}
-      </p>
+      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</p>
       <p className={`text-3xl font-bold mt-1 ${valueClass}`}>{value}</p>
     </div>
   );

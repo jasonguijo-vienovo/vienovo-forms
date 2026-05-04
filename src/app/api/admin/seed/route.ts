@@ -4,6 +4,7 @@ import { Lookup, type LookupCategory } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { requireAdmin } from "@/lib/admin";
+import { syncImportedLookupsForAllImports } from "@/lib/imported-lookups";
 import {
   SEED_DEPARTMENTS,
   SEED_AIRPORTS,
@@ -119,6 +120,9 @@ export async function POST() {
     reimbursementRoutesUpdated: 0,
     approvers: 0,
     approverRolesUpdated: 0,
+    importedDropdownImports: 0,
+    importedDropdownCategories: 0,
+    importedDropdownValues: 0,
   };
 
   const routeResult = await seedReimbursementRoutes();
@@ -128,6 +132,11 @@ export async function POST() {
   const approverResult = await seedApprovers();
   result.approvers = approverResult.added;
   result.approverRolesUpdated = approverResult.rolesAdded;
+
+  const importedLookupResult = await syncImportedLookupsForAllImports();
+  result.importedDropdownImports = importedLookupResult.importsSynced;
+  result.importedDropdownCategories = importedLookupResult.categoriesSynced;
+  result.importedDropdownValues = importedLookupResult.valuesSynced;
 
   return NextResponse.json({ ok: true, added: result });
 }
