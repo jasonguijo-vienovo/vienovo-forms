@@ -55,15 +55,6 @@ export default async function ImportedFormPage({
           </div>
 
           <div className="p-6 space-y-5">
-            <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
-              <p className="font-semibold text-gray-800 mb-1">How this version works</p>
-              <p>
-                This page renders the imported form using the saved HTML structure and optional
-                spreadsheet-backed dropdown sources. Submissions are saved into the request history
-                inside this app.
-              </p>
-            </div>
-
             {runtime.warnings.length > 0 && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold mb-1">Things to review</p>
@@ -101,9 +92,10 @@ export default async function ImportedFormPage({
               </div>
             ) : (
               <form action={submitAction} className="space-y-4">
-                {runtime.fields.map((field) => (
-                  <FieldRenderer key={field.name} field={field} />
-                ))}
+                <div
+                  className="imported-form-original"
+                  dangerouslySetInnerHTML={{ __html: runtime.hydratedHtml }}
+                />
 
                 <div className="pt-4 flex justify-end">
                   <button
@@ -119,85 +111,5 @@ export default async function ImportedFormPage({
         </div>
       </main>
     </>
-  );
-}
-
-function FieldRenderer({
-  field,
-}: {
-  field: Awaited<ReturnType<typeof hydrateImportedFormRuntime>>["fields"][number];
-}) {
-  const hasOptions = (field.options?.length ?? 0) > 0;
-
-  return (
-    <section className="bg-white rounded-2xl shadow-sm border border-brand-100 px-5 py-4">
-      <label className="block text-sm font-semibold text-gray-700 mb-2">
-        {field.label}
-        {field.required ? <span className="text-red-400"> *</span> : null}
-      </label>
-
-      {field.type === "textarea" ? (
-        <textarea
-          name={field.name}
-          required={field.required}
-          rows={field.rows ?? 4}
-          defaultValue={field.defaultValue}
-          placeholder={field.placeholder}
-          className="field-input resize-y"
-        />
-      ) : field.type === "select" && hasOptions ? (
-        <select name={field.name} required={field.required} defaultValue="" className="field-input">
-          <option value="">-- Select --</option>
-          {field.options?.map((option) => (
-            <option key={`${field.name}_${option.value}`} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      ) : field.type === "radio" && hasOptions ? (
-        <div className="space-y-2">
-          {field.options?.map((option) => (
-            <label
-              key={`${field.name}_${option.value}`}
-              className="flex items-center gap-2 rounded-lg border border-brand-100 px-3 py-2 text-sm text-gray-700"
-            >
-              <input type="radio" name={field.name} value={option.value} required={field.required} />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-      ) : field.type === "checkbox-group" && hasOptions ? (
-        <div className="space-y-2">
-          {field.options?.map((option) => (
-            <label
-              key={`${field.name}_${option.value}`}
-              className="flex items-center gap-2 rounded-lg border border-brand-100 px-3 py-2 text-sm text-gray-700"
-            >
-              <input type="checkbox" name={field.name} value={option.value} />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-      ) : field.type === "checkbox" ? (
-        <label className="flex items-center gap-2 rounded-lg border border-brand-100 px-3 py-2 text-sm text-gray-700">
-          <input type="checkbox" name={field.name} required={field.required} defaultChecked={field.defaultValue === "Yes"} />
-          <span>Yes</span>
-        </label>
-      ) : (
-        <input
-          type={field.type === "checkbox-group" || field.type === "radio" || field.type === "select" ? "text" : field.type}
-          name={field.name}
-          required={field.required}
-          defaultValue={field.defaultValue}
-          placeholder={
-            field.placeholder ||
-            (hasOptions ? undefined : field.type === "select" || field.type === "radio" || field.type === "checkbox-group"
-              ? "No options were loaded, so enter a value manually"
-              : undefined)
-          }
-          className="field-input"
-        />
-      )}
-    </section>
   );
 }

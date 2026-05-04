@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { readFile } from "fs/promises";
+import { existsSync } from "fs";
 
 function base64UrlEncode(input: Buffer | string) {
   const buf = typeof input === "string" ? Buffer.from(input) : input;
@@ -36,6 +37,11 @@ async function loadServiceAccountCredentials(): Promise<{ clientEmail: string; p
   if (!keyPath) {
     throw new Error(
       "Missing service account credentials. Set GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY, or GOOGLE_SERVICE_ACCOUNT_KEY_PATH."
+    );
+  }
+  if (!existsSync(keyPath)) {
+    throw new Error(
+      `Google service account key file was not found at ${keyPath}. On Vercel, set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY instead of using GOOGLE_SERVICE_ACCOUNT_KEY_PATH.`
     );
   }
 

@@ -38,10 +38,11 @@ export default async function FormImportsPage() {
             fields: [],
             warnings: [error instanceof Error ? error.message : "Failed to scan spreadsheet."],
             sheetNames: [],
-            spreadsheetBindings: {},
-            autoDetectedBindings: {},
-          },
-        ];
+              spreadsheetBindings: {},
+              autoDetectedBindings: {},
+              hydratedHtml: "",
+            },
+          ];
       }
     })
   );
