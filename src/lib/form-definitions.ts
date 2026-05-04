@@ -101,30 +101,34 @@ function fallbackForms() {
 
 async function syncBuiltInForms() {
   for (const form of BUILTIN_FORMS) {
-    await FormDefinition.updateOne(
-      { slug: form.slug },
-      {
-        $setOnInsert: {
-          slug: form.slug,
-          source: form.source,
-          status: form.status,
-          visibility: form.visibility,
-          availability: form.availability,
-          isImplemented: form.isImplemented,
-          showInNavbar: form.showInNavbar,
-          sortOrder: form.sortOrder,
-          routePath: form.routePath,
-          notes: form.notes,
+    try {
+      await FormDefinition.updateOne(
+        { slug: form.slug },
+        {
+          $setOnInsert: {
+            slug: form.slug,
+            source: form.source,
+            status: form.status,
+            visibility: form.visibility,
+            availability: form.availability,
+            isImplemented: form.isImplemented,
+            showInNavbar: form.showInNavbar,
+            sortOrder: form.sortOrder,
+            routePath: form.routePath,
+            notes: form.notes,
+          },
+          $set: {
+            name: form.name,
+            description: form.description,
+            routePath: form.routePath,
+            source: form.source,
+          },
         },
-        $set: {
-          name: form.name,
-          description: form.description,
-          routePath: form.routePath,
-          source: form.source,
-        },
-      },
-      { upsert: true }
-    );
+        { upsert: true }
+      );
+    } catch (error) {
+      console.error(`Failed to sync built-in form ${form.slug}:`, error);
+    }
   }
 }
 
@@ -154,7 +158,12 @@ async function loadAllFromDb(): Promise<AppFormDefinition[]> {
 }
 
 export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition[]> {
-  return loadAllFromDb();
+  try {
+    return await loadAllFromDb();
+  } catch (error) {
+    console.error("Admin form registry fallback:", error);
+    return fallbackForms();
+  }
 }
 
 export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefinition | null> {

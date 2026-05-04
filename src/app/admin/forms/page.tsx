@@ -11,16 +11,36 @@ export default async function AdminFormsPage() {
   const publishedCount = forms.filter((form) => form.status === "published").length;
   const draftCount = forms.filter((form) => form.status === "draft").length;
   const importedCount = forms.filter((form) => form.source === "imported").length;
+  const hasOnlyBuiltIns = importedCount === 0 && forms.every((form) => form.source === "native");
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-800">Forms registry</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Control which forms appear on the dashboard and forms list, and keep imported drafts
-          admin-only until they are implemented.
+          This is the control panel for whether a form shows up to users, stays admin-only, or is
+          still treated as coming soon.
         </p>
       </div>
+
+      <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
+        <p className="font-semibold text-gray-800 mb-1">What this page is for</p>
+        <p>
+          Use this page to decide if a form is visible on the dashboard and forms list, whether it
+          should appear in the navbar quick menu, and whether it is ready for users or still in
+          draft mode.
+        </p>
+      </div>
+
+      {hasOnlyBuiltIns ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold mb-1">Registry is running in safe mode</p>
+          <p>
+            Only the built-in forms are showing right now. If you expected imported forms here,
+            check the database connection or the form import records.
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Stat label="Published forms" value={publishedCount} />

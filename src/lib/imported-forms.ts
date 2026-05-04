@@ -1,4 +1,4 @@
-import { listSpreadsheetSheets, readSpreadsheetRange } from "@/lib/google/sheets";
+import { listSpreadsheetSheets, readSpreadsheetMatrix, readSpreadsheetRange } from "@/lib/google/sheets";
 
 export type ImportedFieldOption = {
   value: string;
@@ -34,6 +34,7 @@ export type ImportedFormRuntime = {
   warnings: string[];
   sheetNames: string[];
   spreadsheetBindings: Record<string, string>;
+  autoDetectedBindings: Record<string, string>;
 };
 
 function decodeHtml(value: string) {
@@ -228,11 +229,23 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
     warnings,
     sheetNames: [],
     spreadsheetBindings: {},
+    autoDetectedBindings: {},
   };
 }
 
 function toRange(binding: string) {
   return binding.includes("!") ? binding : `${binding}!A2:A`;
+}
+
+function columnLetter(index: number) {
+  let n = index + 1;
+  let out = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    out = String.fromCharCode(65 + rem) + out;
+    n = Math.floor((n - 1) / 26);
+  }
+  return out;
 }
 
 export async function hydrateImportedFormRuntime(opts: {
@@ -251,9 +264,18 @@ export async function hydrateImportedFormRuntime(opts: {
 
   const warnings = [...runtime.warnings];
   const cache = new Map<string, string[]>();
+  const autoDetectedBindings: Record<string, string> = {};
   let sheetNames: string[] = [];
+  let sheetPreviews = new Map<string, string[][]>();
   try {
     sheetNames = await listSpreadsheetSheets(spreadsheetId);
+    const previewEntries: Array<[string, string[][]]> = await Promise.all(
+      sheetNames.map(async (sheet) => [
+        sheet,
+        await readSpreadsheetMatrix(spreadsheetId, `${sheet}!A1:ZZ100`),
+      ] as [string, string[][]])
+    );
+    sheetPreviews = new Map(previewEntries);
   } catch (error) {
     warnings.push(error instanceof Error ? error.message : "Failed to read spreadsheet metadata.");
   }
@@ -276,9 +298,44 @@ export async function hydrateImportedFormRuntime(opts: {
         values = await getOptions(toRange(explicitRange));
       } else {
         const candidates = [field.name, field.label].map(normalizeKey);
-        const matchedSheet = sheetNames.find((sheet) => candidates.includes(normalizeKey(sheet)));
-        if (matchedSheet) {
-          values = await getOptions(`${matchedSheet}!A2:A`);
+        let matchedRange = "";
+
+        for (const [sheetName, rows] of sheetPreviews.entries()) {
+          const headerRow = rows[0] ?? [];
+          const matchedHeaderIndex = headerRow.findIndex((header) =>
+            candidates.includes(normalizeKey(header))
+          );
+          if (matchedHeaderIndex >= 0) {
+            matchedRange = `${sheetName}!${columnLetter(matchedHeaderIndex)}2:${columnLetter(matchedHeaderIndex)}`;
+            break;
+          }
+        }
+
+        if (!matchedRange) {
+          const matchedSheet = sheetNames.find((sheet) => candidates.includes(normalizeKey(sheet)));
+          if (matchedSheet) {
+            matchedRange = `${matchedSheet}!A2:A`;
+          }
+        }
+
+        if (matchedRange) {
+          autoDetectedBindings[field.name] = matchedRange;
+          values = await getOptions(matchedRange);
+        } else {
+          for (const [sheetName, rows] of sheetPreviews.entries()) {
+            const headerRow = rows[0] ?? [];
+            if (headerRow.length <= 1) continue;
+            const columnIndex = headerRow.findIndex((header) =>
+              normalizeKey(field.label).includes(normalizeKey(header)) ||
+              normalizeKey(header).includes(normalizeKey(field.label))
+            );
+            if (columnIndex >= 0) {
+              const range = `${sheetName}!${columnLetter(columnIndex)}2:${columnLetter(columnIndex)}`;
+              autoDetectedBindings[field.name] = range;
+              values = await getOptions(range);
+              break;
+            }
+          }
         }
       }
     } catch (error) {
@@ -297,5 +354,6 @@ export async function hydrateImportedFormRuntime(opts: {
     warnings,
     sheetNames,
     spreadsheetBindings: bindings,
+    autoDetectedBindings,
   };
 }

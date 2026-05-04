@@ -128,6 +128,11 @@ export default async function FormImportsPage() {
               <code>code.gs</code>. Add the spreadsheet ID when the legacy form reads dropdown data
               from Google Sheets or writes responses there.
             </p>
+            <p className="mt-2">
+              The app will first try to scan sheet tabs and header rows automatically. Use
+              bindings JSON only when auto-detection is not enough or when you want to force a
+              specific column.
+            </p>
           </div>
 
           <div className="flex justify-end">
@@ -290,8 +295,9 @@ export default async function FormImportsPage() {
                       />
                     </Field>
                     <p className="text-xs text-gray-500">
-                      Use JSON mapping when a dropdown should read from a specific range, for
-                      example <code>{`{"department":"Departments!A2:A"}`}</code>.
+                      Leave this empty if the spreadsheet has clean header rows. The app will try
+                      to auto-scan tabs and headers first. Use JSON only when you want to force a
+                      specific range, for example <code>{`{"department":"Departments!A2:A"}`}</code>.
                     </p>
                     <div className="flex justify-end">
                       <button
