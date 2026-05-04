@@ -1,4 +1,5 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { hydrateImportedFormRuntime, type ImportedFormRuntime } from "@/lib/imported-forms";
 import Link from "next/link";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
@@ -13,6 +14,32 @@ export default async function FormImportsPage() {
       .lean(),
   ]);
   const definitionBySlug = new Map(definitions.map((item) => [item.slug, item]));
+  const previewEntries: Array<[string, ImportedFormRuntime]> = await Promise.all(
+    imports.map(async (item) => {
+      try {
+        const runtime = await hydrateImportedFormRuntime({
+          htmlSource: item.htmlSource ?? "",
+          spreadsheetId: item.spreadsheetId ?? "",
+          spreadsheetBindings: item.spreadsheetBindings ?? {},
+        });
+        return [item.slug, runtime];
+      } catch (error) {
+        return [
+          item.slug,
+          {
+            title: item.name,
+            description: "",
+            fields: [],
+            warnings: [error instanceof Error ? error.message : "Failed to scan spreadsheet."],
+            sheetNames: [],
+            spreadsheetBindings: {},
+            autoDetectedBindings: {},
+          },
+        ];
+      }
+    })
+  );
+  const runtimePreviewBySlug = new Map(previewEntries);
 
   return (
     <div className="space-y-6">
@@ -160,173 +187,211 @@ export default async function FormImportsPage() {
           </p>
         ) : (
           <div className="space-y-4">
-            {imports.map((item) => (
-              <article
-                key={String(item._id)}
-                className="rounded-xl border border-brand-100 p-4 bg-white"
-              >
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
-                      <span className="text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 bg-brand-50 text-brand-700 border border-brand-100">
-                        {item.status}
-                      </span>
+            {imports.map((item) => {
+              const runtime = runtimePreviewBySlug.get(item.slug);
+              return (
+                <article key={String(item._id)} className="rounded-xl border border-brand-100 p-4 bg-white">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
+                        <span className="text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 bg-brand-50 text-brand-700 border border-brand-100">
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Slug: <code>{item.slug}</code>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Spreadsheet ID: <code>{item.spreadsheetId || "not provided"}</code>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Runtime URL:{" "}
+                        <Link href={`/forms/${item.slug}`} className="text-brand-700 underline">
+                          /forms/{item.slug}
+                        </Link>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Saved by {item.createdByName || item.createdByEmail || "unknown"} on{" "}
+                        {new Date(item.createdAt).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Slug: <code>{item.slug}</code>
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Spreadsheet ID:{" "}
-                      <code>{item.spreadsheetId || "not provided"}</code>
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Runtime URL:{" "}
-                      <Link href={`/forms/${item.slug}`} className="text-brand-700 underline">
-                        /forms/{item.slug}
-                      </Link>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Saved by {item.createdByName || item.createdByEmail || "unknown"} on{" "}
-                      {new Date(item.createdAt).toLocaleString()}
-                    </p>
-                  </div>
 
-                  <form action={updateFormImportStatus} className="flex items-center gap-2">
-                    <input type="hidden" name="id" value={String(item._id)} />
-                    <select
-                      name="status"
-                      defaultValue={item.status}
-                      className="field-input min-w-[160px]"
-                    >
-                      {FORM_IMPORT_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="submit"
-                      className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                    >
-                      Update
-                    </button>
-                  </form>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
-                  <Metric label="Inputs" value={item.summary?.inputCount ?? 0} />
-                  <Metric label="Selects" value={item.summary?.selectCount ?? 0} />
-                  <Metric label="Textareas" value={item.summary?.textareaCount ?? 0} />
-                  <Metric label="GS Functions" value={item.summary?.scriptFunctionCount ?? 0} />
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-3">
-                    Expected native output
-                  </p>
-                  <TargetStructure slug={item.slug} compact />
-                </div>
-
-                {definitionBySlug.get(item.slug) ? (
-                  <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
-                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-2">
-                      Registry visibility
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      This import already created an admin-side form registry record.
-                    </p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
-                      <Metric
-                        label="Publish status"
-                        valueText={String(definitionBySlug.get(item.slug)?.status ?? "draft")}
-                      />
-                      <Metric
-                        label="Visibility"
-                        valueText={String(definitionBySlug.get(item.slug)?.visibility ?? "admin")}
-                      />
-                      <Metric
-                        label="Availability"
-                        valueText={String(
-                          definitionBySlug.get(item.slug)?.availability ?? "coming-soon"
-                        )}
-                      />
-                      <Metric
-                        label="Implemented"
-                        valueText={
-                          definitionBySlug.get(item.slug)?.isImplemented ? "Yes" : "No"
-                        }
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-3">
-                      Manage dashboard visibility and publishing in <code>/admin/forms</code>.
-                    </p>
-                  </div>
-                ) : null}
-
-                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
-                  <p className="text-xs font-bold tracking-[0.1em] uppercase text-gray-500 mb-3">
-                    Spreadsheet configuration
-                  </p>
-                  <form action={updateFormImportConfig} className="space-y-3">
-                    <input type="hidden" name="id" value={String(item._id)} />
-                    <Field label="Spreadsheet ID">
-                      <input
-                        name="spreadsheetId"
-                        defaultValue={item.spreadsheetId ?? ""}
-                        placeholder="Example: 1AbcDef..."
-                        className="field-input"
-                      />
-                    </Field>
-                    <Field label="Spreadsheet bindings JSON">
-                      <textarea
-                        name="spreadsheetBindings"
-                        rows={6}
-                        defaultValue={JSON.stringify(item.spreadsheetBindings ?? {}, null, 2)}
-                        className="field-input font-mono text-xs"
-                      />
-                    </Field>
-                    <Field label="Notes">
-                      <textarea
-                        name="notes"
-                        rows={3}
-                        defaultValue={item.notes ?? ""}
-                        className="field-input"
-                      />
-                    </Field>
-                    <p className="text-xs text-gray-500">
-                      Leave this empty if the spreadsheet has clean header rows. The app will try
-                      to auto-scan tabs and headers first. Use JSON only when you want to force a
-                      specific range, for example <code>{`{"department":"Departments!A2:A"}`}</code>.
-                    </p>
-                    <div className="flex justify-end">
+                    <form action={updateFormImportStatus} className="flex items-center gap-2">
+                      <input type="hidden" name="id" value={String(item._id)} />
+                      <select
+                        name="status"
+                        defaultValue={item.status}
+                        className="field-input min-w-[160px]"
+                      >
+                        {FORM_IMPORT_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="submit"
-                        className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                        className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
                       >
-                        Save spreadsheet config
+                        Update
                       </button>
+                    </form>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
+                    <Metric label="Inputs" value={item.summary?.inputCount ?? 0} />
+                    <Metric label="Selects" value={item.summary?.selectCount ?? 0} />
+                    <Metric label="Textareas" value={item.summary?.textareaCount ?? 0} />
+                    <Metric label="GS Functions" value={item.summary?.scriptFunctionCount ?? 0} />
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-3">
+                      Expected native output
+                    </p>
+                    <TargetStructure slug={item.slug} compact />
+                  </div>
+
+                  {definitionBySlug.get(item.slug) ? (
+                    <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+                      <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-2">
+                        Registry visibility
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        This import already created an admin-side form registry record.
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
+                        <Metric
+                          label="Publish status"
+                          valueText={String(definitionBySlug.get(item.slug)?.status ?? "draft")}
+                        />
+                        <Metric
+                          label="Visibility"
+                          valueText={String(definitionBySlug.get(item.slug)?.visibility ?? "admin")}
+                        />
+                        <Metric
+                          label="Availability"
+                          valueText={String(
+                            definitionBySlug.get(item.slug)?.availability ?? "coming-soon"
+                          )}
+                        />
+                        <Metric
+                          label="Implemented"
+                          valueText={definitionBySlug.get(item.slug)?.isImplemented ? "Yes" : "No"}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-3">
+                        Manage dashboard visibility and publishing in <code>/admin/forms</code>.
+                      </p>
                     </div>
-                  </form>
-                </div>
+                  ) : null}
 
-                {item.notes ? (
-                  <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">
-                    {item.notes}
+                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
+                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-gray-500 mb-3">
+                      Spreadsheet configuration
+                    </p>
+                    <form action={updateFormImportConfig} className="space-y-3">
+                      <input type="hidden" name="id" value={String(item._id)} />
+                      <Field label="Spreadsheet ID">
+                        <input
+                          name="spreadsheetId"
+                          defaultValue={item.spreadsheetId ?? ""}
+                          placeholder="Example: 1AbcDef..."
+                          className="field-input"
+                        />
+                      </Field>
+                      <Field label="Spreadsheet bindings JSON">
+                        <textarea
+                          name="spreadsheetBindings"
+                          rows={6}
+                          defaultValue={JSON.stringify(item.spreadsheetBindings ?? {}, null, 2)}
+                          className="field-input font-mono text-xs"
+                        />
+                      </Field>
+                      <Field label="Notes">
+                        <textarea
+                          name="notes"
+                          rows={3}
+                          defaultValue={item.notes ?? ""}
+                          className="field-input"
+                        />
+                      </Field>
+                      <p className="text-xs text-gray-500">
+                        Leave this empty if the spreadsheet has clean header rows. The app will try
+                        to auto-scan tabs and headers first. Use JSON only when you want to force a
+                        specific range, for example <code>{`{"department":"Departments!A2:A"}`}</code>.
+                      </p>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                        >
+                          Save spreadsheet config
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                ) : null}
 
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-sm font-medium text-brand-700">
-                    View source snapshot
-                  </summary>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
-                    <SourceBox title="index.html" value={item.htmlSource ?? ""} />
-                    <SourceBox title="code.gs" value={item.appsScriptSource ?? ""} />
+                  <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-3">
+                      Spreadsheet scan preview
+                    </p>
+                    {!item.spreadsheetId ? (
+                      <p className="text-sm text-gray-500">
+                        No spreadsheet ID yet. Add one above to let the app scan tabs and headers.
+                      </p>
+                    ) : (
+                      <div className="space-y-3 text-sm text-gray-600">
+                        <p>
+                          Detected sheet tabs: <code>{runtime?.sheetNames.join(", ") || "none"}</code>
+                        </p>
+                        <div>
+                          <p className="font-semibold text-gray-800 mb-1">Explicit bindings</p>
+                          <pre className="bg-white border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
+{JSON.stringify(runtime?.spreadsheetBindings ?? {}, null, 2)}
+                          </pre>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800 mb-1">Auto-detected field mappings</p>
+                          <pre className="bg-white border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
+{JSON.stringify(runtime?.autoDetectedBindings ?? {}, null, 2)}
+                          </pre>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-800 mb-1">Warnings</p>
+                          {runtime?.warnings.length ? (
+                            <ul className="list-disc pl-5 space-y-1 text-xs text-amber-900">
+                              {runtime.warnings.map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs text-gray-500">No scan warnings.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </details>
-              </article>
-            ))}
+
+                  {item.notes ? (
+                    <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">
+                      {item.notes}
+                    </div>
+                  ) : null}
+
+                  <details className="mt-4">
+                    <summary className="cursor-pointer text-sm font-medium text-brand-700">
+                      View source snapshot
+                    </summary>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
+                      <SourceBox title="index.html" value={item.htmlSource ?? ""} />
+                      <SourceBox title="code.gs" value={item.appsScriptSource ?? ""} />
+                    </div>
+                  </details>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
