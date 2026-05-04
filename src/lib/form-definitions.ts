@@ -99,6 +99,9 @@ function fallbackForms() {
   return [...BUILTIN_FORMS].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+const BUILTIN_FORM_BY_SLUG = new Map(BUILTIN_FORMS.map((form) => [form.slug, form]));
+const BUILTIN_FORM_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
+
 async function syncBuiltInForms() {
   for (const form of BUILTIN_FORMS) {
     try {
@@ -149,11 +152,21 @@ function normalizeForms(rows: Array<any>): AppFormDefinition[] {
   }));
 }
 
+function withBuiltInForms(rows: AppFormDefinition[]) {
+  const importedRows = rows.filter(
+    (row) => row.source === "imported" && !BUILTIN_FORM_SLUGS.has(row.slug)
+  );
+  return [...BUILTIN_FORMS, ...importedRows].sort((a, b) => {
+    const orderDiff = a.sortOrder - b.sortOrder;
+    return orderDiff || a.name.localeCompare(b.name);
+  });
+}
+
 async function loadAllFromDb(): Promise<AppFormDefinition[]> {
   await connectMongo();
   await syncBuiltInForms();
   const rows = await FormDefinition.find({}).sort({ sortOrder: 1, name: 1 }).lean();
-  return normalizeForms(rows);
+  return withBuiltInForms(normalizeForms(rows));
 }
 
 export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition[]> {
@@ -166,6 +179,9 @@ export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition
 }
 
 export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefinition | null> {
+  const builtIn = BUILTIN_FORM_BY_SLUG.get(slug);
+  if (builtIn) return builtIn;
+
   try {
     const forms = await loadAllFromDb();
     return forms.find((form) => form.slug === slug) ?? null;

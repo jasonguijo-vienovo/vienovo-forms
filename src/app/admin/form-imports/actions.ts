@@ -65,6 +65,12 @@ async function ensureImportedRegistryEntry(imported: {
   name: string;
   notes?: string;
 }) {
+  if (RESERVED_NATIVE_SLUGS.has(imported.slug)) {
+    throw new Error(
+      `The slug "${imported.slug}" is reserved by an existing built-in form. Create a new import with a different slug.`
+    );
+  }
+
   await FormDefinition.updateOne(
     { slug: imported.slug },
     {
