@@ -38,6 +38,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 <script>
 (function () {
   var bridge = ${bridgeData};
+  var hasSubmittedToParent = false;
 
   function normalize(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -139,8 +140,92 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     window.parent.postMessage({ type: "vienovo-imported-height", height: height }, "*");
   }
 
+  function normalizeKey(value) {
+    return normalize(String(value || ""));
+  }
+
+  function looksLikeSubmitMethod(prop) {
+    var name = normalizeKey(prop);
+    return (
+      name.indexOf("submit") >= 0 ||
+      name.indexOf("save") >= 0 ||
+      name.indexOf("send") >= 0 ||
+      name.indexOf("create") >= 0 ||
+      name.indexOf("process") >= 0 ||
+      name.indexOf("request") >= 0
+    );
+  }
+
+  function isPlainObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function mergeIntoPayload(target, source) {
+    if (!isPlainObject(source)) return;
+    Object.keys(source).forEach(function (key) {
+      if (!key) return;
+      var value = source[key];
+      if (value == null) {
+        target[key] = "";
+        return;
+      }
+      if (Array.isArray(value)) {
+        target[key] = value.map(function (item) { return String(item ?? ""); });
+        return;
+      }
+      target[key] = String(value);
+    });
+  }
+
+  function collectSubmitArgs(args) {
+    var values = {};
+    Array.prototype.forEach.call(args || [], function (arg) {
+      if (!arg) return;
+      if (arg instanceof HTMLFormElement) {
+        var formData = new FormData(arg);
+        formData.forEach(function (value, key) {
+          if (value instanceof File) {
+            values[key] = value.name || "";
+            return;
+          }
+          values[key] = String(value ?? "");
+        });
+        return;
+      }
+      if (arg instanceof Event && arg.target instanceof HTMLFormElement) {
+        var eventFormData = new FormData(arg.target);
+        eventFormData.forEach(function (value, key) {
+          if (value instanceof File) {
+            values[key] = value.name || "";
+            return;
+          }
+          values[key] = String(value ?? "");
+        });
+        return;
+      }
+      if (isPlainObject(arg)) {
+        mergeIntoPayload(values, arg);
+      }
+    });
+    return values;
+  }
+
   function submitToParent() {
+    if (hasSubmittedToParent) return;
+    hasSubmittedToParent = true;
     var payload = collectValues();
+    window.parent.postMessage({
+      type: "vienovo-imported-submit",
+      values: payload.values,
+      labels: payload.labels
+    }, "*");
+  }
+
+  function submitArgsToParent(args) {
+    if (hasSubmittedToParent) return;
+    hasSubmittedToParent = true;
+    var payload = collectValues();
+    mergeIntoPayload(payload.values, collectSubmitArgs(args));
     window.parent.postMessage({
       type: "vienovo-imported-submit",
       values: payload.values,
@@ -169,6 +254,12 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
         return function () {
           try {
             var name = String(prop);
+            var args = arguments;
+            if (looksLikeSubmitMethod(name)) {
+              submitArgsToParent(args);
+              if (successHandler) setTimeout(function () { successHandler(); }, 0);
+              return proxy;
+            }
             var options = findOptions(name);
             var result = options.length ? options.map(optionLabel) : bridge.optionsByName;
             if (successHandler) setTimeout(function () { successHandler(result); }, 0);
