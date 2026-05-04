@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
@@ -107,6 +108,8 @@ async function ensureImportedRegistryEntry(imported: {
   );
 }
 
+const FORM_IMPORTS_PATH = "/admin/form-imports";
+
 export async function createFormImport(formData: FormData) {
   try {
     const { email, session } = await requireAdmin();
@@ -167,13 +170,15 @@ export async function createFormImport(formData: FormData) {
       message: existing ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
     });
 
-    revalidatePath("/admin/form-imports");
+    revalidatePath(FORM_IMPORTS_PATH);
     revalidatePath("/admin/forms");
   } catch (error) {
     console.error("createFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
-    revalidatePath("/admin/form-imports");
+    revalidatePath(FORM_IMPORTS_PATH);
   }
+
+  redirect(FORM_IMPORTS_PATH);
 }
 
 export async function updateFormImportConfig(formData: FormData) {
@@ -197,7 +202,8 @@ export async function updateFormImportConfig(formData: FormData) {
   );
   await setFlashToast({ tone: "success", message: "Import settings saved." });
 
-  revalidatePath("/admin/form-imports");
+  revalidatePath(FORM_IMPORTS_PATH);
+  redirect(FORM_IMPORTS_PATH);
 }
 
 export async function publishFormImport(formData: FormData) {
@@ -233,10 +239,11 @@ export async function publishFormImport(formData: FormData) {
   );
   await setFlashToast({ tone: "success", message: `${imported.name} is now published for users.` });
 
-  revalidatePath("/admin/form-imports");
+  revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
+  redirect(FORM_IMPORTS_PATH);
 }
 
 export async function createMissingRegistryEntry(formData: FormData) {
@@ -252,8 +259,9 @@ export async function createMissingRegistryEntry(formData: FormData) {
   await ensureImportedRegistryEntry(imported);
   await setFlashToast({ tone: "success", message: "Registry entry created from import draft." });
 
-  revalidatePath("/admin/form-imports");
+  revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  redirect(FORM_IMPORTS_PATH);
 }
 
 export async function updateFormImportStatus(formData: FormData) {
@@ -269,8 +277,9 @@ export async function updateFormImportStatus(formData: FormData) {
     await FormDefinition.updateOne({ importSourceId: id }, { $set: { isImplemented: true } });
   }
   await setFlashToast({ tone: "success", message: `Import status saved as ${status}.` });
-  revalidatePath("/admin/form-imports");
+  revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  redirect(FORM_IMPORTS_PATH);
 }
 
 export async function deleteFormImport(formData: FormData) {
@@ -291,8 +300,9 @@ export async function deleteFormImport(formData: FormData) {
   ]);
   await setFlashToast({ tone: "success", message: `${imported.name} import was deleted.` });
 
-  revalidatePath("/admin/form-imports");
+  revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
+  redirect(FORM_IMPORTS_PATH);
 }

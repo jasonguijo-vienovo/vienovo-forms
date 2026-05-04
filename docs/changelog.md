@@ -19,6 +19,7 @@
 - Added delete controls for imported registry entries and imported form drafts.
 - Re-importing a form with the same slug now replaces the existing draft instead of creating duplicate importer records.
 - Hardened form re-import again so duplicate slug drafts are cleaned up and importer failures show a readable toast instead of a generic production 500.
+- Changed importer actions to redirect back to `/admin/form-imports` after save/update/delete so the page reloads with fresh data and visible feedback instead of silently resetting the form.
 
 ### Dashboard
 - The dashboard now hides unavailable or coming-soon forms from normal users.
