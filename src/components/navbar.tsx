@@ -8,7 +8,11 @@ import { safeAuth } from "@/lib/safe-auth";
 const HELP_DESK_URL = "https://itdashboard-mu.vercel.app/helpdesk/";
 const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
 
-export async function Navbar() {
+export async function Navbar({
+  adminShortcut,
+}: {
+  adminShortcut?: { href: string; label: string } | null;
+} = {}) {
   const session = await safeAuth();
   const showAdmin = isAdminEmail(session?.user?.email);
   const navbarForms = await getNavbarForms();
@@ -39,6 +43,9 @@ export async function Navbar() {
             }))}
           />
           <ExternalNavLink href={HELP_DESK_URL}>Helpdesk</ExternalNavLink>
+          {showAdmin && adminShortcut ? (
+            <NavLink href={adminShortcut.href}>{adminShortcut.label}</NavLink>
+          ) : null}
           {showAdmin && <NavLink href="/admin">Admin</NavLink>}
         </nav>
 
