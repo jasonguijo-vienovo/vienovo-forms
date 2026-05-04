@@ -10,6 +10,7 @@ import {
   appendSpreadsheetRow,
   ensureSpreadsheetSheet,
   readSpreadsheetMatrix,
+  writeSpreadsheetRow,
 } from "@/lib/google/sheets";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
 import { generateReferenceNo } from "@/lib/reference-number";
@@ -82,6 +83,56 @@ function stringifyValue(value: unknown) {
   return String(value ?? "");
 }
 
+function normalizeHeaderKey(value: string) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function candidateKeys(...values: string[]) {
+  const keys = new Set<string>();
+  for (const value of values) {
+    const key = normalizeHeaderKey(value);
+    if (!key) continue;
+    keys.add(key);
+    if (key.startsWith("nameof")) keys.add(key.slice("nameof".length));
+    if (key === "amounttotal") keys.add("totalamount");
+    if (key === "totalamount") keys.add("amounttotal");
+    if (key.startsWith("requestor")) keys.add(key.replace(/^requestor/, "submittedby"));
+    if (key.startsWith("requester")) keys.add(key.replace(/^requester/, "submittedby"));
+  }
+  return [...keys].filter(Boolean);
+}
+
+function headerMatchScore(headerKey: string, candidates: string[]) {
+  let best = 0;
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (headerKey === candidate) return 3;
+    if (candidate.length >= 5 && (headerKey.includes(candidate) || candidate.includes(headerKey))) {
+      best = Math.max(best, 2);
+    }
+  }
+  return best;
+}
+
+function findBestHeaderIndex(
+  headers: string[],
+  candidates: string[],
+  usedIndexes: Set<number>
+) {
+  let bestIndex = -1;
+  let bestScore = 0;
+  for (let index = 0; index < headers.length; index += 1) {
+    if (usedIndexes.has(index)) continue;
+    const score = headerMatchScore(normalizeHeaderKey(headers[index]), candidates);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+      if (score === 3) break;
+    }
+  }
+  return bestIndex;
+}
+
 async function writeImportedSubmissionToSheet(opts: {
   spreadsheetId: string;
   sheetTitle: string;
@@ -95,36 +146,102 @@ async function writeImportedSubmissionToSheet(opts: {
 }) {
   await ensureSpreadsheetSheet(opts.spreadsheetId, opts.sheetTitle);
   const existing = await readSpreadsheetMatrix(opts.spreadsheetId, `${opts.sheetTitle}!A1:ZZ2`);
-  const baseHeaders = [
+  const timestamp = new Date();
+  const timestampText = timestamp.toLocaleString("en-US", { hour12: false });
+  const defaultBaseHeaders = [
+    "Request ID",
     "Timestamp",
-    "Reference No",
+    "Requestor Name",
+    "Requestor Email",
+    "Status",
+    "Last Updated",
     "Form Slug",
     "Form Name",
-    "Submitted By Email",
-    "Submitted By Name",
-    "Status",
   ];
-  const fieldEntries = Object.entries(opts.labels);
-  const headers = [...baseHeaders, ...fieldEntries.map(([, label]) => label)];
+  const fieldEntries = Object.entries(opts.labels).map(([name, label]) => ({
+    header: label || humanize(name),
+    value: stringifyValue(opts.values[name]),
+    candidates: candidateKeys(label || humanize(name), name, humanize(name)),
+  }));
 
-  if ((existing[0] ?? []).length === 0) {
-    await appendSpreadsheetRow({
+  let headers = (existing[0] ?? []).map((value) => String(value ?? "").trim());
+  if (headers.length === 0) {
+    headers = [...defaultBaseHeaders, ...fieldEntries.map((entry) => entry.header)];
+    await writeSpreadsheetRow({
       spreadsheetId: opts.spreadsheetId,
-      sheetTitle: opts.sheetTitle,
+      range: `${opts.sheetTitle}!A1`,
       values: headers,
     });
   }
 
-  const row = [
-    new Date().toISOString(),
-    opts.referenceNo,
-    opts.slug,
-    opts.importedName,
-    opts.submittedByEmail,
-    opts.submittedByName,
-    "submitted",
-    ...fieldEntries.map(([name]) => stringifyValue(opts.values[name])),
+  const row = new Array(headers.length).fill("");
+  const usedIndexes = new Set<number>();
+
+  const baseEntries = [
+    {
+      candidates: candidateKeys("Request ID", "Reference No", "Reference Number", "Request No"),
+      value: opts.referenceNo,
+    },
+    {
+      candidates: candidateKeys("Timestamp", "Created At", "Submitted At"),
+      value: timestampText,
+    },
+    {
+      candidates: candidateKeys("Requestor Name", "Requester Name", "Submitted By Name"),
+      value: opts.submittedByName,
+    },
+    {
+      candidates: candidateKeys("Requestor Email", "Requester Email", "Submitted By Email"),
+      value: opts.submittedByEmail,
+    },
+    {
+      candidates: candidateKeys("Status", "Request Status"),
+      value: "submitted",
+    },
+    {
+      candidates: candidateKeys("Last Updated", "Updated At", "Modified At"),
+      value: timestampText,
+    },
+    {
+      candidates: candidateKeys("Form Slug", "Slug"),
+      value: opts.slug,
+    },
+    {
+      candidates: candidateKeys("Form Name", "Imported Form Name"),
+      value: opts.importedName,
+    },
   ];
+
+  for (const entry of baseEntries) {
+    const index = findBestHeaderIndex(headers, entry.candidates, usedIndexes);
+    if (index >= 0) {
+      row[index] = entry.value;
+      usedIndexes.add(index);
+    }
+  }
+
+  const unmatchedFields: typeof fieldEntries = [];
+  for (const entry of fieldEntries) {
+    const index = findBestHeaderIndex(headers, entry.candidates, usedIndexes);
+    if (index >= 0) {
+      row[index] = entry.value;
+      usedIndexes.add(index);
+    } else {
+      unmatchedFields.push(entry);
+    }
+  }
+
+  if (unmatchedFields.length > 0) {
+    headers = [...headers, ...unmatchedFields.map((entry) => entry.header)];
+    for (const entry of unmatchedFields) {
+      row.push(entry.value);
+    }
+    await writeSpreadsheetRow({
+      spreadsheetId: opts.spreadsheetId,
+      range: `${opts.sheetTitle}!A1`,
+      values: headers,
+    });
+  }
 
   await appendSpreadsheetRow({
     spreadsheetId: opts.spreadsheetId,

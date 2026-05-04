@@ -178,3 +178,21 @@ export async function appendSpreadsheetRow(opts: {
     "https://www.googleapis.com/auth/spreadsheets"
   );
 }
+
+export async function writeSpreadsheetRow(opts: {
+  spreadsheetId: string;
+  range: string;
+  values: string[];
+}) {
+  await authorizedSheetsFetch(
+    `spreadsheets/${encodeURIComponent(opts.spreadsheetId)}/values/${encodeURIComponent(opts.range)}?valueInputOption=USER_ENTERED`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        majorDimension: "ROWS",
+        values: [opts.values],
+      }),
+    },
+    "https://www.googleapis.com/auth/spreadsheets"
+  );
+}
