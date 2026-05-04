@@ -1,11 +1,5 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error("MONGODB_URI is not defined. Copy .env.example to .env.local.");
-}
-
 type Cached = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -25,8 +19,13 @@ if (!globalWithMongoose._mongooseCache) {
 export async function connectMongo(): Promise<typeof mongoose> {
   if (cached.conn) return cached.conn;
 
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI is not defined. Copy .env.example to .env.local.");
+  }
+
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI!, {
+    cached.promise = mongoose.connect(mongoUri, {
       bufferCommands: false,
       serverSelectionTimeoutMS: 5000,
     });
