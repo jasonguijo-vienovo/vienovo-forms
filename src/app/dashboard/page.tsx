@@ -1,3 +1,4 @@
+import { Clock3, FileText, PlusCircle, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -50,7 +51,7 @@ export default async function DashboardPage() {
             Welcome, {String(name).split(" ")[0]}
           </h1>
           <p className="text-gray-500 mt-1">
-            Submit a new request or check the status of your existing ones.
+            Start a request, track your submissions, and see approvals waiting for you.
           </p>
         </div>
 
@@ -63,7 +64,7 @@ export default async function DashboardPage() {
               forms.map((form) => <FormCard key={form.slug} {...form} />)
             ) : (
               <div className="sm:col-span-2 lg:col-span-3 rounded-2xl border border-brand-100 bg-white p-6 text-sm text-gray-400 text-center">
-                No available forms right now.
+                No available request forms right now.
               </div>
             )}
           </div>
@@ -118,13 +119,16 @@ function FormCard({
   const inner = (
     <div
       className={`bg-white rounded-2xl shadow-sm border border-brand-100 p-5 h-full transition ${
-        available
-          ? "hover:shadow-md hover:border-brand-300 cursor-pointer"
-          : "opacity-60"
+        available ? "hover:shadow-md hover:border-brand-300 cursor-pointer" : "opacity-60"
       }`}
     >
-      <div className="flex items-start justify-between mb-2">
-        <h3 className="font-bold text-gray-800">{name}</h3>
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="rounded-lg bg-brand-50 p-2 text-brand-700">
+            <FileText className="h-4 w-4" />
+          </div>
+          <h3 className="font-bold text-gray-800 truncate">{name}</h3>
+        </div>
         {!available && (
           <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
             Soon
@@ -132,19 +136,19 @@ function FormCard({
         )}
       </div>
       <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
+      {available ? (
+        <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-700">
+          <PlusCircle className="h-4 w-4" />
+          Start request
+        </div>
+      ) : null}
     </div>
   );
 
   return available ? <Link href={routePath || `/forms/${slug}`}>{inner}</Link> : inner;
 }
 
-function Panel({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
       <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
@@ -177,9 +181,10 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
       <div className="flex items-start justify-between gap-3">
         <Link href={`/requests/${request.referenceNo}`} className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-800 truncate">{requestFormLabel(request)}</p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+            <Clock3 className="h-3.5 w-3.5" />
             <span className="font-mono">{request.referenceNo}</span>
-            {" · "}
+            {" - "}
             {formatDate(request.createdAt)}
           </p>
         </Link>
@@ -196,8 +201,9 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
           <input type="hidden" name="referenceNo" value={request.referenceNo} />
           <button
             type="submit"
-            className="text-xs font-semibold text-red-700 border border-red-200 bg-white hover:bg-red-50 rounded-lg px-3 py-1.5 transition"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 border border-red-200 bg-white hover:bg-red-50 rounded-lg px-3 py-1.5 transition"
           >
+            <Trash2 className="h-3.5 w-3.5" />
             Delete request
           </button>
         </form>

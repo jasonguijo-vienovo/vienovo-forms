@@ -1,35 +1,48 @@
+import { Eye, FileInput, ListChecks, Save, Trash2, Undo2 } from "lucide-react";
+import Link from "next/link";
+import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import {
   FORM_DEFINITION_AVAILABILITIES,
   FORM_DEFINITION_STATUSES,
   FORM_DEFINITION_VISIBILITIES,
 } from "@/models/FormDefinition";
+import { FormImport } from "@/models/FormImport";
 import { deleteFormDefinition, hideFormDefinition, updateFormDefinition } from "./actions";
 
 export default async function AdminFormsPage() {
   const forms = await getAllFormDefinitionsForAdmin();
+  await connectMongo();
+  const imports = await FormImport.find({})
+    .select({ slug: 1, name: 1 })
+    .lean();
+  const importedSlugSet = new Set(imports.map((item) => item.slug));
+
   const publishedCount = forms.filter((form) => form.status === "published").length;
   const draftCount = forms.filter((form) => form.status === "draft").length;
   const importedCount = forms.filter((form) => form.source === "imported").length;
+  const liveCount = forms.filter(isLiveForRequesters).length;
   const hasOnlyBuiltIns = importedCount === 0 && forms.every((form) => form.source === "native");
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Forms registry</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          This is the control panel for whether a form shows up to users, stays admin-only, or is
-          still treated as coming soon.
-        </p>
-      </div>
-
-      <div className="rounded-2xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
-        <p className="font-semibold text-gray-800 mb-1">What this page is for</p>
-        <p>
-          Use this page to decide if a form is visible on the dashboard and forms list, whether it
-          should appear in the navbar quick menu, and whether it is ready for users or still in
-          draft mode.
-        </p>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Forms registry</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Control which forms are live for requesters, admin-only, hidden, or shown in the navbar.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <LinkButton href="/admin/form-imports">
+            <FileInput className="h-4 w-4" />
+            Import form
+          </LinkButton>
+          <LinkButton href="/admin/lookups">
+            <ListChecks className="h-4 w-4" />
+            Manage dropdowns
+          </LinkButton>
+        </div>
       </div>
 
       {hasOnlyBuiltIns ? (
@@ -42,10 +55,11 @@ export default async function AdminFormsPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Stat label="Published forms" value={publishedCount} />
-        <Stat label="Draft forms" value={draftCount} />
-        <Stat label="Imported forms" value={importedCount} />
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <Stat label="Live to users" value={liveCount} tone="ok" />
+        <Stat label="Published" value={publishedCount} />
+        <Stat label="Draft" value={draftCount} />
+        <Stat label="Imported" value={importedCount} />
       </div>
 
       <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
@@ -57,19 +71,20 @@ export default async function AdminFormsPage() {
         </div>
 
         <div className="space-y-4">
-          {forms.map((form) => (
-            <article
-              key={form.slug}
-              className="rounded-xl border border-brand-100 p-4 bg-white"
-            >
-              <form action={updateFormDefinition} className="space-y-4">
-                <input type="hidden" name="id" value={form._id ?? ""} />
-                <input type="hidden" name="slug" value={form.slug} />
+          {forms.map((form) => {
+            const liveForUsers = isLiveForRequesters(form);
+            const implementedRoute = form.isImplemented && form.routePath;
+            const sourceExists = form.source === "native" || importedSlugSet.has(form.slug);
 
+            return (
+              <article key={form.slug} className="rounded-xl border border-brand-100 bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-lg font-semibold text-gray-800">{form.name}</h3>
+                      <Badge tone={liveForUsers ? "ok" : "warn"}>
+                        {liveForUsers ? "live" : "not live"}
+                      </Badge>
                       <Badge>{form.status}</Badge>
                       <Badge tone="neutral">{form.source}</Badge>
                       {form.visibility === "admin" ? <Badge tone="warn">admin only</Badge> : null}
@@ -77,160 +92,211 @@ export default async function AdminFormsPage() {
                     <p className="text-sm text-gray-500 mt-1">
                       Slug: <code>{form.slug}</code>
                     </p>
-                  </div>
-
-                  <div className="text-xs text-gray-500 space-y-1">
-                    <div>
+                    <p className="text-xs text-gray-400 mt-1">
                       Route: <code>{form.routePath}</code>
-                    </div>
-                    <div>
-                      Availability: <strong>{form.availability}</strong>
-                    </div>
-                    <div>
-                      Implemented: <strong>{form.isImplemented ? "Yes" : "No"}</strong>
-                    </div>
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {implementedRoute ? (
+                      <LinkButton href={form.routePath}>
+                        <Eye className="h-4 w-4" />
+                        Open
+                      </LinkButton>
+                    ) : null}
+                    {implementedRoute ? (
+                      <LinkButton href={`${form.routePath}?preview=requester`}>
+                        <Eye className="h-4 w-4" />
+                        Requester preview
+                      </LinkButton>
+                    ) : null}
+                    {form.source === "imported" ? (
+                      <LinkButton href="/admin/form-imports">
+                        <FileInput className="h-4 w-4" />
+                        Import source
+                      </LinkButton>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Name">
-                    <input name="name" defaultValue={form.name} className="field-input" />
-                  </Field>
-                  <Field label="Route path">
-                    <input name="routePath" defaultValue={form.routePath} className="field-input" />
-                  </Field>
+                {!sourceExists ? (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    This imported registry entry has no matching import draft. Re-import the source
+                    with the same slug or delete the registry entry.
+                  </div>
+                ) : null}
+
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <StatusMetric label="Status" value={form.status} />
+                  <StatusMetric label="Visibility" value={form.visibility} />
+                  <StatusMetric label="Availability" value={form.availability} />
+                  <StatusMetric label="Navbar" value={form.showInNavbar ? "shown" : "hidden"} />
                 </div>
 
-                <Field label="Description">
-                  <textarea
-                    name="description"
-                    rows={3}
-                    defaultValue={form.description}
-                    className="field-input"
-                  />
-                </Field>
+                <form action={updateFormDefinition} className="space-y-4 mt-4">
+                  <input type="hidden" name="id" value={form._id ?? ""} />
+                  <input type="hidden" name="slug" value={form.slug} />
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Field label="Publishing status">
-                    <select name="status" defaultValue={form.status} className="field-input">
-                      {FORM_DEFINITION_STATUSES.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Visibility">
-                    <select name="visibility" defaultValue={form.visibility} className="field-input">
-                      {FORM_DEFINITION_VISIBILITIES.map((visibility) => (
-                        <option key={visibility} value={visibility}>
-                          {visibility}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label="Catalog availability">
-                    <select name="availability" defaultValue={form.availability} className="field-input">
-                      {FORM_DEFINITION_AVAILABILITIES.map((availability) => (
-                        <option key={availability} value={availability}>
-                          {availability}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Name">
+                      <input name="name" defaultValue={form.name} className="field-input" />
+                    </Field>
+                    <Field label="Route path">
+                      <input name="routePath" defaultValue={form.routePath} className="field-input" />
+                    </Field>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="Notes">
+                  <Field label="Description">
                     <textarea
-                      name="notes"
+                      name="description"
                       rows={3}
-                      defaultValue={form.notes}
+                      defaultValue={form.description}
                       className="field-input"
                     />
                   </Field>
-                  <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
-                    <p className="text-sm font-semibold text-gray-800 mb-3">Display controls</p>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-                      <input
-                        type="checkbox"
-                        name="isImplemented"
-                        defaultChecked={form.isImplemented}
-                        className="accent-brand-600"
-                      />
-                      <span>Form code exists and route is ready</span>
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        name="showInNavbar"
-                        defaultChecked={form.showInNavbar}
-                        className="accent-brand-600"
-                      />
-                      <span>Show in navbar quick menu</span>
-                    </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Field label="Publishing status">
+                      <select name="status" defaultValue={form.status} className="field-input">
+                        {FORM_DEFINITION_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Visibility">
+                      <select name="visibility" defaultValue={form.visibility} className="field-input">
+                        {FORM_DEFINITION_VISIBILITIES.map((visibility) => (
+                          <option key={visibility} value={visibility}>
+                            {visibility}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Catalog availability">
+                      <select name="availability" defaultValue={form.availability} className="field-input">
+                        {FORM_DEFINITION_AVAILABILITIES.map((availability) => (
+                          <option key={availability} value={availability}>
+                            {availability}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
                   </div>
-                </div>
 
-                <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
-                  <p className="font-semibold text-gray-800 mb-1">Publishing rule</p>
-                  <p>
-                    A form appears on the public dashboard/forms list only when it is{" "}
-                    <strong>published</strong>. It becomes clickable only when it is both{" "}
-                    <strong>implemented</strong> and <strong>available</strong>. Imported forms
-                    should normally stay <strong>draft + admin</strong> until implementation is
-                    done.
-                  </p>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Notes">
+                      <textarea
+                        name="notes"
+                        rows={3}
+                        defaultValue={form.notes}
+                        className="field-input"
+                      />
+                    </Field>
+                    <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                      <p className="text-sm font-semibold text-gray-800 mb-3">Display controls</p>
+                      <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                        <input
+                          type="checkbox"
+                          name="isImplemented"
+                          defaultChecked={form.isImplemented}
+                          className="accent-brand-600"
+                        />
+                        <span>Route is ready and can be opened</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          name="showInNavbar"
+                          defaultChecked={form.showInNavbar}
+                          className="accent-brand-600"
+                        />
+                        <span>Show in navbar quick menu</span>
+                      </label>
+                    </div>
+                  </div>
 
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                  >
-                    Save form settings
-                  </button>
-                </div>
-              </form>
-              <div className="mt-3 flex flex-wrap justify-end gap-2">
-                <form action={hideFormDefinition}>
-                  <input type="hidden" name="id" value={form._id ?? ""} />
-                  <input type="hidden" name="slug" value={form.slug} />
-                  <button
-                    type="submit"
-                    className="bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                  >
-                    Hide from users
-                  </button>
+                  <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
+                    <p className="font-semibold text-gray-800 mb-1">Requester visibility rule</p>
+                    <p>
+                      Users see this form only when it is published, visible to everyone, available,
+                      and marked ready.
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save settings
+                    </button>
+                  </div>
                 </form>
-                {form.source === "imported" ? (
-                  <form action={deleteFormDefinition}>
+
+                <div className="mt-3 flex flex-wrap justify-end gap-2">
+                  <form action={hideFormDefinition}>
                     <input type="hidden" name="id" value={form._id ?? ""} />
                     <input type="hidden" name="slug" value={form.slug} />
-                  <button
-                    type="submit"
-                    className="bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                  >
-                    Delete registry entry
-                  </button>
-                </form>
-                ) : null}
-              </div>
-            </article>
-          ))}
+                    <button
+                      type="submit"
+                      className="inline-flex items-center gap-2 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                    >
+                      <Undo2 className="h-4 w-4" />
+                      Hide from users
+                    </button>
+                  </form>
+                  {form.source === "imported" ? (
+                    <form action={deleteFormDefinition}>
+                      <input type="hidden" name="id" value={form._id ?? ""} />
+                      <input type="hidden" name="slug" value={form.slug} />
+                      <button
+                        type="submit"
+                        className="inline-flex items-center gap-2 bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete registry entry
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
+function isLiveForRequesters(form: {
+  status: string;
+  visibility: string;
+  availability: string;
+  isImplemented: boolean;
 }) {
+  return (
+    form.status === "published" &&
+    form.visibility === "everyone" &&
+    form.availability === "available" &&
+    form.isImplemented
+  );
+}
+
+function LinkButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}</label>
@@ -239,11 +305,21 @@ function Field({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "ok" }) {
+  const valueClass = tone === "ok" ? "text-green-700" : "text-gray-800";
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="text-3xl font-bold mt-1 text-gray-800">{value}</p>
+      <p className={`text-3xl font-bold mt-1 ${valueClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function StatusMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-brand-100 bg-brand-50/40 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">{label}</p>
+      <p className="text-sm font-bold text-gray-800">{value}</p>
     </div>
   );
 }
@@ -253,14 +329,16 @@ function Badge({
   tone = "brand",
 }: {
   children: React.ReactNode;
-  tone?: "brand" | "warn" | "neutral";
+  tone?: "brand" | "warn" | "neutral" | "ok";
 }) {
   const className =
-    tone === "warn"
-      ? "bg-amber-50 text-amber-700 border-amber-200"
-      : tone === "neutral"
-        ? "bg-gray-50 text-gray-600 border-gray-200"
-        : "bg-brand-50 text-brand-700 border-brand-100";
+    tone === "ok"
+      ? "bg-green-50 text-green-700 border-green-200"
+      : tone === "warn"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : tone === "neutral"
+          ? "bg-gray-50 text-gray-600 border-gray-200"
+          : "bg-brand-50 text-brand-700 border-brand-100";
 
   return (
     <span

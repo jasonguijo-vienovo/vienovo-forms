@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { signOut } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { getNavbarForms } from "@/lib/form-definitions";
@@ -123,7 +124,9 @@ function NewRequestMenu({
   return (
     <details className="relative">
       <summary className="list-none px-3 py-1.5 rounded-lg hover:bg-white/15 transition font-medium cursor-pointer select-none">
-        New request <span className="text-[10px] align-middle opacity-90">▼</span>
+        <span className="inline-flex items-center gap-1">
+          New request <ChevronDown className="h-3.5 w-3.5 opacity-90" />
+        </span>
       </summary>
       <div className="absolute z-50 mt-2 w-64 rounded-xl border border-brand-100 bg-white text-gray-800 shadow-lg overflow-hidden">
         <div className="py-1">

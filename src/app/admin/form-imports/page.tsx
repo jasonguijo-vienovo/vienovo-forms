@@ -1,8 +1,19 @@
+import {
+  CheckCircle2,
+  Circle,
+  DatabaseZap,
+  Eye,
+  FileInput,
+  Layers3,
+  Settings2,
+  Trash2,
+} from "lucide-react";
+import Link from "next/link";
 import { connectMongo } from "@/lib/db/mongo";
 import { hydrateImportedFormRuntime, type ImportedFormRuntime } from "@/lib/imported-forms";
-import Link from "next/link";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
+import { Lookup } from "@/models/Lookup";
 import {
   createMissingRegistryEntry,
   createFormImport,
@@ -13,15 +24,43 @@ import {
   updateFormImportStatus,
 } from "./actions";
 
+type SyncedDropdownStats = {
+  categoryCount: number;
+  valueCount: number;
+};
+
+function normalizeLookupKey(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 export default async function FormImportsPage() {
   await connectMongo();
-  const [imports, definitions] = await Promise.all([
+  const [imports, definitions, syncedLookupRows] = await Promise.all([
     FormImport.find({}).sort({ createdAt: -1 }).lean(),
     FormDefinition.find({ source: "imported" })
       .select({ slug: 1, status: 1, visibility: 1, availability: 1, isImplemented: 1 })
       .lean(),
+    Lookup.find({ category: /^imported:/, isActive: true })
+      .select({ category: 1, value: 1 })
+      .lean(),
   ]);
+
   const definitionBySlug = new Map(definitions.map((item) => [item.slug, item]));
+  const syncedStatsBySlugKey = new Map<string, SyncedDropdownStats & { categories: Set<string> }>();
+  for (const row of syncedLookupRows) {
+    const [, slugKey] = String(row.category).split(":");
+    if (!slugKey) continue;
+    const current = syncedStatsBySlugKey.get(slugKey) ?? {
+      categoryCount: 0,
+      valueCount: 0,
+      categories: new Set<string>(),
+    };
+    current.categories.add(String(row.category));
+    current.categoryCount = current.categories.size;
+    current.valueCount += 1;
+    syncedStatsBySlugKey.set(slugKey, current);
+  }
+
   const previewEntries: Array<[string, ImportedFormRuntime]> = await Promise.all(
     imports.map(async (item) => {
       try {
@@ -41,40 +80,53 @@ export default async function FormImportsPage() {
             fields: [],
             warnings: [error instanceof Error ? error.message : "Failed to scan spreadsheet."],
             sheetNames: [],
-              spreadsheetBindings: {},
-              autoDetectedBindings: {},
-              hydratedHtml: "",
-            },
-          ];
+            spreadsheetBindings: {},
+            autoDetectedBindings: {},
+            hydratedHtml: "",
+          },
+        ];
       }
     })
   );
   const runtimePreviewBySlug = new Map(previewEntries);
 
+  const readyForReview = imports.filter((item) => definitionBySlug.has(item.slug)).length;
+  const published = definitions.filter(
+    (item) =>
+      item.status === "published" &&
+      item.visibility === "everyone" &&
+      item.availability === "available" &&
+      item.isImplemented
+  ).length;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Form importer</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Save legacy Apps Script form assets here so we can convert them into native app forms.
-        </p>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Form importer</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Bring a legacy Apps Script form into the app, sync its dropdowns, preview it, then
+            publish it for requesters.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <MiniStat label="Drafts" value={imports.length} />
+          <MiniStat label="Ready" value={readyForReview} />
+          <MiniStat label="Live" value={published} />
+        </div>
       </div>
 
       <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-        <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
-          Target output structure
-        </h2>
-        <p className="text-sm text-gray-500 mb-4">
-          Every imported form is meant to end up in the same native structure used by the existing
-          forms in this repo.
-        </p>
-        <TargetStructure slug="your-form-slug" />
-      </section>
+        <div className="flex items-center gap-3 mb-4">
+          <StepNumber value="1" />
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">Create or replace an import draft</h2>
+            <p className="text-sm text-gray-500">
+              Use the same slug to re-import a form. The latest source replaces the old draft.
+            </p>
+          </div>
+        </div>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-        <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
-          New import draft
-        </h2>
         <form action={createFormImport} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Form name" required>
@@ -97,39 +149,10 @@ export default async function FormImportsPage() {
           <Field label="Spreadsheet ID">
             <input
               name="spreadsheetId"
-              placeholder="Optional. Needed if dropdowns or responses are sheet-driven."
+              placeholder="Optional, but needed for sheet-driven dropdowns."
               className="field-input"
             />
           </Field>
-
-          <Field label="Spreadsheet bindings JSON">
-            <textarea
-              name="spreadsheetBindings"
-              rows={6}
-              placeholder={`{\n  \"department\": \"Departments!A2:A\",\n  \"destination\": \"Airports!A2:A\"\n}`}
-              className="field-input font-mono text-xs"
-            />
-          </Field>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
-                <span>Also write submitted responses back to Google Sheets</span>
-              </label>
-              <p className="text-xs text-gray-500 mt-2">
-                Optional. Mongo stays the main record, and Sheets gets a copy of each imported-form
-                submission.
-              </p>
-            </div>
-            <Field label="Response sheet tab">
-              <input
-                name="responseSheetName"
-                placeholder="Optional. Example: Imported Responses"
-                className="field-input"
-              />
-            </Field>
-          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Field label="index.html file">
@@ -150,53 +173,78 @@ export default async function FormImportsPage() {
             </Field>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Field label="index.html source" required>
-              <textarea
-                name="htmlSource"
-                rows={14}
-                placeholder="Paste the legacy form HTML here if you are not uploading the file."
-                className="field-input font-mono text-xs"
-              />
-            </Field>
-            <Field label="code.gs source" required>
-              <textarea
-                name="appsScriptSource"
-                rows={14}
-                placeholder="Paste the Google Apps Script code here if you are not uploading the file."
-                className="field-input font-mono text-xs"
-              />
-            </Field>
-          </div>
+          <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+              Paste source instead of uploading files
+            </summary>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+              <Field label="index.html source">
+                <textarea
+                  name="htmlSource"
+                  rows={12}
+                  placeholder="Paste the legacy form HTML here if you are not uploading the file."
+                  className="field-input font-mono text-xs"
+                />
+              </Field>
+              <Field label="code.gs source">
+                <textarea
+                  name="appsScriptSource"
+                  rows={12}
+                  placeholder="Paste the Google Apps Script code here if you are not uploading the file."
+                  className="field-input font-mono text-xs"
+                />
+              </Field>
+            </div>
+          </details>
 
-          <Field label="Notes">
-            <textarea
-              name="notes"
-              rows={4}
-              placeholder="Optional notes about dropdown sources, workflow rules, approvers, or anything we should preserve."
-              className="field-input"
-            />
-          </Field>
-
-          <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4 text-sm text-gray-600">
-            <p className="font-semibold text-gray-800 mb-1">What to provide</p>
-            <p>
-              For the most reliable conversion, give both <code>index.html</code> and{" "}
-              <code>code.gs</code>. Add the spreadsheet ID when the legacy form reads dropdown data
-              from Google Sheets or writes responses there.
-            </p>
-            <p className="mt-2">
-              The app will first try to scan sheet tabs and header rows automatically. Use
-              bindings JSON only when auto-detection is not enough or when you want to force a
-              specific column.
-            </p>
-          </div>
+          <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+            <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+              Optional spreadsheet and notes settings
+            </summary>
+            <div className="space-y-4 mt-4">
+              <Field label="Spreadsheet bindings JSON">
+                <textarea
+                  name="spreadsheetBindings"
+                  rows={6}
+                  placeholder={`{\n  "department": "Departments!A2:A",\n  "destination": "Airports!A2:A"\n}`}
+                  className="field-input font-mono text-xs"
+                />
+              </Field>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
+                    <span>Write submitted responses back to Google Sheets</span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-2">
+                    MongoDB remains the main record. Sheets gets a copy when this is enabled.
+                  </p>
+                </div>
+                <Field label="Response sheet tab">
+                  <input
+                    name="responseSheetName"
+                    placeholder="Optional. Example: Imported Responses"
+                    className="field-input"
+                  />
+                </Field>
+              </div>
+              <Field label="Notes">
+                <textarea
+                  name="notes"
+                  rows={4}
+                  placeholder="Optional workflow rules, approver notes, or dropdown details."
+                  className="field-input"
+                />
+              </Field>
+            </div>
+          </details>
 
           <div className="flex justify-end">
             <button
               type="submit"
-              className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+              className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
             >
+              <FileInput className="h-4 w-4" />
               Save import draft
             </button>
           </div>
@@ -205,42 +253,58 @@ export default async function FormImportsPage() {
 
       <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3">
-            Saved drafts
-          </h2>
+          <div className="flex items-center gap-3">
+            <StepNumber value="2" />
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">Review, sync, preview, publish</h2>
+              <p className="text-sm text-gray-500">
+                Each draft shows the next useful action and keeps the technical scan details nearby.
+              </p>
+            </div>
+          </div>
           <span className="text-xs text-gray-400">{imports.length} drafts</span>
         </div>
 
         {imports.length === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center py-6">
-            No import drafts yet. Add one above to start converting a legacy form.
-          </p>
+          <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/30 p-8 text-center">
+            <p className="text-sm font-semibold text-gray-700">No import drafts yet.</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Add `index.html`, `code.gs`, and the spreadsheet ID above to start.
+            </p>
+          </div>
         ) : (
           <div className="space-y-4">
             {imports.map((item) => {
               const runtime = runtimePreviewBySlug.get(item.slug);
               const definition = definitionBySlug.get(item.slug);
+              const slugKey = normalizeLookupKey(item.slug);
+              const syncedStats = syncedStatsBySlugKey.get(slugKey) ?? {
+                categoryCount: 0,
+                valueCount: 0,
+              };
+              const hasRegistry = Boolean(definition);
+              const hasSpreadsheet = Boolean(item.spreadsheetId);
+              const hasSyncedDropdowns = syncedStats.valueCount > 0;
+              const isPublished =
+                definition?.status === "published" &&
+                definition?.visibility === "everyone" &&
+                definition?.availability === "available" &&
+                definition?.isImplemented;
+
               return (
-                <article key={String(item._id)} className="rounded-xl border border-brand-100 p-4 bg-white">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
+                <article
+                  key={String(item._id)}
+                  className="rounded-xl border border-brand-100 bg-white p-4 shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
-                        <span className="text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 bg-brand-50 text-brand-700 border border-brand-100">
-                          {item.status}
-                        </span>
+                        <Badge>{item.status}</Badge>
+                        {isPublished ? <Badge tone="ok">live</Badge> : <Badge tone="warn">admin</Badge>}
                       </div>
                       <p className="text-sm text-gray-500 mt-1">
                         Slug: <code>{item.slug}</code>
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Spreadsheet ID: <code>{item.spreadsheetId || "not provided"}</code>
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Runtime URL:{" "}
-                        <Link href={`/forms/${item.slug}`} className="text-brand-700 underline">
-                          /forms/{item.slug}
-                        </Link>
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
                         Saved by {item.createdByName || item.createdByEmail || "unknown"} on{" "}
@@ -248,264 +312,215 @@ export default async function FormImportsPage() {
                       </p>
                     </div>
 
-                    <form action={updateFormImportStatus} className="flex items-center gap-2">
-                      <input type="hidden" name="id" value={String(item._id)} />
-                      <select
-                        name="status"
-                        defaultValue={item.status}
-                        className="field-input min-w-[160px]"
-                      >
-                        {FORM_IMPORT_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="submit"
-                        className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                      >
-                        Update
-                      </button>
-                    </form>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {!definition ? (
-                      <form action={createMissingRegistryEntry}>
-                        <input type="hidden" name="id" value={String(item._id)} />
-                        <button
-                          type="submit"
-                          className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                        >
-                          Create registry entry
-                        </button>
-                      </form>
-                    ) : null}
-                    <form action={publishFormImport}>
-                      <input type="hidden" name="id" value={String(item._id)} />
-                      <button
-                        type="submit"
-                        className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                      >
-                        Publish for users
-                      </button>
-                    </form>
-                    <Link
-                      href="/admin/forms"
-                      className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                    >
-                      Open forms registry
-                    </Link>
-                    <form action={syncImportedDropdowns}>
-                      <input type="hidden" name="id" value={String(item._id)} />
-                      <button
-                        type="submit"
-                        className="bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                      >
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                      {!hasRegistry ? (
+                        <ActionForm action={createMissingRegistryEntry} id={String(item._id)}>
+                          <Layers3 className="h-4 w-4" />
+                          Create registry
+                        </ActionForm>
+                      ) : null}
+                      <ActionForm action={syncImportedDropdowns} id={String(item._id)} tone="blue">
+                        <DatabaseZap className="h-4 w-4" />
                         Sync dropdowns
-                      </button>
-                    </form>
-                    <form action={deleteFormImport}>
-                      <input type="hidden" name="id" value={String(item._id)} />
-                      <button
-                        type="submit"
-                        className="bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      </ActionForm>
+                      <Link
+                        href={`/forms/${item.slug}`}
+                        className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
                       >
-                        Delete import
-                      </button>
-                    </form>
+                        <Eye className="h-4 w-4" />
+                        Open form
+                      </Link>
+                      <ActionForm action={publishFormImport} id={String(item._id)} tone="brand">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Publish
+                      </ActionForm>
+                      <ActionForm action={deleteFormImport} id={String(item._id)} tone="danger">
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </ActionForm>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-5 gap-2">
+                    <ProgressStep done label="Source saved" />
+                    <ProgressStep done={hasRegistry} label="Registry created" />
+                    <ProgressStep
+                      done={!hasSpreadsheet || hasSyncedDropdowns}
+                      label={hasSpreadsheet ? "Dropdowns synced" : "No sheet linked"}
+                    />
+                    <ProgressStep done={Boolean(runtime?.fields.length)} label="Preview ready" />
+                    <ProgressStep done={Boolean(isPublished)} label="Published" />
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <Metric label="Inputs" value={item.summary?.inputCount ?? 0} />
                     <Metric label="Selects" value={item.summary?.selectCount ?? 0} />
-                    <Metric label="Textareas" value={item.summary?.textareaCount ?? 0} />
-                    <Metric label="GS Functions" value={item.summary?.scriptFunctionCount ?? 0} />
+                    <Metric label="Dropdown values" value={syncedStats.valueCount} />
+                    <Metric label="Sheet tabs" value={runtime?.sheetNames.length ?? 0} />
                   </div>
 
-                  <div className="mt-4">
-                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-3">
-                      Expected native output
-                    </p>
-                    <TargetStructure slug={item.slug} compact />
-                  </div>
+                  <NextActionHint
+                    hasRegistry={hasRegistry}
+                    hasSpreadsheet={hasSpreadsheet}
+                    hasSyncedDropdowns={hasSyncedDropdowns}
+                    previewReady={Boolean(runtime?.fields.length)}
+                    isPublished={Boolean(isPublished)}
+                  />
 
-                  {definition ? (
-                    <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
-                      <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-2">
-                        Registry visibility
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        This import already created an admin-side form registry record.
-                      </p>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
-                        <Metric
-                          label="Publish status"
-                          valueText={String(definition?.status ?? "draft")}
-                        />
-                        <Metric
-                          label="Visibility"
-                          valueText={String(definition?.visibility ?? "admin")}
-                        />
-                        <Metric
-                          label="Availability"
-                          valueText={String(definition?.availability ?? "coming-soon")}
-                        />
-                        <Metric
-                          label="Implemented"
-                          valueText={definition?.isImplemented ? "Yes" : "No"}
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500 mt-3">
-                        Manage dashboard visibility and publishing in <code>/admin/forms</code>.
-                      </p>
-                    </div>
-                  ) : (
+                  {runtime?.warnings.length ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                      <p className="font-semibold mb-1">Registry entry missing</p>
-                      <p>
-                        This imported draft does not have a linked forms-registry record yet, so it
-                        will not appear in <code>/admin/forms</code>. Use{" "}
-                        <strong>Create registry entry</strong> or <strong>Publish for users</strong>{" "}
-                        above to repair it.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/50 p-4">
-                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-gray-500 mb-3">
-                      Spreadsheet configuration
-                    </p>
-                    <form action={updateFormImportConfig} className="space-y-3">
-                      <input type="hidden" name="id" value={String(item._id)} />
-                      <Field label="Spreadsheet ID">
-                        <input
-                          name="spreadsheetId"
-                          defaultValue={item.spreadsheetId ?? ""}
-                          placeholder="Example: 1AbcDef..."
-                          className="field-input"
-                        />
-                      </Field>
-                      <Field label="Spreadsheet bindings JSON">
-                        <textarea
-                          name="spreadsheetBindings"
-                          rows={6}
-                          defaultValue={JSON.stringify(item.spreadsheetBindings ?? {}, null, 2)}
-                          className="field-input font-mono text-xs"
-                        />
-                      </Field>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
-                          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                            <input
-                              type="checkbox"
-                              name="writeResponsesToSheet"
-                              defaultChecked={Boolean((item as any).writeResponsesToSheet)}
-                              className="accent-brand-600"
-                            />
-                            <span>Write imported submissions back to Sheets</span>
-                          </label>
-                          <p className="text-xs text-gray-500 mt-2">
-                            Optional. App requests are still saved in Mongo even if this is enabled.
-                          </p>
-                        </div>
-                        <Field label="Response sheet tab">
-                          <input
-                            name="responseSheetName"
-                            defaultValue={(item as any).responseSheetName ?? ""}
-                            placeholder="Example: Imported Responses"
-                            className="field-input"
-                          />
-                        </Field>
-                      </div>
-                      <Field label="Notes">
-                        <textarea
-                          name="notes"
-                          rows={3}
-                          defaultValue={item.notes ?? ""}
-                          className="field-input"
-                        />
-                      </Field>
-                      <p className="text-xs text-gray-500">
-                        Leave this empty if the spreadsheet has clean header rows. The app will try
-                        to auto-scan tabs and headers first. Use JSON only when you want to force a
-                        specific range, for example <code>{`{"department":"Departments!A2:A"}`}</code>.
-                      </p>
-                      <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                        >
-                          Save spreadsheet config
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-
-                  <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/30 p-4">
-                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-3">
-                      Spreadsheet scan preview
-                    </p>
-                    {!item.spreadsheetId ? (
-                      <p className="text-sm text-gray-500">
-                        No spreadsheet ID yet. Add one above to let the app scan tabs and headers.
-                      </p>
-                    ) : (
-                      <div className="space-y-3 text-sm text-gray-600">
-                        <p>
-                          Detected sheet tabs: <code>{runtime?.sheetNames.join(", ") || "none"}</code>
-                        </p>
-                        <div>
-                          <p className="font-semibold text-gray-800 mb-1">Explicit bindings</p>
-                          <pre className="bg-white border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
-{JSON.stringify(runtime?.spreadsheetBindings ?? {}, null, 2)}
-                          </pre>
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-800 mb-1">Auto-detected field mappings</p>
-                          <pre className="bg-white border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
-{JSON.stringify(runtime?.autoDetectedBindings ?? {}, null, 2)}
-                          </pre>
-                        </div>
-                      <div>
-                        <p className="font-semibold text-gray-800 mb-1">Warnings</p>
-                        {runtime?.warnings.length ? (
-                            <ul className="list-disc pl-5 space-y-1 text-xs text-amber-900">
-                              {runtime.warnings.map((warning) => (
-                                <li key={warning}>{warning}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-xs text-gray-500">No scan warnings.</p>
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800 mb-1">Response export</p>
-                        <p className="text-xs text-gray-500">
-                          Enabled:{" "}
-                          <strong>{(item as any).writeResponsesToSheet ? "Yes" : "No"}</strong>
-                          {" · "}
-                          Tab: <code>{(item as any).responseSheetName || `${item.name} Responses`}</code>
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                  {item.notes ? (
-                    <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">
-                      {item.notes}
+                      <p className="font-semibold mb-1">Needs review</p>
+                      <ul className="list-disc pl-5 space-y-1 text-xs">
+                        {runtime.warnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
                     </div>
                   ) : null}
 
-                  <details className="mt-4">
-                    <summary className="cursor-pointer text-sm font-medium text-brand-700">
-                      View source snapshot
+                  <details className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                    <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+                      Spreadsheet, status, and source details
                     </summary>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
-                      <SourceBox title="index.html" value={item.htmlSource ?? ""} />
-                      <SourceBox title="code.gs" value={item.appsScriptSource ?? ""} />
+                    <div className="mt-4 space-y-4">
+                      <div className="rounded-xl border border-brand-100 bg-white p-4">
+                        <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-3">
+                          Registry status
+                        </p>
+                        {definition ? (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <Metric label="Status" valueText={String(definition.status ?? "draft")} />
+                            <Metric label="Visibility" valueText={String(definition.visibility ?? "admin")} />
+                            <Metric label="Availability" valueText={String(definition.availability ?? "coming-soon")} />
+                            <Metric label="Implemented" valueText={definition.isImplemented ? "Yes" : "No"} />
+                          </div>
+                        ) : (
+                          <p className="text-sm text-amber-800">
+                            No registry entry yet. Create one before relying on dashboard visibility.
+                          </p>
+                        )}
+                      </div>
+
+                      <form action={updateFormImportStatus} className="flex flex-wrap items-end gap-2">
+                        <input type="hidden" name="id" value={String(item._id)} />
+                        <Field label="Internal import status">
+                          <select
+                            name="status"
+                            defaultValue={item.status}
+                            className="field-input min-w-[180px]"
+                          >
+                            {FORM_IMPORT_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {status}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <button
+                          type="submit"
+                          className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                        >
+                          <Settings2 className="h-4 w-4" />
+                          Update status
+                        </button>
+                      </form>
+
+                      <form action={updateFormImportConfig} className="space-y-3">
+                        <input type="hidden" name="id" value={String(item._id)} />
+                        <Field label="Spreadsheet ID">
+                          <input
+                            name="spreadsheetId"
+                            defaultValue={item.spreadsheetId ?? ""}
+                            placeholder="Example: 1AbcDef..."
+                            className="field-input"
+                          />
+                        </Field>
+                        <Field label="Spreadsheet bindings JSON">
+                          <textarea
+                            name="spreadsheetBindings"
+                            rows={6}
+                            defaultValue={JSON.stringify(item.spreadsheetBindings ?? {}, null, 2)}
+                            className="field-input font-mono text-xs"
+                          />
+                        </Field>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                              <input
+                                type="checkbox"
+                                name="writeResponsesToSheet"
+                                defaultChecked={Boolean((item as any).writeResponsesToSheet)}
+                                className="accent-brand-600"
+                              />
+                              <span>Write imported submissions back to Sheets</span>
+                            </label>
+                          </div>
+                          <Field label="Response sheet tab">
+                            <input
+                              name="responseSheetName"
+                              defaultValue={(item as any).responseSheetName ?? ""}
+                              placeholder="Example: Imported Responses"
+                              className="field-input"
+                            />
+                          </Field>
+                        </div>
+                        <Field label="Notes">
+                          <textarea
+                            name="notes"
+                            rows={3}
+                            defaultValue={item.notes ?? ""}
+                            className="field-input"
+                          />
+                        </Field>
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                          >
+                            Save settings
+                          </button>
+                        </div>
+                      </form>
+
+                      <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 text-sm text-gray-600 space-y-3">
+                        <p>
+                          Spreadsheet ID: <code>{item.spreadsheetId || "not provided"}</code>
+                        </p>
+                        <p>
+                          Detected sheet tabs: <code>{runtime?.sheetNames.join(", ") || "none"}</code>
+                        </p>
+                        <ScanBlock
+                          title="Explicit bindings"
+                          value={runtime?.spreadsheetBindings ?? {}}
+                        />
+                        <ScanBlock
+                          title="Auto-detected field mappings"
+                          value={runtime?.autoDetectedBindings ?? {}}
+                        />
+                        <p className="text-xs text-gray-500">
+                          Response export:{" "}
+                          <strong>{(item as any).writeResponsesToSheet ? "Enabled" : "Off"}</strong>
+                          {" - "}
+                          tab <code>{(item as any).responseSheetName || `${item.name} Responses`}</code>
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-brand-100 bg-white p-4">
+                        <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-3">
+                          Expected native output
+                        </p>
+                        <TargetStructure slug={item.slug} />
+                      </div>
+
+                      <details>
+                        <summary className="cursor-pointer text-sm font-medium text-brand-700">
+                          View source snapshot
+                        </summary>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
+                          <SourceBox title="index.html" value={item.htmlSource ?? ""} />
+                          <SourceBox title="code.gs" value={item.appsScriptSource ?? ""} />
+                        </div>
+                      </details>
                     </div>
                   </details>
                 </article>
@@ -538,6 +553,102 @@ function Field({
   );
 }
 
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-brand-100 bg-white px-4 py-2 min-w-[84px]">
+      <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">{label}</p>
+      <p className="text-xl font-bold text-gray-800">{value}</p>
+    </div>
+  );
+}
+
+function StepNumber({ value }: { value: string }) {
+  return (
+    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600 text-sm font-bold text-white">
+      {value}
+    </div>
+  );
+}
+
+function ProgressStep({ done, label }: { done: boolean; label: string }) {
+  const Icon = done ? CheckCircle2 : Circle;
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${
+        done
+          ? "border-green-200 bg-green-50 text-green-800"
+          : "border-gray-200 bg-gray-50 text-gray-500"
+      }`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function NextActionHint({
+  hasRegistry,
+  hasSpreadsheet,
+  hasSyncedDropdowns,
+  previewReady,
+  isPublished,
+}: {
+  hasRegistry: boolean;
+  hasSpreadsheet: boolean;
+  hasSyncedDropdowns: boolean;
+  previewReady: boolean;
+  isPublished: boolean;
+}) {
+  let message = "Open the form and use Requester preview in the navbar before publishing.";
+  if (!hasRegistry) message = "Create the registry entry so this draft has a dashboard control record.";
+  else if (hasSpreadsheet && !hasSyncedDropdowns) {
+    message = "Sync dropdowns so Manage dropdowns has the values discovered from the spreadsheet.";
+  } else if (!previewReady) {
+    message = "Open the technical details and review the imported source because no supported fields were detected.";
+  } else if (isPublished) {
+    message = "This form is live for requesters. Use Forms registry for later visibility changes.";
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 px-4 py-3 text-sm text-gray-700">
+      <span className="font-semibold text-gray-900">Next:</span> {message}
+    </div>
+  );
+}
+
+function ActionForm({
+  action,
+  id,
+  children,
+  tone = "default",
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  id: string;
+  children: React.ReactNode;
+  tone?: "default" | "brand" | "blue" | "danger";
+}) {
+  const className =
+    tone === "brand"
+      ? "bg-brand-600 hover:bg-brand-700 text-white border-brand-600"
+      : tone === "blue"
+        ? "bg-white hover:bg-blue-50 text-blue-700 border-blue-200"
+        : tone === "danger"
+          ? "bg-white hover:bg-red-50 text-red-700 border-red-200"
+          : "bg-white hover:bg-amber-50 text-amber-700 border-amber-200";
+
+  return (
+    <form action={action}>
+      <input type="hidden" name="id" value={id} />
+      <button
+        type="submit"
+        className={`inline-flex items-center gap-2 border font-semibold px-4 py-2 rounded-lg text-sm transition ${className}`}
+      >
+        {children}
+      </button>
+    </form>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -555,6 +666,17 @@ function Metric({
   );
 }
 
+function ScanBlock({ title, value }: { title: string; value: unknown }) {
+  return (
+    <div>
+      <p className="font-semibold text-gray-800 mb-1">{title}</p>
+      <pre className="bg-white border border-gray-200 rounded-lg p-3 text-xs overflow-auto whitespace-pre-wrap">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    </div>
+  );
+}
+
 function SourceBox({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-lg border border-gray-200 overflow-hidden">
@@ -568,25 +690,18 @@ function SourceBox({ title, value }: { title: string; value: string }) {
   );
 }
 
-function TargetStructure({
-  slug,
-  compact = false,
-}: {
-  slug: string;
-  compact?: boolean;
-}) {
+function TargetStructure({ slug }: { slug: string }) {
   return (
     <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
       <pre className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
-{`src/app/forms/${slug}/
+        {`src/app/forms/${slug}/
   page.tsx
   form.tsx
   actions.ts`}
       </pre>
-
-      <div className={`grid gap-3 mt-4 ${compact ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"}`}>
+      <div className="grid gap-3 mt-4 grid-cols-1 md:grid-cols-2">
         <Checklist
-          title="Always part of the output"
+          title="Core output"
           items={[
             `Route folder: src/app/forms/${slug}/`,
             "page.tsx loads lookup data and prefill data",
@@ -595,12 +710,11 @@ function TargetStructure({
           ]}
         />
         <Checklist
-          title="Optional supporting files"
+          title="Supporting links"
           items={[
-            "src/lib/request-fields.ts for diff/history display",
-            "src/models/Lookup.ts categories for dropdown sources",
-            "src/lib/seed-data.ts for initial dropdown values",
-            "src/app/forms/page.tsx, dashboard/page.tsx, and navbar.tsx to expose the new form",
+            "Manage dropdowns stores synced dropdown values",
+            "Forms registry controls dashboard and navbar visibility",
+            "Dashboard and forms list expose published available forms",
           ]}
         />
       </div>
@@ -608,13 +722,7 @@ function TargetStructure({
   );
 }
 
-function Checklist({
-  title,
-  items,
-}: {
-  title: string;
-  items: string[];
-}) {
+function Checklist({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="rounded-lg bg-white border border-brand-100 p-3">
       <p className="text-sm font-semibold text-gray-800 mb-2">{title}</p>
@@ -624,5 +732,28 @@ function Checklist({
         ))}
       </ul>
     </div>
+  );
+}
+
+function Badge({
+  children,
+  tone = "brand",
+}: {
+  children: React.ReactNode;
+  tone?: "brand" | "warn" | "ok";
+}) {
+  const className =
+    tone === "ok"
+      ? "bg-green-50 text-green-700 border-green-200"
+      : tone === "warn"
+        ? "bg-amber-50 text-amber-700 border-amber-200"
+        : "bg-brand-50 text-brand-700 border-brand-100";
+
+  return (
+    <span
+      className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2 py-1 border ${className}`}
+    >
+      {children}
+    </span>
   );
 }

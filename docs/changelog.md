@@ -10,6 +10,12 @@
 - Added development-mode admin access for signed-in `@vienovo.ph` users when `AUTH_DEV_BYPASS=1`.
 
 ### Admin importer and registry
+- Refined the form importer into a guided admin workflow: create or replace draft, sync dropdowns, open preview, publish, and delete.
+- Added import progress checks for source saved, registry created, dropdowns synced, preview ready, and published.
+- Moved importer technical details such as spreadsheet scan output, bindings JSON, native output structure, and source snapshots into expandable sections.
+- Refined the forms registry into a clearer control panel with live/admin status badges, quick open links, requester preview links, import source links, and dropdown links.
+- Reordered the admin sidebar so the importer sits next to overview and registry in the main workflow.
+- Refined admin overview into a launchpad for importer, registry, dropdowns, approvers, and seed actions.
 - Added `/admin/form-imports` to store imported `index.html`, `code.gs`, spreadsheet IDs, and notes.
 - Added `/admin/forms` as a forms registry for visibility, status, availability, and navbar control.
 - Connected the dashboard, forms list, and navbar to the registry instead of hardcoded form lists.
@@ -27,6 +33,7 @@
 - Added the same admin/requester preview toggle to the native form pages in the top navbar.
 
 ### Dashboard
+- Refined dashboard and forms list cards so requesters see clearer start-request actions and simpler empty states.
 - The dashboard now hides unavailable or coming-soon forms from normal users.
 - Added real recent request and pending approval lists.
 - Added a dashboard delete action for a user's own submitted requests.

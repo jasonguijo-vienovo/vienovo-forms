@@ -23,11 +23,11 @@ export default async function AdminLayout({
               </p>
               <nav className="flex flex-col gap-0.5 text-sm">
                 <AdminLink href="/admin">Overview</AdminLink>
+                <AdminLink href="/admin/form-imports">Form importer</AdminLink>
                 <AdminLink href="/admin/forms">Forms registry</AdminLink>
                 <AdminLink href="/admin/lookups">Dropdowns</AdminLink>
                 <AdminLink href="/admin/approvers">Approvers</AdminLink>
                 <AdminLink href="/admin/reimbursement-routing">Reimbursement routing</AdminLink>
-                <AdminLink href="/admin/form-imports">Form importer</AdminLink>
               </nav>
             </div>
           </aside>
