@@ -1,32 +1,17 @@
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { signOut } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
+import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
 
 const HELP_DESK_URL = "https://itdashboard-mu.vercel.app/helpdesk/";
 const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
-const NEW_REQUEST_OPTIONS = [
-  {
-    href: "/forms/travel-booking",
-    title: "Travel Booking",
-    subtitle: "Flight, hotel, and travel request.",
-  },
-  {
-    href: "/forms/cash-advance",
-    title: "Cash Advance",
-    subtitle: "Request advance funds.",
-  },
-  {
-    href: "/forms/reimbursement",
-    title: "Reimbursement",
-    subtitle: "Claim reimbursement for expenses.",
-  },
-] as const;
 
 export async function Navbar() {
   const session = await safeAuth();
   const showAdmin = isAdminEmail(session?.user?.email);
+  const navbarForms = await getNavbarForms();
 
   return (
     <header className="bg-gradient-to-r from-brand-700 via-brand-800 to-brand-900 text-white shadow-md">
@@ -46,16 +31,20 @@ export async function Navbar() {
 
         <nav className="hidden sm:flex items-center gap-1 text-sm">
           <NavLink href="/dashboard">Dashboard</NavLink>
-          <NewRequestMenu />
+          <NewRequestMenu
+            options={navbarForms.map((form) => ({
+              href: form.routePath || `/forms/${form.slug}`,
+              title: form.name,
+              subtitle: form.description,
+            }))}
+          />
           <ExternalNavLink href={HELP_DESK_URL}>Helpdesk</ExternalNavLink>
           {showAdmin && <NavLink href="/admin">Admin</NavLink>}
         </nav>
 
         {session?.user ? (
           <div className="flex items-center gap-3 text-sm">
-            <span className="hidden md:inline text-brand-100">
-              {session.user.email}
-            </span>
+            <span className="hidden md:inline text-brand-100">{session.user.email}</span>
             <form
               action={async () => {
                 "use server";
@@ -107,7 +96,11 @@ function ExternalNavLink({ href, children }: { href: string; children: React.Rea
   );
 }
 
-function NewRequestMenu() {
+function NewRequestMenu({
+  options,
+}: {
+  options: Array<{ href: string; title: string; subtitle: string }>;
+}) {
   return (
     <details className="relative">
       <summary className="list-none px-3 py-1.5 rounded-lg hover:bg-white/15 transition font-medium cursor-pointer select-none">
@@ -115,12 +108,12 @@ function NewRequestMenu() {
       </summary>
       <div className="absolute z-50 mt-2 w-64 rounded-xl border border-brand-100 bg-white text-gray-800 shadow-lg overflow-hidden">
         <div className="py-1">
-          {NEW_REQUEST_OPTIONS.map((o) => (
+          {options.map((option) => (
             <MenuLink
-              key={o.href}
-              href={o.href}
-              title={o.title}
-              subtitle={o.subtitle}
+              key={option.href}
+              href={option.href}
+              title={option.title}
+              subtitle={option.subtitle}
             />
           ))}
           <div className="px-3 py-2 text-[11px] text-gray-400 border-t border-brand-50">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
+import { FormDefinition } from "@/models/FormDefinition";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -55,7 +56,7 @@ export async function createFormImport(formData: FormData) {
     throw new Error("Provide the code.gs source or upload the file.");
   }
 
-  await FormImport.create({
+  const created = await FormImport.create({
     name,
     slug: slugify(s(formData, "slug")) || slugify(name),
     sourceType: "google-apps-script",
@@ -69,7 +70,30 @@ export async function createFormImport(formData: FormData) {
     summary: summarize(htmlSource, appsScriptSource),
   });
 
+  await FormDefinition.updateOne(
+    { slug: created.slug },
+    {
+      $setOnInsert: {
+        slug: created.slug,
+        name: created.name,
+        description: "Imported legacy form draft. Review and implement before publishing.",
+        routePath: `/forms/${created.slug}`,
+        source: "imported",
+        status: "draft",
+        visibility: "admin",
+        availability: "coming-soon",
+        isImplemented: false,
+        showInNavbar: false,
+        sortOrder: 1000,
+        importSourceId: created._id,
+        notes: created.notes || "",
+      },
+    },
+    { upsert: true }
+  );
+
   revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/forms");
 }
 
 export async function updateFormImportStatus(formData: FormData) {
@@ -81,5 +105,9 @@ export async function updateFormImportStatus(formData: FormData) {
   if (!id || !FORM_IMPORT_STATUSES.includes(status)) return;
 
   await FormImport.updateOne({ _id: id }, { $set: { status } });
+  if (status === "implemented") {
+    await FormDefinition.updateOne({ importSourceId: id }, { $set: { isImplemented: true } });
+  }
   revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/forms");
 }

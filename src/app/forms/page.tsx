@@ -1,44 +1,13 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { safeAuth } from "@/lib/safe-auth";
+import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-
-const FORMS = [
-  {
-    slug: "travel-booking",
-    name: "Travel Booking",
-    description: "Book a flight, hotel, or company travel.",
-    available: true,
-  },
-  {
-    slug: "cash-advance",
-    name: "Cash Advance",
-    description: "Request advance funds for upcoming expenses.",
-    available: true,
-  },
-  {
-    slug: "reimbursement",
-    name: "Reimbursement",
-    description: "Get reimbursed for expenses you already paid for.",
-    available: true,
-  },
-  {
-    slug: "request-for-payment",
-    name: "Request for Payment",
-    description: "Request payment to a vendor or supplier.",
-    available: false,
-  },
-  {
-    slug: "cashiering",
-    name: "Cashiering",
-    description: "Cashier-related transactions and requests.",
-    available: false,
-  },
-] as const;
+import { getCatalogForms } from "@/lib/form-definitions";
+import { safeAuth } from "@/lib/safe-auth";
 
 export default async function FormsIndexPage() {
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
+  const forms = await getCatalogForms({ allowFallback: true });
 
   return (
     <>
@@ -58,8 +27,8 @@ export default async function FormsIndexPage() {
             Forms
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FORMS.map((f) => (
-              <FormCard key={f.slug} {...f} />
+            {forms.map((form) => (
+              <FormCard key={form.slug} {...form} />
             ))}
           </div>
         </section>
@@ -72,13 +41,19 @@ function FormCard({
   slug,
   name,
   description,
-  available,
+  availability,
+  isImplemented,
+  routePath,
 }: {
   slug: string;
   name: string;
   description: string;
-  available: boolean;
+  availability: "available" | "coming-soon";
+  isImplemented: boolean;
+  routePath: string;
 }) {
+  const available = availability === "available" && isImplemented;
+
   const inner = (
     <div
       className={`bg-white rounded-2xl shadow-sm border border-brand-100 p-5 h-full transition ${
@@ -99,5 +74,5 @@ function FormCard({
     </div>
   );
 
-  return available ? <Link href={`/forms/${slug}`}>{inner}</Link> : inner;
+  return available ? <Link href={routePath || `/forms/${slug}`}>{inner}</Link> : inner;
 }
