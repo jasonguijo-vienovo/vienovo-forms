@@ -82,13 +82,18 @@ async function getServiceAccountAccessToken(scope: string) {
   return json.access_token;
 }
 
-async function authorizedSheetsFetch(path: string) {
+async function authorizedSheetsFetch(path: string, init?: RequestInit, scope?: string) {
   const accessToken = await getServiceAccountAccessToken(
-    "https://www.googleapis.com/auth/spreadsheets.readonly"
+    scope ?? "https://www.googleapis.com/auth/spreadsheets.readonly"
   );
 
   const res = await fetch(`https://sheets.googleapis.com/v4/${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    method: init?.method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: init?.body,
     cache: "no-store",
   });
 
@@ -131,4 +136,39 @@ export async function readSpreadsheetRange(spreadsheetId: string, range: string)
   return values
     .map((row) => String(row?.[0] ?? "").trim())
     .filter(Boolean);
+}
+
+export async function ensureSpreadsheetSheet(spreadsheetId: string, sheetTitle: string) {
+  const sheets = await listSpreadsheetSheets(spreadsheetId);
+  if (sheets.includes(sheetTitle)) return;
+
+  await authorizedSheetsFetch(
+    `spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        requests: [{ addSheet: { properties: { title: sheetTitle } } }],
+      }),
+    },
+    "https://www.googleapis.com/auth/spreadsheets"
+  );
+}
+
+export async function appendSpreadsheetRow(opts: {
+  spreadsheetId: string;
+  sheetTitle: string;
+  values: string[];
+}) {
+  const range = `${opts.sheetTitle}!A:A`;
+  await authorizedSheetsFetch(
+    `spreadsheets/${encodeURIComponent(opts.spreadsheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        majorDimension: "ROWS",
+        values: [opts.values],
+      }),
+    },
+    "https://www.googleapis.com/auth/spreadsheets"
+  );
 }

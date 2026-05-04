@@ -14,6 +14,7 @@
 - Added `/admin/forms` as a forms registry for visibility, status, availability, and navbar control.
 - Connected the dashboard, forms list, and navbar to the registry instead of hardcoded form lists.
 - Hardened the registry page so it falls back safely instead of throwing an internal server error.
+- Added a one-click `Publish for users` action from the importer page.
 
 ### Imported form runtime
 - Added generic imported-form routes at `/forms/[slug]`.
@@ -28,6 +29,8 @@
 - Added explicit `spreadsheetBindings` JSON support for forced field-to-range mappings.
 - Added automatic spreadsheet scanning by sheet tabs and header rows.
 - Added admin-side spreadsheet scan preview so imports show detected tabs, field mappings, and warnings.
+- Added optional write-back of imported submissions into Google Sheets response tabs.
+- Added response export configuration on the importer page, including a target response tab name.
 
 ### Notes
 - Lint is still not configured in this repo. `npm run lint` opens the Next.js ESLint setup prompt.

@@ -11,6 +11,11 @@ function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+function bool(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return value === "on" || value === "true" || value === "1";
+}
+
 async function readTextInput(formData: FormData, fileKey: string, textKey: string) {
   const file = formData.get(fileKey);
   if (file instanceof File && file.size > 0) {
@@ -74,6 +79,8 @@ export async function createFormImport(formData: FormData) {
     sourceType: "google-apps-script",
     spreadsheetId: s(formData, "spreadsheetId"),
     spreadsheetBindings: bindingsFromFormData(formData),
+    writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+    responseSheetName: s(formData, "responseSheetName"),
     htmlSource,
     appsScriptSource,
     notes: s(formData, "notes"),
@@ -122,12 +129,50 @@ export async function updateFormImportConfig(formData: FormData) {
       $set: {
         spreadsheetId: s(formData, "spreadsheetId"),
         spreadsheetBindings: bindingsFromFormData(formData),
+        writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+        responseSheetName: s(formData, "responseSheetName"),
         notes: s(formData, "notes"),
       },
     }
   );
 
   revalidatePath("/admin/form-imports");
+}
+
+export async function publishFormImport(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+
+  const id = s(formData, "id");
+  if (!id) return;
+
+  const imported = await FormImport.findByIdAndUpdate(
+    id,
+    { $set: { status: "implemented" } },
+    { new: true }
+  ).lean();
+  if (!imported) return;
+
+  await FormDefinition.updateOne(
+    { importSourceId: id },
+    {
+      $set: {
+        name: imported.name,
+        description:
+          imported.notes?.trim() ||
+          "Imported legacy form, now published for end users through the in-app runtime.",
+        status: "published",
+        visibility: "everyone",
+        availability: "available",
+        isImplemented: true,
+      },
+    }
+  );
+
+  revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/forms");
+  revalidatePath("/dashboard");
+  revalidatePath("/forms");
 }
 
 export async function updateFormImportStatus(formData: FormData) {

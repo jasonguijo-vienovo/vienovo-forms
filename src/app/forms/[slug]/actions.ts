@@ -5,6 +5,11 @@ import { auth } from "@/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import {
+  appendSpreadsheetRow,
+  ensureSpreadsheetSheet,
+  readSpreadsheetMatrix,
+} from "@/lib/google/sheets";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { RequestModel } from "@/models/Request";
@@ -30,6 +35,62 @@ function isFieldMissing(field: ImportedFieldDefinition, value: unknown) {
   if (Array.isArray(value)) return value.length === 0;
   if (field.type === "checkbox") return value !== "Yes";
   return !String(value ?? "").trim();
+}
+
+function stringifyValue(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
+  return String(value ?? "");
+}
+
+async function writeImportedSubmissionToSheet(opts: {
+  spreadsheetId: string;
+  sheetTitle: string;
+  referenceNo: string;
+  slug: string;
+  importedName: string;
+  submittedByEmail: string;
+  submittedByName: string;
+  labels: Record<string, string>;
+  values: Record<string, unknown>;
+}) {
+  await ensureSpreadsheetSheet(opts.spreadsheetId, opts.sheetTitle);
+  const existing = await readSpreadsheetMatrix(opts.spreadsheetId, `${opts.sheetTitle}!A1:ZZ2`);
+  const baseHeaders = [
+    "Timestamp",
+    "Reference No",
+    "Form Slug",
+    "Form Name",
+    "Submitted By Email",
+    "Submitted By Name",
+    "Status",
+  ];
+  const fieldEntries = Object.entries(opts.labels);
+  const headers = [...baseHeaders, ...fieldEntries.map(([, label]) => label)];
+
+  if ((existing[0] ?? []).length === 0) {
+    await appendSpreadsheetRow({
+      spreadsheetId: opts.spreadsheetId,
+      sheetTitle: opts.sheetTitle,
+      values: headers,
+    });
+  }
+
+  const row = [
+    new Date().toISOString(),
+    opts.referenceNo,
+    opts.slug,
+    opts.importedName,
+    opts.submittedByEmail,
+    opts.submittedByName,
+    "submitted",
+    ...fieldEntries.map(([name]) => stringifyValue(opts.values[name])),
+  ];
+
+  await appendSpreadsheetRow({
+    spreadsheetId: opts.spreadsheetId,
+    sheetTitle: opts.sheetTitle,
+    values: row,
+  });
 }
 
 export async function submitImportedForm(slug: string, formData: FormData) {
@@ -105,6 +166,24 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       },
     ],
   });
+
+  if ((imported as any).writeResponsesToSheet && imported.spreadsheetId) {
+    try {
+      await writeImportedSubmissionToSheet({
+        spreadsheetId: imported.spreadsheetId,
+        sheetTitle: (imported as any).responseSheetName?.trim() || `${imported.name} Responses`,
+        referenceNo,
+        slug,
+        importedName: imported.name,
+        submittedByEmail: email,
+        submittedByName: name,
+        labels,
+        values,
+      });
+    } catch (error) {
+      console.error("Imported form response export failed:", error);
+    }
+  }
 
   redirect(`/requests/${referenceNo}`);
 }
