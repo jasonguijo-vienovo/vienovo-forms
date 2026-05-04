@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { sendNotificationEmail } from "@/lib/notifications/email";
 import { NotificationFlow } from "@/models/NotificationFlow";
 
 function s(formData: FormData, key: string) {
@@ -27,6 +28,50 @@ function parseEmails(raw: string) {
 }
 
 const NOTIFICATIONS_PATH = "/admin/notifications";
+
+export async function sendNotificationTestEmail(formData: FormData) {
+  const { email: adminEmail } = await requireAdmin();
+  const targetEmail = s(formData, "testEmail").toLowerCase() || adminEmail;
+
+  try {
+    await sendNotificationEmail({
+      to: targetEmail,
+      subject: "Vienovo Forms SMTP test",
+      text:
+        `This is a test email from Vienovo Forms.\n\n` +
+        `If you received this, the SMTP settings on the current deployment are working.\n\n` +
+        `SMTP host: ${process.env.SMTP_HOST || "smtp.office365.com"}\n` +
+        `From: ${process.env.SMTP_FROM || "(missing SMTP_FROM)"}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+          <h2 style="margin: 0 0 12px;">Vienovo Forms SMTP test</h2>
+          <p style="margin: 0 0 12px;">This is a test email from the admin notification flow page.</p>
+          <p style="margin: 0 0 12px;">If you received this, the SMTP settings on the current deployment are working.</p>
+          <div style="padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; background: #f9fafb;">
+            <p style="margin: 0 0 6px;"><strong>SMTP host:</strong> ${process.env.SMTP_HOST || "smtp.office365.com"}</p>
+            <p style="margin: 0;"><strong>From:</strong> ${process.env.SMTP_FROM || "(missing SMTP_FROM)"}</p>
+          </div>
+        </div>
+      `,
+    });
+
+    await setFlashToast({
+      tone: "success",
+      message: `Test email sent to ${targetEmail}.`,
+    });
+  } catch (error) {
+    console.error("sendNotificationTestEmail failed:", error);
+    await setFlashToast({
+      tone: "error",
+      message:
+        error instanceof Error && error.message.trim()
+          ? `SMTP test failed: ${error.message.trim()}`
+          : "SMTP test failed.",
+    });
+  }
+
+  redirect(NOTIFICATIONS_PATH);
+}
 
 export async function saveNotificationFlow(formData: FormData) {
   await requireAdmin();

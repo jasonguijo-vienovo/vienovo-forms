@@ -1,8 +1,8 @@
-import { BellRing, RotateCcw, Save } from "lucide-react";
+import { BellRing, RotateCcw, Save, Send } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { listNotificationFlowSettings } from "@/lib/notifications/flow";
-import { resetNotificationFlow, saveNotificationFlow } from "./actions";
+import { resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
 
 export default async function NotificationFlowPage() {
   const flows = await listNotificationFlowSettings();
@@ -16,6 +16,40 @@ export default async function NotificationFlowPage() {
           of the current approval logic without changing request storage or routing.
         </p>
       </div>
+
+      <section className="rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">SMTP test email</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Send a real test email using the current deployment&apos;s SMTP env vars. Use this to confirm
+              Vercel mail settings are working before testing form notifications.
+            </p>
+          </div>
+
+          <form action={sendNotificationTestEmail} className="w-full max-w-xl">
+            <PendingFormState className="flex flex-col gap-3 sm:flex-row">
+              <input
+                type="email"
+                name="testEmail"
+                placeholder="email@vienovo.ph"
+                className="field-input flex-1"
+              />
+              <PendingSubmitButton
+                type="submit"
+                idleLabel={
+                  <span className="inline-flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    <span>Send test email</span>
+                  </span>
+                }
+                pendingLabel="Sending..."
+                className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+              />
+            </PendingFormState>
+          </form>
+        </div>
+      </section>
 
       <div className="grid gap-4">
         {flows.map((flow) => (
