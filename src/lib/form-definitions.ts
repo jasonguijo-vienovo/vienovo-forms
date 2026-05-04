@@ -153,10 +153,17 @@ function normalizeForms(rows: Array<any>): AppFormDefinition[] {
 }
 
 function withBuiltInForms(rows: AppFormDefinition[]) {
+  const rowBySlug = new Map(rows.map((row) => [row.slug, row]));
+  const builtInRows = BUILTIN_FORMS.map((form) => ({
+    ...form,
+    ...(rowBySlug.get(form.slug) ?? {}),
+    source: "native" as const,
+    routePath: rowBySlug.get(form.slug)?.routePath || form.routePath,
+  }));
   const importedRows = rows.filter(
     (row) => row.source === "imported" && !BUILTIN_FORM_SLUGS.has(row.slug)
   );
-  return [...BUILTIN_FORMS, ...importedRows].sort((a, b) => {
+  return [...builtInRows, ...importedRows].sort((a, b) => {
     const orderDiff = a.sortOrder - b.sortOrder;
     return orderDiff || a.name.localeCompare(b.name);
   });
@@ -179,14 +186,13 @@ export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition
 }
 
 export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefinition | null> {
-  const builtIn = BUILTIN_FORM_BY_SLUG.get(slug);
-  if (builtIn) return builtIn;
-
   try {
     const forms = await loadAllFromDb();
     return forms.find((form) => form.slug === slug) ?? null;
   } catch (error) {
     console.error("Form registry lookup failed:", error);
+    const builtIn = BUILTIN_FORM_BY_SLUG.get(slug);
+    if (builtIn) return builtIn;
     return fallbackForms().find((form) => form.slug === slug) ?? null;
   }
 }
@@ -194,10 +200,12 @@ export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefi
 export async function getCatalogForms(opts?: {
   includeAdminOnly?: boolean;
   includeDrafts?: boolean;
+  includeUnavailable?: boolean;
   allowFallback?: boolean;
 }): Promise<AppFormDefinition[]> {
   const includeAdminOnly = opts?.includeAdminOnly ?? false;
   const includeDrafts = opts?.includeDrafts ?? false;
+  const includeUnavailable = opts?.includeUnavailable ?? false;
   const allowFallback = opts?.allowFallback ?? true;
 
   try {
@@ -205,13 +213,20 @@ export async function getCatalogForms(opts?: {
     return forms.filter((form) => {
       if (!includeDrafts && form.status !== "published") return false;
       if (!includeAdminOnly && form.visibility === "admin") return false;
+      if (!includeUnavailable && (form.availability !== "available" || !form.isImplemented)) {
+        return false;
+      }
       if (form.status === "archived") return false;
       return true;
     });
   } catch (error) {
     if (!allowFallback) throw error;
     console.error("Form registry fallback:", error);
-    return fallbackForms().filter((form) => form.status === "published");
+    return fallbackForms().filter(
+      (form) =>
+        form.status === "published" &&
+        (includeUnavailable || (form.availability === "available" && form.isImplemented))
+    );
   }
 }
 

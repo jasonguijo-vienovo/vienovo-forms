@@ -234,3 +234,26 @@ export async function updateFormImportStatus(formData: FormData) {
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
 }
+
+export async function deleteFormImport(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+
+  const id = s(formData, "id");
+  if (!id) return;
+
+  const imported = await FormImport.findById(id).lean();
+  if (!imported) return;
+
+  await Promise.all([
+    FormImport.deleteOne({ _id: id }),
+    FormDefinition.deleteMany({
+      $or: [{ importSourceId: id }, { source: "imported", slug: imported.slug }],
+    }),
+  ]);
+
+  revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/forms");
+  revalidatePath("/dashboard");
+  revalidatePath("/forms");
+}

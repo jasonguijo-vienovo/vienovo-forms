@@ -6,6 +6,7 @@ import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
 import {
   createMissingRegistryEntry,
   createFormImport,
+  deleteFormImport,
   publishFormImport,
   updateFormImportConfig,
   updateFormImportStatus,
@@ -294,6 +295,15 @@ export default async function FormImportsPage() {
                     >
                       Open forms registry
                     </Link>
+                    <form action={deleteFormImport}>
+                      <input type="hidden" name="id" value={String(item._id)} />
+                      <button
+                        type="submit"
+                        className="bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      >
+                        Delete import
+                      </button>
+                    </form>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">

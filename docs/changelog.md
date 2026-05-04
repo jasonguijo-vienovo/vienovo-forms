@@ -15,6 +15,13 @@
 - Connected the dashboard, forms list, and navbar to the registry instead of hardcoded form lists.
 - Hardened the registry page so it falls back safely instead of throwing an internal server error.
 - Added a one-click `Publish for users` action from the importer page.
+- Added admin controls to hide forms from users without deleting them.
+- Added delete controls for imported registry entries and imported form drafts.
+
+### Dashboard
+- The dashboard now hides unavailable or coming-soon forms from normal users.
+- Added real recent request and pending approval lists.
+- Added a dashboard delete action for a user's own submitted requests.
 
 ### Imported form runtime
 - Added generic imported-form routes at `/forms/[slug]`.

@@ -4,7 +4,7 @@ import {
   FORM_DEFINITION_STATUSES,
   FORM_DEFINITION_VISIBILITIES,
 } from "@/models/FormDefinition";
-import { updateFormDefinition } from "./actions";
+import { deleteFormDefinition, hideFormDefinition, updateFormDefinition } from "./actions";
 
 export default async function AdminFormsPage() {
   const forms = await getAllFormDefinitionsForAdmin();
@@ -63,7 +63,8 @@ export default async function AdminFormsPage() {
               className="rounded-xl border border-brand-100 p-4 bg-white"
             >
               <form action={updateFormDefinition} className="space-y-4">
-                <input type="hidden" name="id" value={form._id} />
+                <input type="hidden" name="id" value={form._id ?? ""} />
+                <input type="hidden" name="slug" value={form.slug} />
 
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -191,6 +192,30 @@ export default async function AdminFormsPage() {
                   </button>
                 </div>
               </form>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <form action={hideFormDefinition}>
+                  <input type="hidden" name="id" value={form._id ?? ""} />
+                  <input type="hidden" name="slug" value={form.slug} />
+                  <button
+                    type="submit"
+                    className="bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                  >
+                    Hide from users
+                  </button>
+                </form>
+                {form.source === "imported" ? (
+                  <form action={deleteFormDefinition}>
+                    <input type="hidden" name="id" value={form._id ?? ""} />
+                    <input type="hidden" name="slug" value={form.slug} />
+                  <button
+                    type="submit"
+                    className="bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                  >
+                    Delete registry entry
+                  </button>
+                </form>
+                ) : null}
+              </div>
             </article>
           ))}
         </div>
