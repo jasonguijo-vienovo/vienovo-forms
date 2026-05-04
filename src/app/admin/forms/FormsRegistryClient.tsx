@@ -13,11 +13,6 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
-import {
-  FORM_DEFINITION_AVAILABILITIES,
-  FORM_DEFINITION_STATUSES,
-  FORM_DEFINITION_VISIBILITIES,
-} from "@/models/FormDefinition";
 import { deleteFormDefinition, hideFormDefinition, updateFormDefinition } from "./actions";
 
 type RegistryForm = {
@@ -45,6 +40,9 @@ export function FormsRegistryClient({
   draftCount,
   importedCount,
   hasOnlyBuiltIns,
+  statusOptions,
+  visibilityOptions,
+  availabilityOptions,
 }: {
   forms: RegistryForm[];
   importedSlugSet: string[];
@@ -53,6 +51,9 @@ export function FormsRegistryClient({
   draftCount: number;
   importedCount: number;
   hasOnlyBuiltIns: boolean;
+  statusOptions: string[];
+  visibilityOptions: string[];
+  availabilityOptions: string[];
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -236,7 +237,7 @@ export function FormsRegistryClient({
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <Field label="Publishing state">
                           <select name="status" defaultValue={form.status} className="field-input">
-                            {FORM_DEFINITION_STATUSES.map((status) => (
+                            {statusOptions.map((status) => (
                               <option key={status} value={status}>
                                 {humanizeStatus(status)}
                               </option>
@@ -245,7 +246,7 @@ export function FormsRegistryClient({
                         </Field>
                         <Field label="Who can see this?">
                           <select name="visibility" defaultValue={form.visibility} className="field-input">
-                            {FORM_DEFINITION_VISIBILITIES.map((visibility) => (
+                            {visibilityOptions.map((visibility) => (
                               <option key={visibility} value={visibility}>
                                 {humanizeVisibility(visibility)}
                               </option>
@@ -254,7 +255,7 @@ export function FormsRegistryClient({
                         </Field>
                         <Field label="Can users open it?">
                           <select name="availability" defaultValue={form.availability} className="field-input">
-                            {FORM_DEFINITION_AVAILABILITIES.map((availability) => (
+                            {availabilityOptions.map((availability) => (
                               <option key={availability} value={availability}>
                                 {availability === "available" ? "Yes, users can open it" : "No, not yet"}
                               </option>

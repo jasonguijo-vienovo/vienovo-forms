@@ -1,5 +1,10 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
+import {
+  FORM_DEFINITION_AVAILABILITIES,
+  FORM_DEFINITION_STATUSES,
+  FORM_DEFINITION_VISIBILITIES,
+} from "@/models/FormDefinition";
 import { FormImport } from "@/models/FormImport";
 import { FormsRegistryClient } from "./FormsRegistryClient";
 
@@ -23,6 +28,9 @@ export default async function AdminFormsPage() {
       draftCount={draftCount}
       importedCount={importedCount}
       hasOnlyBuiltIns={hasOnlyBuiltIns}
+      statusOptions={[...FORM_DEFINITION_STATUSES]}
+      visibilityOptions={[...FORM_DEFINITION_VISIBILITIES]}
+      availabilityOptions={[...FORM_DEFINITION_AVAILABILITIES]}
     />
   );
 }
