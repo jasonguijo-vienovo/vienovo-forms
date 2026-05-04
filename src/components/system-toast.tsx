@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FLASH_TOAST_COOKIE, type FlashToast } from "@/lib/flash";
+import { FLASH_TOAST_COOKIE, type FlashToast } from "@/lib/flash-shared";
 
 export function SystemToast({ initialToast }: { initialToast: FlashToast | null }) {
   const [toast, setToast] = useState(initialToast);

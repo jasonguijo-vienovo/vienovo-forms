@@ -26,6 +26,7 @@
 ### System feedback
 - Added a reusable global toast notification for successful admin and dashboard actions.
 - Save, import, publish, hide, and delete actions now show a short confirmation message in the UI.
+- Fixed the toast implementation so Vercel builds do not fail from a client component importing a server-only `next/headers` helper.
 
 ### Imported form runtime
 - Added generic imported-form routes at `/forms/[slug]`.

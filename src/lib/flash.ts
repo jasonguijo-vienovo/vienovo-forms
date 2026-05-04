@@ -1,11 +1,5 @@
 import { cookies } from "next/headers";
-
-export const FLASH_TOAST_COOKIE = "vienovo_flash_toast";
-
-export type FlashToast = {
-  tone: "success" | "error";
-  message: string;
-};
+import { FLASH_TOAST_COOKIE, type FlashToast } from "@/lib/flash-shared";
 
 function normalizeToast(input: unknown): FlashToast | null {
   if (!input || typeof input !== "object") return null;
