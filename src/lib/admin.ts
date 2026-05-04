@@ -1,5 +1,10 @@
 import { safeAuth } from "@/lib/safe-auth";
 
+function isDevBypassAdmin(email: string | null | undefined): boolean {
+  if (process.env.AUTH_DEV_BYPASS !== "1") return false;
+  return Boolean(email?.toLowerCase().endsWith("@vienovo.ph"));
+}
+
 function adminEmails(): Set<string> {
   const raw = process.env.ADMIN_EMAILS ?? "";
   return new Set(
@@ -12,6 +17,7 @@ function adminEmails(): Set<string> {
 
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
+  if (isDevBypassAdmin(email)) return true;
   return adminEmails().has(email.toLowerCase());
 }
 
