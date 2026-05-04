@@ -1,0 +1,234 @@
+"use client";
+
+import { useState } from "react";
+import { BellRing, RotateCcw, Save, Send } from "lucide-react";
+import { PendingFormState } from "@/components/pending-form-state";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
+import {
+  AdminEmptyState,
+  AdminHelpPanel,
+  AdminPageHeader,
+  AdminSection,
+  AdminStatusPill,
+} from "@/components/admin-ui";
+import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
+import { resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
+
+type Flow = {
+  formSlug: string;
+  formName: string;
+  isActive: boolean;
+  notifyOnSubmit: boolean;
+  notifyNextApprover: boolean;
+  notifySubmitterOnApproved: boolean;
+  notifySubmitterOnRejected: boolean;
+  extraRecipients: string[];
+  notes: string;
+};
+
+type ViewFilter = "all" | "active" | "off";
+
+export function NotificationsClient({ flows }: { flows: Flow[] }) {
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState<ViewFilter>("all");
+
+  const filtered = flows.filter((flow) => {
+    const matchesQuery =
+      !query ||
+      [flow.formName, flow.formSlug].join(" ").toLowerCase().includes(query.toLowerCase());
+    if (!matchesQuery) return false;
+    if (view === "active") return flow.isActive;
+    if (view === "off") return !flow.isActive;
+    return true;
+  });
+
+  return (
+    <div className="admin-page">
+      <AdminPageHeader
+        eyebrow="Email control"
+        title="Notification flow"
+        description="Control who gets emailed and when, without changing request routing, approvals, or storage."
+      />
+
+      <AdminHelpPanel title="What this page does">
+        Default recipients still come from the form logic. This page only turns those emails on or off
+        and lets you add extra recipients for each form.
+      </AdminHelpPanel>
+
+      <AdminSection
+        title="SMTP test email"
+        description="Send a real test email using the current deployment settings before testing live form notifications."
+      >
+        <form action={sendNotificationTestEmail} className="w-full max-w-2xl">
+          <PendingFormState className="flex flex-col gap-3 sm:flex-row">
+            <input type="email" name="testEmail" placeholder="email@vienovo.ph" className="field-input flex-1" />
+            <PendingSubmitButton
+              type="submit"
+              idleLabel={
+                <span className="inline-flex items-center gap-2">
+                  <Send className="h-4 w-4" />
+                  <span>Send test email</span>
+                </span>
+              }
+              pendingLabel="Sending..."
+              className="btn-primary"
+            />
+          </PendingFormState>
+        </form>
+      </AdminSection>
+
+      <AdminSection
+        title="Per-form notification settings"
+        description="Search forms and keep the notification settings compact and readable."
+        meta={`${filtered.length} of ${flows.length} shown`}
+      >
+        <div className="mb-5 flex flex-col gap-3">
+          <AdminSearchField value={query} onChange={setQuery} placeholder="Search by form name or form ID" />
+          <AdminFilterTabs
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "all", label: "All forms" },
+              { value: "active", label: "Notifications on" },
+              { value: "off", label: "Notifications off" },
+            ]}
+          />
+        </div>
+
+        {filtered.length === 0 ? (
+          <AdminEmptyState
+            title="No forms match these filters"
+            description="Try another search or switch back to a broader filter."
+          />
+        ) : (
+          <div className="grid gap-4">
+            {filtered.map((flow) => (
+              <section key={flow.formSlug} className="border border-surface-border bg-white p-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="rounded bg-brand-50 p-2 text-brand-700">
+                        <BellRing className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-surface-text">{flow.formName}</h3>
+                        <p className="text-xs text-surface-muted">
+                          Form ID: <code>{flow.formSlug}</code>
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm text-surface-muted">
+                      Extra recipients are added to the same email. They do not replace the built-in
+                      recipients from the form flow.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <AdminStatusPill tone={flow.isActive ? "ok" : "neutral"}>
+                      {flow.isActive ? "Notifications on" : "Notifications off"}
+                    </AdminStatusPill>
+                    <form action={resetNotificationFlow}>
+                      <input type="hidden" name="formSlug" value={flow.formSlug} />
+                      <input type="hidden" name="formName" value={flow.formName} />
+                      <PendingSubmitButton
+                        type="submit"
+                        idleLabel={
+                          <span className="inline-flex items-center gap-2">
+                            <RotateCcw className="h-4 w-4" />
+                            <span>Reset</span>
+                          </span>
+                        }
+                        pendingLabel="Resetting..."
+                        className="btn-secondary"
+                      />
+                    </form>
+                  </div>
+                </div>
+
+                <form action={saveNotificationFlow} className="mt-4">
+                  <PendingFormState className="space-y-4">
+                    <input type="hidden" name="formSlug" value={flow.formSlug} />
+                    <input type="hidden" name="formName" value={flow.formName} />
+
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                      <ToggleField name="isActive" defaultChecked={flow.isActive} label="Notifications active" description="Master switch for this form." />
+                      <ToggleField name="notifyOnSubmit" defaultChecked={flow.notifyOnSubmit} label="When submitted" description="Email after submit or resubmit." />
+                      <ToggleField name="notifyNextApprover" defaultChecked={flow.notifyNextApprover} label="Next approver" description="Email the next approver in line." />
+                      <ToggleField name="notifySubmitterOnApproved" defaultChecked={flow.notifySubmitterOnApproved} label="When fully approved" description="Tell the requester the process is done." />
+                      <ToggleField name="notifySubmitterOnRejected" defaultChecked={flow.notifySubmitterOnRejected} label="When rejected" description="Tell the requester the request was rejected." />
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-surface-text">Extra recipients</label>
+                        <textarea
+                          name="extraRecipients"
+                          rows={4}
+                          defaultValue={flow.extraRecipients.join(", ")}
+                          placeholder="finance@vienovo.ph, audit@vienovo.ph"
+                          className="field-input"
+                        />
+                        <p className="mt-1 text-xs text-surface-muted">
+                          Use commas, semicolons, or new lines.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-surface-text">Notes</label>
+                        <textarea
+                          name="notes"
+                          rows={4}
+                          defaultValue={flow.notes}
+                          placeholder="Example: Keep accounting informed after rollout."
+                          className="field-input"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <PendingSubmitButton
+                        type="submit"
+                        idleLabel={
+                          <span className="inline-flex items-center gap-2">
+                            <Save className="h-4 w-4" />
+                            <span>Save notification settings</span>
+                          </span>
+                        }
+                        pendingLabel="Saving..."
+                        className="btn-primary"
+                      />
+                    </div>
+                  </PendingFormState>
+                </form>
+              </section>
+            ))}
+          </div>
+        )}
+      </AdminSection>
+    </div>
+  );
+}
+
+function ToggleField({
+  name,
+  label,
+  description,
+  defaultChecked,
+}: {
+  name: string;
+  label: string;
+  description: string;
+  defaultChecked: boolean;
+}) {
+  return (
+    <label className="border border-surface-border bg-slate-50 p-4">
+      <span className="flex items-start gap-3">
+        <input type="checkbox" name={name} defaultChecked={defaultChecked} className="mt-1 accent-brand-600" />
+        <span>
+          <span className="block text-sm font-semibold text-surface-text">{label}</span>
+          <span className="mt-1 block text-xs text-surface-muted">{description}</span>
+        </span>
+      </span>
+    </label>
+  );
+}
