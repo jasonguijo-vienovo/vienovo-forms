@@ -1,0 +1,122 @@
+export type FieldDiff = {
+  from: string;
+  to: string;
+};
+
+export type FieldMap = Record<string, string>;
+
+function s(v: unknown) {
+  if (v == null) return "";
+  return String(v);
+}
+
+export function formatMoney(v: unknown) {
+  const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/,/g, ""));
+  if (!Number.isFinite(n)) return "";
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+export function travelBookingFieldMap(formData: any): FieldMap {
+  const tripType = s(formData?.tripType);
+  const multiCity = formData?.multiCity ?? null;
+  const activity = formData?.activitySchedule ?? null;
+
+  return {
+    employeeId: s(formData?.employeeId),
+    fullName: s(formData?.fullName),
+    department: s(formData?.department),
+    birthday: formData?.birthday ? new Date(formData.birthday).toISOString().slice(0, 10) : s(formData?.birthday),
+    contactNumber: s(formData?.contactNumber),
+    landAir: s(formData?.landAir),
+    tripType,
+    origin: s(formData?.origin),
+    destination: s(formData?.destination),
+    departureDate: formData?.departureDate ? new Date(formData.departureDate).toISOString().slice(0, 10) : s(formData?.departureDate),
+    returnDate: formData?.returnDate ? new Date(formData.returnDate).toISOString().slice(0, 10) : s(formData?.returnDate),
+    preferredTime: s(formData?.preferredTime),
+    mc1Origin: s(multiCity?.trip1?.origin),
+    mc1Destination: s(multiCity?.trip1?.destination),
+    mc1Date: multiCity?.trip1?.date ? new Date(multiCity.trip1.date).toISOString().slice(0, 10) : s(multiCity?.trip1?.date),
+    mc1Time: s(multiCity?.trip1?.time),
+    mc2Origin: s(multiCity?.trip2?.origin),
+    mc2Destination: s(multiCity?.trip2?.destination),
+    mc2Date: multiCity?.trip2?.date ? new Date(multiCity.trip2.date).toISOString().slice(0, 10) : s(multiCity?.trip2?.date),
+    mc2Time: s(multiCity?.trip2?.time),
+    airline: s(formData?.airline),
+    travelPurpose: s(formData?.travelPurpose),
+    baggage: s(formData?.baggage),
+    hotelAccommodation: s(formData?.hotelAccommodation),
+    hotelOther: s(formData?.hotelOther),
+    servicePickup: s(formData?.servicePickup),
+    activityScheduleFileName: s(formData?.activityScheduleFileName),
+    activityDriveLink: s(activity?.driveWebViewLink),
+  };
+}
+
+export function cashAdvanceFieldMap(formData: any): FieldMap {
+  const supporting = formData?.supportingDocument ?? null;
+  return {
+    firstName: s(formData?.firstName),
+    lastName: s(formData?.lastName),
+    payablesTo: s(formData?.payablesTo),
+    payeeName: s(formData?.payeeName),
+    amount: formatMoney(formData?.amount),
+    reason: s(formData?.reason),
+    forApprovalNote: s(formData?.forApprovalNote),
+    supportingFileName: s(formData?.supportingFileName),
+    supportingDriveLink: s(supporting?.driveWebViewLink),
+    agreedToAuthorization: formData?.agreedToAuthorization ? "Yes" : "",
+  };
+}
+
+export function reimbursementFieldMap(formData: any): FieldMap {
+  const supporting = formData?.supportingDocument ?? null;
+  const expenses: Record<string, unknown> = formData?.expensesByCode ?? {};
+
+  const map: FieldMap = {
+    firstName: s(formData?.firstName),
+    lastName: s(formData?.lastName),
+    department: s(formData?.department),
+    costCenter: s(formData?.costCenter),
+    location: s(formData?.location),
+    totalExpenses: formatMoney(formData?.totalExpenses),
+    formType: s(formData?.formType),
+    cashAdvanceReferenceNo: s(formData?.cashAdvanceReferenceNo),
+    reason: s(formData?.reason),
+    dateFrom: formData?.dateFrom ? new Date(formData.dateFrom).toISOString().slice(0, 10) : s(formData?.dateFrom),
+    dateTo: formData?.dateTo ? new Date(formData.dateTo).toISOString().slice(0, 10) : s(formData?.dateTo),
+    liquidationType: s(formData?.liquidationType),
+    transactionNumber: s(formData?.transactionNumber),
+    psNumber: s(formData?.psNumber),
+    businessPartner: s(formData?.businessPartner),
+    jvNo: s(formData?.jvNo),
+    supportingFileName: s(formData?.supportingFileName),
+    supportingDriveLink: s(supporting?.driveWebViewLink),
+    agreedToCertification: formData?.agreedToCertification ? "Yes" : "",
+  };
+
+  for (const [code, amount] of Object.entries(expenses)) {
+    const n =
+      typeof amount === "number"
+        ? amount
+        : Number(String(amount ?? "").replace(/,/g, ""));
+    map[`expense_${code.replace(/-/g, "_")}`] =
+      Number.isFinite(n) && n > 0 ? formatMoney(n) : "";
+  }
+
+  return map;
+}
+
+export function diffFields(prev: FieldMap, next: FieldMap): Record<string, FieldDiff> {
+  const out: Record<string, FieldDiff> = {};
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const k of keys) {
+    const from = prev[k] ?? "";
+    const to = next[k] ?? "";
+    if (from !== to) out[k] = { from, to };
+  }
+  return out;
+}
