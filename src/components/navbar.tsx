@@ -1,6 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { isAdminEmail } from "@/lib/admin";
@@ -8,7 +7,6 @@ import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
 
 const HELP_DESK_URL = "https://itdashboard-mu.vercel.app/helpdesk/";
-const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
 
 export async function Navbar({
   adminShortcut,
@@ -20,22 +18,13 @@ export async function Navbar({
   const navbarForms = await getNavbarForms();
 
   return (
-    <header className="bg-gradient-to-r from-brand-700 via-brand-800 to-brand-900 text-white shadow-md">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="rounded-lg bg-white/90 px-2 py-1 ring-2 ring-white/25">
-            <Image
-              src={BRAND_LOGO_SRC}
-              alt="Vienovo"
-              width={132}
-              height={28}
-              priority
-              className="h-7 w-auto"
-            />
-          </div>
+    <header className="sticky top-0 z-50 h-14 border-b border-surface-border bg-white">
+      <div className="flex h-full items-center justify-between px-5">
+        <Link href="/dashboard" className="text-xl font-bold tracking-tight text-brand-700">
+          Vienovo Forms
         </Link>
 
-        <nav className="hidden sm:flex items-center gap-1 text-sm">
+        <nav className="hidden sm:flex h-full items-center gap-6 text-sm">
           <NavLink href="/dashboard">Dashboard</NavLink>
           <NewRequestMenu
             options={navbarForms.map((form) => ({
@@ -48,11 +37,11 @@ export async function Navbar({
         </nav>
 
         {session?.user ? (
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-3 text-sm text-slate-700">
             {showAdmin && adminShortcut ? (
               <Link
                 href={adminShortcut.href}
-                className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
+                className="hidden md:inline-flex border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
               >
                 {adminShortcut.label}
               </Link>
@@ -60,12 +49,17 @@ export async function Navbar({
             {showAdmin ? (
               <Link
                 href="/admin"
-                className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
+                className="hidden md:inline-flex border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
               >
                 Admin
               </Link>
             ) : null}
-            <span className="hidden md:inline text-brand-100">{session.user.email}</span>
+            <button className="hidden sm:inline-flex p-2 text-slate-700 transition hover:text-brand-700" type="button">
+              <Bell className="h-5 w-5" />
+            </button>
+            <a className="hidden sm:inline-flex p-2 text-slate-700 transition hover:text-brand-700" href={HELP_DESK_URL} target="_blank" rel="noopener noreferrer">
+              <CircleHelp className="h-5 w-5" />
+            </a>
             <form
               action={async () => {
                 "use server";
@@ -74,16 +68,17 @@ export async function Navbar({
             >
               <PendingSubmitButton
                 type="submit"
-                idleLabel="Sign out"
+                title={session.user.email ?? "Sign out"}
+                idleLabel={<UserCircle className="h-5 w-5" />}
                 pendingLabel="Signing out..."
-                className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
+                className="p-2 text-slate-700 transition hover:text-brand-700"
               />
             </form>
           </div>
         ) : (
           <Link
             href="/sign-in"
-            className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
+            className="border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
           >
             Sign in
           </Link>
@@ -97,7 +92,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link
       href={href}
-      className="px-3 py-1.5 rounded-lg hover:bg-white/15 transition font-medium"
+      className="flex h-full items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700"
     >
       {children}
     </Link>
@@ -110,7 +105,7 @@ function ExternalNavLink({ href, children }: { href: string; children: React.Rea
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="px-3 py-1.5 rounded-lg hover:bg-white/15 transition font-medium"
+      className="flex h-full items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700"
     >
       {children}
     </a>
@@ -124,12 +119,12 @@ function NewRequestMenu({
 }) {
   return (
     <details className="relative">
-      <summary className="list-none px-3 py-1.5 rounded-lg hover:bg-white/15 transition font-medium cursor-pointer select-none">
+      <summary className="flex h-14 list-none items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700 cursor-pointer select-none">
         <span className="inline-flex items-center gap-1">
           New request <ChevronDown className="h-3.5 w-3.5 opacity-90" />
         </span>
       </summary>
-      <div className="absolute z-50 mt-2 w-64 rounded-xl border border-brand-100 bg-white text-gray-800 shadow-lg overflow-hidden">
+      <div className="absolute z-50 mt-2 w-72 overflow-hidden border border-surface-border bg-white text-gray-800 shadow-lg">
         <div className="py-1">
           {options.map((option) => (
             <MenuLink

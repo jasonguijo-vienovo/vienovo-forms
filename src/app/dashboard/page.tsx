@@ -1,4 +1,16 @@
-import { Clock3, FileText, PlusCircle, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  Building2,
+  Clock3,
+  FileText,
+  Laptop,
+  Megaphone,
+  Plane,
+  Plus,
+  ReceiptText,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
@@ -19,11 +31,11 @@ const FORM_LABELS: Record<string, string> = {
 };
 
 const STATUS_TONES: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800 border-amber-200",
-  approved: "bg-green-100 text-green-800 border-green-200",
-  rejected: "bg-red-100 text-red-800 border-red-200",
-  returned: "bg-blue-100 text-blue-800 border-blue-200",
-  submitted: "bg-sky-100 text-sky-800 border-sky-200",
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  approved: "border-green-200 bg-green-50 text-green-800",
+  rejected: "border-red-200 bg-red-50 text-red-800",
+  returned: "border-blue-200 bg-blue-50 text-blue-800",
+  submitted: "border-sky-200 bg-sky-50 text-sky-800",
 };
 
 export default async function DashboardPage() {
@@ -46,35 +58,45 @@ export default async function DashboardPage() {
   return (
     <>
       <Navbar />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 tracking-tight">
-            Welcome, {String(name).split(" ")[0]}
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Start a request, track your submissions, and see approvals waiting for you.
-          </p>
+      <main className="app-page">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="section-eyebrow">Requester workspace</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">
+              Welcome, {String(name).split(" ")[0]}
+            </h1>
+            <p className="mt-1 text-sm text-surface-muted">
+              Start a request, track your submissions, and see approvals waiting for you.
+            </p>
+          </div>
+          <Link href="/forms" className="btn-primary w-full sm:w-auto">
+            <Plus className="h-4 w-4" />
+            New Request
+          </Link>
         </div>
 
-        <section className="mb-10">
-          <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
-            Submit a request
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <section className="mb-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-surface-text">Quick request forms</h2>
+            <Link href="/forms" className="text-sm font-semibold text-brand-700 hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {forms.length > 0 ? (
-              forms.map((form) => <FormCard key={form.slug} {...form} />)
+              forms.slice(0, 4).map((form) => <FormCard key={form.slug} {...form} />)
             ) : (
-              <div className="sm:col-span-2 lg:col-span-3 rounded-2xl border border-brand-100 bg-white p-6 text-sm text-gray-400 text-center">
+              <div className="app-panel p-8 text-center text-sm text-surface-muted sm:col-span-2">
                 No available request forms right now.
               </div>
             )}
           </div>
         </section>
 
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Panel title="My recent requests">
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Panel title="Recent requests" description="Latest forms you submitted.">
             {myRequests.length > 0 ? (
-              <div className="space-y-3">
+              <div className="divide-y divide-surface-border">
                 {myRequests.map((request) => (
                   <RequestRow key={String(request._id)} request={request} showDelete />
                 ))}
@@ -83,9 +105,9 @@ export default async function DashboardPage() {
               <EmptyState message="You haven't submitted any requests yet." />
             )}
           </Panel>
-          <Panel title="Pending my approval">
+          <Panel title="Pending approvals" description="Requests waiting for your action.">
             {pendingApprovals.length > 0 ? (
-              <div className="space-y-3">
+              <div className="divide-y divide-surface-border">
                 {pendingApprovals.map((request) => (
                   <RequestRow key={String(request._id)} request={request} />
                 ))}
@@ -98,6 +120,16 @@ export default async function DashboardPage() {
       </main>
     </>
   );
+}
+
+function formIcon(slug: string) {
+  if (slug.includes("travel")) return Plane;
+  if (slug.includes("cash")) return Banknote;
+  if (slug.includes("reimbursement")) return ReceiptText;
+  if (slug.includes("payment")) return Building2;
+  if (slug.includes("tell") || slug.includes("help")) return Megaphone;
+  if (slug.includes("it")) return Laptop;
+  return FileText;
 }
 
 function FormCard({
@@ -116,52 +148,58 @@ function FormCard({
   routePath: string;
 }) {
   const available = availability === "available" && isImplemented;
+  const Icon = formIcon(slug);
 
   const inner = (
     <div
-      className={`bg-white rounded-2xl shadow-sm border border-brand-100 p-5 h-full transition ${
-        available ? "hover:shadow-md hover:border-brand-300 cursor-pointer" : "opacity-60"
+      className={`app-panel group h-full p-5 transition ${
+        available ? "hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm" : "opacity-60"
       }`}
     >
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="rounded-lg bg-brand-50 p-2 text-brand-700">
-            <FileText className="h-4 w-4" />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+            <Icon className="h-5 w-5" />
           </div>
-          <h3 className="font-bold text-gray-800 truncate">{name}</h3>
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold text-surface-text">{name}</h3>
+            <p className="mt-1 line-clamp-2 text-sm leading-6 text-surface-muted">{description}</p>
+          </div>
         </div>
-        {!available && (
-          <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-            Soon
-          </span>
+        {available ? (
+          <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-brand-700" />
+        ) : (
+          <span className="status-pill border-surface-border bg-slate-50 text-surface-muted">Soon</span>
         )}
       </div>
-      <p className="text-sm text-gray-500 leading-relaxed">{description}</p>
-      {available ? (
-        <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand-700">
-          <PlusCircle className="h-4 w-4" />
-          Start request
-        </div>
-      ) : null}
     </div>
   );
 
   return available ? <Link href={routePath || `/forms/${slug}`}>{inner}</Link> : inner;
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-      <h2 className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3 mb-4">
-        {title}
-      </h2>
-      {children}
+    <div className="app-panel overflow-hidden">
+      <div className="border-b border-surface-border px-5 py-4">
+        <h2 className="text-base font-semibold text-surface-text">{title}</h2>
+        <p className="mt-1 text-sm text-surface-muted">{description}</p>
+      </div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <div className="text-center py-10 text-sm text-gray-400">{message}</div>;
+  return <div className="py-10 text-center text-sm text-surface-muted">{message}</div>;
 }
 
 function requestFormLabel(request: any) {
@@ -179,11 +217,11 @@ function formatDate(value: unknown) {
 
 function RequestRow({ request, showDelete = false }: { request: any; showDelete?: boolean }) {
   return (
-    <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-3">
+    <div className="py-3 first:pt-0 last:pb-0">
       <div className="flex items-start justify-between gap-3">
         <Link href={`/requests/${request.referenceNo}`} className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-800 truncate">{requestFormLabel(request)}</p>
-          <p className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+          <p className="truncate text-sm font-semibold text-surface-text">{requestFormLabel(request)}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
             <Clock3 className="h-3.5 w-3.5" />
             <span className="font-mono">{request.referenceNo}</span>
             {" - "}
@@ -191,8 +229,8 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
           </p>
         </Link>
         <span
-          className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
-            STATUS_TONES[request.status] ?? "bg-gray-100 text-gray-700 border-gray-200"
+          className={`status-pill shrink-0 uppercase ${
+            STATUS_TONES[request.status] ?? "border-surface-border bg-slate-50 text-slate-700"
           }`}
         >
           {request.status}
@@ -210,7 +248,7 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
               </span>
             }
             pendingLabel="Deleting..."
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 border border-red-200 bg-white hover:bg-red-50 rounded-lg px-3 py-1.5 transition"
+            className="inline-flex items-center gap-1.5 border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
           />
         </form>
       ) : null}

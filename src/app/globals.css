@@ -3,8 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f9fafb;
-  --fg: #111827;
+  --bg: #f6f8fa;
+  --fg: #1f2328;
+  --surface-panel: #ffffff;
+  --surface-border: #d0d7de;
+  --surface-muted: #636c76;
+  --primary: #006e2a;
+  --primary-dark: #006426;
+  --primary-soft: #eaf0e6;
 }
 
 html,
@@ -13,10 +19,9 @@ body {
 }
 
 body {
-  background: linear-gradient(160deg, #f0fdf4 0%, #f9fafb 60%);
+  background: var(--bg);
   color: var(--fg);
-  font-family: var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto,
-    sans-serif);
+  font-family: Inter, var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -28,8 +33,20 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #bbf7d0;
+  background: #becabb;
   border-radius: 99px;
+}
+
+.rounded-2xl {
+  border-radius: 0.5rem !important;
+}
+
+.rounded-xl {
+  border-radius: 0.5rem !important;
+}
+
+.rounded-lg {
+  border-radius: 0.375rem !important;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator,
@@ -40,56 +57,136 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .field-input {
   width: 100%;
-  padding: 0.625rem 0.875rem;
-  border: 1.5px solid #d1d5db;
-  border-radius: 0.625rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.25rem;
   font-size: 0.875rem;
   background: #fff;
-  color: #111827;
+  color: var(--fg);
   transition: border-color 0.15s, box-shadow 0.15s;
   outline: none;
 }
 .field-input:focus {
-  border-color: #16a34a;
-  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
 }
 .field-input::placeholder {
-  color: #9ca3af;
+  color: #636c76;
 }
 .field-input.field-locked,
 .field-input[readonly],
 .field-input:disabled {
-  background: #f9fafb;
-  color: #6b7280;
+  background: #f6f8fa;
+  color: var(--surface-muted);
   cursor: not-allowed;
-  border-color: #e5e7eb;
+  border-color: var(--surface-border);
 }
 
 .radio-card {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.7rem 1rem;
-  border-radius: 0.75rem;
-  border: 1.5px solid #e5e7eb;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--surface-border);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--fg);
   user-select: none;
   background: #fff;
 }
 .radio-card:hover {
-  border-color: #86efac;
-  background: #f0fdf4;
+  border-color: #becabb;
+  background: #f0f5eb;
 }
 .radio-card-checked,
 .radio-card:has(input:checked) {
-  border-color: #16a34a;
-  background: #f0fdf4;
-  color: #15803d;
+  border-color: var(--primary);
+  background: #eaf0e6;
+  color: var(--primary-dark);
   font-weight: 600;
 }
 .radio-card input {
-  accent-color: #15803d;
+  accent-color: var(--primary);
+}
+
+.app-page {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 3rem 1rem;
+}
+
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-panel,
+.app-panel {
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-border);
+  border-radius: 0.5rem;
+  box-shadow: none;
+}
+
+.section-eyebrow {
+  color: var(--surface-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  border-radius: 0.25rem;
+  background: var(--primary-dark);
+  border: 1px solid var(--primary-dark);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn-primary:hover {
+  background: var(--primary);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  border-radius: 0.25rem;
+  background: white;
+  border: 1px solid var(--surface-border);
+  color: var(--fg);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.btn-secondary:hover {
+  background: #f6f8fa;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
 }

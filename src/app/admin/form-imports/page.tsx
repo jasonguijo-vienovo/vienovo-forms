@@ -102,11 +102,12 @@ export default async function FormImportsPage() {
   ).length;
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Form importer</h1>
-          <p className="text-gray-500 text-sm mt-1">
+          <p className="section-eyebrow">Import pipeline</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">Form importer</h1>
+          <p className="mt-1 text-sm text-surface-muted">
             Bring a legacy Apps Script form into the app, sync its dropdowns and people, preview it, then
             publish it for requesters.
           </p>
@@ -118,7 +119,7 @@ export default async function FormImportsPage() {
         </div>
       </div>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
+      <section className="admin-panel p-5">
         <div className="flex items-center gap-3 mb-4">
           <StepNumber value="1" />
           <div>
@@ -214,7 +215,7 @@ export default async function FormImportsPage() {
                   />
                 </Field>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                  <div className="border border-surface-border bg-slate-50 p-4">
                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                       <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
                       <span>Write submitted responses back to Google Sheets</span>
@@ -252,14 +253,14 @@ export default async function FormImportsPage() {
                   </span>
                 }
                 pendingLabel="Saving draft..."
-                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+                className="btn-primary"
               />
             </div>
           </PendingFormState>
         </form>
       </section>
 
-      <section className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
+      <section className="admin-panel p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <StepNumber value="2" />
@@ -302,7 +303,7 @@ export default async function FormImportsPage() {
               return (
                 <article
                   key={String(item._id)}
-                  className="rounded-xl border border-brand-100 bg-white p-4 shadow-sm"
+                  className="border border-surface-border bg-white p-4"
                 >
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0">
@@ -459,7 +460,7 @@ export default async function FormImportsPage() {
                           />
                         </Field>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                          <div className="border border-surface-border bg-slate-50 p-4">
                             <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                               <input
                                 type="checkbox"
@@ -492,7 +493,7 @@ export default async function FormImportsPage() {
                             type="submit"
                             idleLabel="Save settings"
                             pendingLabel="Saving..."
-                            className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                            className="btn-secondary"
                           />
                         </div>
                       </form>
@@ -712,7 +713,7 @@ function SourceBox({ title, value }: { title: string; value: string }) {
 
 function TargetStructure({ slug }: { slug: string }) {
   return (
-    <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+    <div className="border border-surface-border bg-slate-50 p-4">
       <pre className="text-xs sm:text-sm text-gray-700 whitespace-pre-wrap overflow-auto">
         {`src/app/forms/${slug}/
   page.tsx
