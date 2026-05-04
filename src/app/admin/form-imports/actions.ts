@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { BUILTIN_FORMS } from "@/lib/form-definitions";
 import { parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
@@ -137,6 +138,7 @@ export async function createFormImport(formData: FormData) {
   });
 
   await ensureImportedRegistryEntry(created);
+  await setFlashToast({ tone: "success", message: `Import draft saved for ${name}.` });
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
@@ -161,6 +163,7 @@ export async function updateFormImportConfig(formData: FormData) {
       },
     }
   );
+  await setFlashToast({ tone: "success", message: "Import settings saved." });
 
   revalidatePath("/admin/form-imports");
 }
@@ -196,6 +199,7 @@ export async function publishFormImport(formData: FormData) {
       },
     }
   );
+  await setFlashToast({ tone: "success", message: `${imported.name} is now published for users.` });
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
@@ -214,6 +218,7 @@ export async function createMissingRegistryEntry(formData: FormData) {
   if (!imported) return;
 
   await ensureImportedRegistryEntry(imported);
+  await setFlashToast({ tone: "success", message: "Registry entry created from import draft." });
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
@@ -231,6 +236,7 @@ export async function updateFormImportStatus(formData: FormData) {
   if (status === "implemented") {
     await FormDefinition.updateOne({ importSourceId: id }, { $set: { isImplemented: true } });
   }
+  await setFlashToast({ tone: "success", message: `Import status saved as ${status}.` });
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");
 }
@@ -251,6 +257,7 @@ export async function deleteFormImport(formData: FormData) {
       $or: [{ importSourceId: id }, { source: "imported", slug: imported.slug }],
     }),
   ]);
+  await setFlashToast({ tone: "success", message: `${imported.name} import was deleted.` });
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");

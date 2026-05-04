@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { BUILTIN_FORMS } from "@/lib/form-definitions";
 import {
   FormDefinition,
@@ -64,6 +65,7 @@ export async function updateFormDefinition(formData: FormData) {
       },
     }
   );
+  await setFlashToast({ tone: "success", message: "Form settings saved." });
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
@@ -90,6 +92,7 @@ export async function hideFormDefinition(formData: FormData) {
       },
     }
   );
+  await setFlashToast({ tone: "success", message: "Form hidden from users." });
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
@@ -118,6 +121,7 @@ export async function deleteFormDefinition(formData: FormData) {
   if (form.importSourceId) {
     await FormImport.updateOne({ _id: form.importSourceId }, { $set: { status: "draft" } });
   }
+  await setFlashToast({ tone: "success", message: "Registry entry deleted." });
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");

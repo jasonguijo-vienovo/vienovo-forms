@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { safeAuth } from "@/lib/safe-auth";
 import { RequestModel } from "@/models/Request";
 
@@ -29,6 +30,7 @@ export async function deleteDashboardRequest(formData: FormData) {
   }
 
   await RequestModel.deleteOne({ referenceNo });
+  await setFlashToast({ tone: "success", message: `Request ${referenceNo} was deleted.` });
 
   revalidatePath("/dashboard");
   revalidatePath(`/requests/${referenceNo}`);

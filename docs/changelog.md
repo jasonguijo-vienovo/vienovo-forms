@@ -23,6 +23,10 @@
 - Added real recent request and pending approval lists.
 - Added a dashboard delete action for a user's own submitted requests.
 
+### System feedback
+- Added a reusable global toast notification for successful admin and dashboard actions.
+- Save, import, publish, hide, and delete actions now show a short confirmation message in the UI.
+
 ### Imported form runtime
 - Added generic imported-form routes at `/forms/[slug]`.
 - Imported forms can now render a usable runtime for end users instead of staying as admin-only metadata.
