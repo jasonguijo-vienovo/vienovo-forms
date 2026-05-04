@@ -1,10 +1,17 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
 import { createFormImport, updateFormImportStatus } from "./actions";
 
 export default async function FormImportsPage() {
   await connectMongo();
-  const imports = await FormImport.find({}).sort({ createdAt: -1 }).lean();
+  const [imports, definitions] = await Promise.all([
+    FormImport.find({}).sort({ createdAt: -1 }).lean(),
+    FormDefinition.find({ source: "imported" })
+      .select({ slug: 1, status: 1, visibility: 1, availability: 1, isImplemented: 1 })
+      .lean(),
+  ]);
+  const definitionBySlug = new Map(definitions.map((item) => [item.slug, item]));
 
   return (
     <div className="space-y-6">
@@ -200,6 +207,42 @@ export default async function FormImportsPage() {
                   <TargetStructure slug={item.slug} compact />
                 </div>
 
+                {definitionBySlug.get(item.slug) ? (
+                  <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+                    <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 mb-2">
+                      Registry visibility
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      This import already created an admin-side form registry record.
+                    </p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 text-sm">
+                      <Metric
+                        label="Publish status"
+                        valueText={String(definitionBySlug.get(item.slug)?.status ?? "draft")}
+                      />
+                      <Metric
+                        label="Visibility"
+                        valueText={String(definitionBySlug.get(item.slug)?.visibility ?? "admin")}
+                      />
+                      <Metric
+                        label="Availability"
+                        valueText={String(
+                          definitionBySlug.get(item.slug)?.availability ?? "coming-soon"
+                        )}
+                      />
+                      <Metric
+                        label="Implemented"
+                        valueText={
+                          definitionBySlug.get(item.slug)?.isImplemented ? "Yes" : "No"
+                        }
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3">
+                      Manage dashboard visibility and publishing in <code>/admin/forms</code>.
+                    </p>
+                  </div>
+                ) : null}
+
                 {item.notes ? (
                   <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">
                     {item.notes}
@@ -244,11 +287,19 @@ function Field({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  label,
+  value,
+  valueText,
+}: {
+  label: string;
+  value?: number;
+  valueText?: string;
+}) {
   return (
     <div className="rounded-lg border border-brand-100 bg-brand-50/40 px-3 py-2">
       <p className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">{label}</p>
-      <p className="text-lg font-bold text-gray-800">{value}</p>
+      <p className="text-lg font-bold text-gray-800">{valueText ?? value ?? 0}</p>
     </div>
   );
 }
