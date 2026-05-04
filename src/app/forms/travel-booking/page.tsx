@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isAdminEmail } from "@/lib/admin";
 import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
@@ -8,9 +9,16 @@ import { getEmployeeByEmail } from "@/lib/employee";
 import { TravelBookingForm } from "./form";
 import { submitTravelBooking } from "./actions";
 
-export default async function TravelBookingPage() {
+export default async function TravelBookingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ preview?: string }>;
+}) {
+  const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
+  const isAdmin = isAdminEmail(session.user.email);
+  const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
 
   await connectMongo();
 
@@ -49,7 +57,18 @@ export default async function TravelBookingPage() {
 
   return (
     <>
-      <Navbar />
+      <Navbar
+        adminShortcut={
+          isAdmin
+            ? {
+                href: requesterPreview
+                  ? "/forms/travel-booking"
+                  : "/forms/travel-booking?preview=requester",
+                label: requesterPreview ? "Admin view" : "Requester preview",
+              }
+            : null
+        }
+      />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <TravelBookingForm
           user={{ email: userEmail, name: userName }}

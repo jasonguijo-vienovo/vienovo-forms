@@ -24,6 +24,7 @@
 - Made the admin/requester preview controls visible in the always-present right side of the navbar.
 - Added imported dropdown syncing into `Manage dropdowns`, grouped by imported form.
 - Updated `Run seed` on admin overview so it also syncs imported-form dropdown values into the lookup store.
+- Added the same admin/requester preview toggle to the native form pages in the top navbar.
 
 ### Dashboard
 - The dashboard now hides unavailable or coming-soon forms from normal users.

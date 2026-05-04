@@ -55,6 +55,7 @@ export type ReimbursementInitialValues = Partial<{
 
 export type ReimbursementFormProps = {
   user: { email: string; name: string };
+  requesterPreview?: boolean;
   prefill: EmployeePrefill;
   initial?: ReimbursementInitialValues;
   submitAction: (formData: FormData) => void | Promise<void>;
@@ -72,6 +73,7 @@ const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
 export function ReimbursementForm(props: ReimbursementFormProps) {
   const {
     user,
+    requesterPreview,
     prefill,
     initial,
     submitAction,

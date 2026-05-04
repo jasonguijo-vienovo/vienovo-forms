@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { isAdminEmail } from "@/lib/admin";
 import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
@@ -21,9 +22,16 @@ function splitName(fullName: string) {
   };
 }
 
-export default async function ReimbursementPage() {
+export default async function ReimbursementPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ preview?: string }>;
+}) {
+  const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
+  const isAdmin = isAdminEmail(session.user.email);
+  const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
 
   await connectMongo();
 
@@ -58,10 +66,22 @@ export default async function ReimbursementPage() {
 
   return (
     <>
-      <Navbar />
+      <Navbar
+        adminShortcut={
+          isAdmin
+            ? {
+                href: requesterPreview
+                  ? "/forms/reimbursement"
+                  : "/forms/reimbursement?preview=requester",
+                label: requesterPreview ? "Admin view" : "Requester preview",
+              }
+            : null
+        }
+      />
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <ReimbursementForm
           user={{ email: userEmail, name: userName }}
+          requesterPreview={requesterPreview}
           submitAction={submitReimbursement}
           prefill={{
             firstName: nameParts.firstName,
