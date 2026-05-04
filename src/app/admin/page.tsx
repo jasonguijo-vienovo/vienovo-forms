@@ -1,4 +1,4 @@
-import { FileInput, ListChecks, Route, Send, Users } from "lucide-react";
+import { Cog, FileInput, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
@@ -14,12 +14,14 @@ export default async function AdminOverviewPage() {
     lookupCount,
     approverCount,
     approverNeedsReview,
+    processorCount,
     importedDraftCount,
     forms,
   ] = await Promise.all([
     Lookup.countDocuments({}),
     Approver.countDocuments({}),
     Approver.countDocuments({ emailNeedsReview: true }),
+    Approver.countDocuments({ roles: "processor" }),
     FormImport.countDocuments({}),
     getAllFormDefinitionsForAdmin(),
   ]);
@@ -80,6 +82,12 @@ export default async function AdminOverviewPage() {
             title="Approvers"
             description={`${approverCount} approvers loaded. Review emails that need cleanup.`}
           />
+          <AdminCard
+            href="/admin/processors"
+            icon={<Cog className="h-5 w-5" />}
+            title="Processors"
+            description={`${processorCount} processors configured for final processing steps.`}
+          />
         </div>
       </section>
 
@@ -94,8 +102,8 @@ export default async function AdminOverviewPage() {
             </h2>
             <p className="text-sm text-gray-500 mb-4 leading-relaxed">
               Loads departments, airports, airlines, baggage options, and the approver roster. It
-              also syncs imported-form dropdowns into Manage dropdowns. Safe to re-run; existing
-              entries are not overwritten.
+              also syncs imported-form dropdowns and any detected approver or processor people.
+              Safe to re-run; existing entries are not overwritten.
             </p>
             <SeedButton />
           </div>

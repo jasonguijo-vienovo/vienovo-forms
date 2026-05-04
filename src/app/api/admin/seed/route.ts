@@ -123,6 +123,8 @@ export async function POST() {
     importedDropdownImports: 0,
     importedDropdownCategories: 0,
     importedDropdownValues: 0,
+    importedPeople: 0,
+    importedProcessors: 0,
   };
 
   const routeResult = await seedReimbursementRoutes();
@@ -137,6 +139,8 @@ export async function POST() {
   result.importedDropdownImports = importedLookupResult.importsSynced;
   result.importedDropdownCategories = importedLookupResult.categoriesSynced;
   result.importedDropdownValues = importedLookupResult.valuesSynced;
+  result.importedPeople = importedLookupResult.peopleSynced;
+  result.importedProcessors = importedLookupResult.processorsSynced;
 
   return NextResponse.json({ ok: true, added: result });
 }

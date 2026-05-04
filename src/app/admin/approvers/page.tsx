@@ -20,6 +20,9 @@ export default async function ApproversPage() {
           People who can approve or process requests. Each person can serve as
           supervisor, department head, cash advance approver, or final approver.
         </p>
+        <p className="text-xs text-gray-400 mt-2">
+          Need a focused processor list? Use <a href="/admin/processors" className="text-brand-700 underline">Processors</a>.
+        </p>
       </div>
 
       {needsReview > 0 && (

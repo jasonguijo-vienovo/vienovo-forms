@@ -105,7 +105,7 @@ export default async function FormImportsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Form importer</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Bring a legacy Apps Script form into the app, sync its dropdowns, preview it, then
+            Bring a legacy Apps Script form into the app, sync its dropdowns and people, preview it, then
             publish it for requesters.
           </p>
         </div>
@@ -321,7 +321,7 @@ export default async function FormImportsPage() {
                       ) : null}
                       <ActionForm action={syncImportedDropdowns} id={String(item._id)} tone="blue">
                         <DatabaseZap className="h-4 w-4" />
-                        Sync dropdowns
+                        Sync
                       </ActionForm>
                       <Link
                         href={`/forms/${item.slug}`}
@@ -346,7 +346,7 @@ export default async function FormImportsPage() {
                     <ProgressStep done={hasRegistry} label="Registry created" />
                     <ProgressStep
                       done={!hasSpreadsheet || hasSyncedDropdowns}
-                      label={hasSpreadsheet ? "Dropdowns synced" : "No sheet linked"}
+                      label={hasSpreadsheet ? "Synced" : "No sheet linked"}
                     />
                     <ProgressStep done={Boolean(runtime?.fields.length)} label="Preview ready" />
                     <ProgressStep done={Boolean(isPublished)} label="Published" />
@@ -355,7 +355,7 @@ export default async function FormImportsPage() {
                   <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <Metric label="Inputs" value={item.summary?.inputCount ?? 0} />
                     <Metric label="Selects" value={item.summary?.selectCount ?? 0} />
-                    <Metric label="Dropdown values" value={syncedStats.valueCount} />
+                    <Metric label="Synced values" value={syncedStats.valueCount} />
                     <Metric label="Sheet tabs" value={runtime?.sheetNames.length ?? 0} />
                   </div>
 
@@ -602,7 +602,7 @@ function NextActionHint({
   let message = "Open the form and use Requester preview in the navbar before publishing.";
   if (!hasRegistry) message = "Create the registry entry so this draft has a dashboard control record.";
   else if (hasSpreadsheet && !hasSyncedDropdowns) {
-    message = "Sync dropdowns so Manage dropdowns has the values discovered from the spreadsheet.";
+    message = "Sync so Manage dropdowns, approvers, and processors can pull what the spreadsheet exposes.";
   } else if (!previewReady) {
     message = "Open the technical details and review the imported source because no supported fields were detected.";
   } else if (isPublished) {

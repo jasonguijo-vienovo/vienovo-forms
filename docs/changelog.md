@@ -10,6 +10,8 @@
 - Added development-mode admin access for signed-in `@vienovo.ph` users when `AUTH_DEV_BYPASS=1`.
 
 ### Admin importer and registry
+- Renamed the importer action button to `Sync` and expanded it to sync dropdown values plus detected approver and processor people from imported form options.
+- Added a dedicated `/admin/processors` page for managing processor accounts separately from the general approver roster.
 - Refined the form importer into a guided admin workflow: create or replace draft, sync dropdowns, open preview, publish, and delete.
 - Added import progress checks for source saved, registry created, dropdowns synced, preview ready, and published.
 - Moved importer technical details such as spreadsheet scan output, bindings JSON, native output structure, and source snapshots into expandable sections.

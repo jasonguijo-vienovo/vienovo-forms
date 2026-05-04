@@ -317,9 +317,9 @@ export async function syncImportedDropdowns(formData: FormData) {
   await setFlashToast({
     tone: "success",
     message:
-      result.categoriesSynced > 0
-        ? `${result.importName}: synced ${result.valuesSynced} dropdown values into Manage dropdowns.`
-        : `${result.importName}: no dropdown values were found to sync.`,
+      result.categoriesSynced > 0 || result.peopleSynced > 0
+        ? `${result.importName}: synced ${result.valuesSynced} dropdown values and ${result.peopleSynced} people.`
+        : `${result.importName}: no dropdown values or people were found to sync.`,
   });
 
   revalidatePath(FORM_IMPORTS_PATH);
