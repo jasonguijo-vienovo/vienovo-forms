@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminStatusPill } from "@/components/admin-ui";
+import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { addLookup, deleteLookup, toggleLookup, updateLookup } from "./actions";
@@ -25,25 +27,34 @@ export default function LookupsClient(props: {
 }) {
   const { categoryLabels, groups, itemsByCategory } = props;
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
-
-  const selectedGroup = useMemo(
-    () => groups.find((g) => g.key === selectedGroupKey) ?? groups[0],
-    [groups, selectedGroupKey],
-  );
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const selectedGroup = groups.find((g) => g.key === selectedGroupKey) ?? groups[0];
+  const visibleCategories =
+    selectedGroup?.categories.filter((category) =>
+      (categoryLabels[category] ?? category).toLowerCase().includes(categoryQuery.toLowerCase()),
+    ) ?? [];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-      <aside className="bg-white rounded-2xl shadow-sm border border-brand-100 p-3 h-fit lg:sticky lg:top-24">
-        <div className="px-2 pt-1 pb-2">
-          <div className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700">
-            Forms
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
-            Select a form to manage dropdowns.
-          </div>
-        </div>
+    <div className="admin-page">
+      <AdminPageHeader
+        eyebrow="Lookup management"
+        title="Dropdown values"
+        description="Edit the choices users see inside forms. Use this page to keep form options current without touching form logic."
+      />
 
-        <div className="flex flex-col gap-1">
+      <AdminHelpPanel title="What this page does">
+        Choose a form on the left, then manage the dropdown lists used by that form. Changing values
+        here affects future form filling only; it does not rewrite old requests.
+      </AdminHelpPanel>
+
+      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+        <aside className="admin-panel h-fit p-3 lg:sticky lg:top-24">
+          <div className="px-2 pt-1 pb-2">
+            <div className="text-xs font-bold uppercase tracking-[0.1em] text-brand-700">Forms</div>
+            <div className="mt-1 text-xs text-surface-muted">Select a form area to manage its dropdowns.</div>
+          </div>
+
+          <div className="flex flex-col gap-1">
           {groups.map((g) => {
             const isActive = g.key === selectedGroup?.key;
             return (
@@ -52,48 +63,58 @@ export default function LookupsClient(props: {
                 type="button"
                 onClick={() => setSelectedGroupKey(g.key)}
                 className={[
-                  "text-left px-3 py-2 rounded-xl border transition",
+                  "border px-3 py-2 text-left transition",
                   isActive
-                    ? "bg-brand-50 border-brand-200 text-brand-800"
-                    : "bg-white border-transparent hover:bg-gray-50 text-gray-700",
+                    ? "border-brand-200 bg-brand-50 text-brand-800"
+                    : "border-transparent bg-white text-gray-700 hover:bg-gray-50",
                 ].join(" ")}
               >
                 <div className="font-semibold text-sm">{g.title}</div>
-                <div className="text-xs text-gray-500 line-clamp-2">
-                  {g.description}
-                </div>
+                <div className="line-clamp-2 text-xs text-gray-500">{g.description}</div>
               </button>
             );
           })}
-        </div>
-      </aside>
+          </div>
+        </aside>
 
-      <main className="space-y-4">
-        {selectedGroup ? (
-          <>
-            <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-lg font-bold text-gray-800">
-                  {selectedGroup.title}
-                </h2>
-                <p className="text-sm text-gray-500">{selectedGroup.description}</p>
+        <main className="space-y-4">
+          {selectedGroup ? (
+            <AdminSection
+              title={selectedGroup.title}
+              description={selectedGroup.description}
+              meta={`${visibleCategories.length} of ${selectedGroup.categories.length} dropdown groups shown`}
+            >
+              <div className="mb-4 flex flex-col gap-3">
+                <AdminSearchField
+                  value={categoryQuery}
+                  onChange={setCategoryQuery}
+                  placeholder="Search dropdown groups in this form"
+                />
+                <div className="text-xs text-surface-muted">
+                  Tip: imported dropdowns can be updated from the importer, then fine-tuned here.
+                </div>
               </div>
-            </div>
 
-            <div className="grid gap-4">
-              {selectedGroup.categories.map((cat, idx) => (
+              {visibleCategories.length === 0 ? (
+                <AdminEmptyState
+                  title="No dropdown groups match this search"
+                  description="Try a broader search or switch to a different form area."
+                />
+              ) : (
+                <div className="grid gap-4">
+                  {visibleCategories.map((cat, idx) => (
                 <details
                   key={cat}
-                  className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5"
+                  className="border border-surface-border bg-white p-5"
                   open={idx === 0}
                 >
                   <summary className="flex items-center justify-between cursor-pointer select-none list-none">
-                    <div className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700 border-l-[3px] border-brand-600 pl-3">
-                      {categoryLabels[cat] ?? cat}
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-surface-text">{categoryLabels[cat] ?? cat}</h3>
+                      <AdminStatusPill tone="neutral">
+                        {(itemsByCategory[cat]?.length ?? 0).toString()} entries
+                      </AdminStatusPill>
                     </div>
-                    <span className="text-xs text-gray-400">
-                      {(itemsByCategory[cat]?.length ?? 0).toString()} entries
-                    </span>
                   </summary>
 
                   <div className="mt-4">
@@ -105,27 +126,24 @@ export default function LookupsClient(props: {
                           name="value"
                           placeholder="Add a new value..."
                           required
-                          className="flex-1 px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
+                          className="field-input flex-1"
                         />
                         <PendingSubmitButton
                           type="submit"
-                          idleLabel="Add"
+                          idleLabel="Add value"
                           pendingLabel="Adding..."
-                          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 rounded-lg text-sm transition"
+                          className="btn-primary"
                         />
                       </PendingFormState>
                     </form>
 
                     {!itemsByCategory[cat] || itemsByCategory[cat].length === 0 ? (
-                      <p className="text-sm text-gray-400 italic text-center py-4">
-                        No entries yet. Add one above or run seed from{" "}
-                        <a href="/admin" className="text-brand-700 underline">
-                          Admin
-                        </a>
-                        .
-                      </p>
+                      <AdminEmptyState
+                        title="No values yet"
+                        description="Add the first value above, or load default setup data from the overview page."
+                      />
                     ) : (
-                      <ul className="divide-y divide-brand-50">
+                      <ul className="divide-y divide-surface-border">
                         {itemsByCategory[cat].map((item) => (
                           <li
                             key={item.id}
@@ -153,13 +171,13 @@ export default function LookupsClient(props: {
                                       name="value"
                                       defaultValue={item.value}
                                       required
-                                      className="flex-1 px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
+                                      className="field-input flex-1"
                                     />
                                     <PendingSubmitButton
                                       type="submit"
-                                      idleLabel="Update"
+                                      idleLabel="Save"
                                       pendingLabel="Updating..."
-                                      className="bg-gray-900 hover:bg-black text-white font-semibold px-4 rounded-lg text-sm transition"
+                                      className="btn-secondary"
                                     />
                                   </PendingFormState>
                                 </form>
@@ -191,15 +209,18 @@ export default function LookupsClient(props: {
                     )}
                   </div>
                 </details>
-              ))}
-            </div>
-          </>
+                  ))}
+                </div>
+              )}
+            </AdminSection>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-5 text-sm text-gray-500">
-            No groups configured.
-          </div>
+            <AdminEmptyState
+              title="No form groups configured"
+              description="This usually means there are no lookup groups loaded yet."
+            />
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

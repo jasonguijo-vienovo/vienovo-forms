@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { AdminHelpPanel, AdminMetricCard, AdminPageHeader, AdminSection } from "@/components/admin-ui";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
@@ -103,29 +104,33 @@ export default async function FormImportsPage() {
 
   return (
     <div className="admin-page">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="section-eyebrow">Import pipeline</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">Form importer</h1>
-          <p className="mt-1 text-sm text-surface-muted">
-            Bring a legacy Apps Script form into the app, sync its dropdowns and people, preview it, then
-            publish it for requesters.
-          </p>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <MiniStat label="Drafts" value={imports.length} />
-          <MiniStat label="Ready" value={readyForReview} />
-          <MiniStat label="Live" value={published} />
-        </div>
+      <AdminPageHeader
+        eyebrow="Import pipeline"
+        title="Form importer"
+        description="Bring in a legacy Apps Script form, connect its spreadsheet, update dropdowns, preview it, and then make it available to users."
+      />
+
+      <AdminHelpPanel title="Fast path">
+        The usual order is: upload `index.html` and `code.gs`, add the spreadsheet ID, save the draft,
+        add it to the registry, update from spreadsheet, preview it, and then make it live.
+      </AdminHelpPanel>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <AdminMetricCard label="Drafts" value={imports.length} />
+        <AdminMetricCard label="Ready for review" value={readyForReview} />
+        <AdminMetricCard label="Live forms" value={published} tone="ok" />
       </div>
 
-      <section className="admin-panel p-5">
+      <AdminSection
+        title="Step 1: Create or replace an import draft"
+        description="Use the same form ID if you are re-importing. The latest source replaces the old draft."
+      >
         <div className="flex items-center gap-3 mb-4">
           <StepNumber value="1" />
           <div>
             <h2 className="text-lg font-bold text-gray-800">Create or replace an import draft</h2>
             <p className="text-sm text-gray-500">
-              Use the same slug to re-import a form. The latest source replaces the old draft.
+              This stores the imported source safely without making it visible to requesters yet.
             </p>
           </div>
         </div>
@@ -141,7 +146,7 @@ export default async function FormImportsPage() {
                   className="field-input"
                 />
               </Field>
-              <Field label="Suggested slug">
+              <Field label="Suggested form ID">
                 <input
                   name="slug"
                   placeholder="Example: petty-cash-replenishment"
@@ -153,7 +158,7 @@ export default async function FormImportsPage() {
             <Field label="Spreadsheet ID">
               <input
                 name="spreadsheetId"
-                placeholder="Optional, but needed for sheet-driven dropdowns."
+                placeholder="Needed if dropdowns or people come from Google Sheets."
                 className="field-input"
               />
             </Field>
@@ -179,7 +184,7 @@ export default async function FormImportsPage() {
 
             <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
               <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-                Paste source instead of uploading files
+                Paste source manually instead of uploading files
               </summary>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
                 <Field label="index.html source">
@@ -218,10 +223,10 @@ export default async function FormImportsPage() {
                   <div className="border border-surface-border bg-slate-50 p-4">
                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                       <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
-                      <span>Write submitted responses back to Google Sheets</span>
+                      <span>Also copy submitted responses to Google Sheets</span>
                     </label>
                     <p className="text-xs text-gray-500 mt-2">
-                      MongoDB remains the main record. Sheets gets a copy when this is enabled.
+                      MongoDB stays the main record. Google Sheets receives an extra copy when this is enabled.
                     </p>
                   </div>
                   <Field label="Response sheet tab">
@@ -249,7 +254,7 @@ export default async function FormImportsPage() {
                 idleLabel={
                   <span className="inline-flex items-center gap-2">
                     <FileInput className="h-4 w-4" />
-                    <span>Save import draft</span>
+                    <span>Save draft</span>
                   </span>
                 }
                 pendingLabel="Saving draft..."
@@ -258,16 +263,20 @@ export default async function FormImportsPage() {
             </div>
           </PendingFormState>
         </form>
-      </section>
+      </AdminSection>
 
-      <section className="admin-panel p-5">
+      <AdminSection
+        title="Step 2: Review, update, preview, and publish"
+        description="Each draft shows the next useful action so admins can move it forward safely."
+        meta={`${imports.length} drafts`}
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <StepNumber value="2" />
             <div>
               <h2 className="text-lg font-bold text-gray-800">Review, sync, preview, publish</h2>
               <p className="text-sm text-gray-500">
-                Each draft shows the next useful action and keeps the technical scan details nearby.
+                Best order: add to registry, update from spreadsheet, preview it, then make it live.
               </p>
             </div>
           </div>
@@ -310,10 +319,10 @@ export default async function FormImportsPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
                         <Badge>{item.status}</Badge>
-                        {isPublished ? <Badge tone="ok">live</Badge> : <Badge tone="warn">admin</Badge>}
+                        {isPublished ? <Badge tone="ok">live</Badge> : <Badge tone="warn">internal only</Badge>}
                       </div>
                       <p className="text-sm text-gray-500 mt-1">
-                        Slug: <code>{item.slug}</code>
+                        Form ID: <code>{item.slug}</code>
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
                         Saved by {item.createdByName || item.createdByEmail || "unknown"} on{" "}
@@ -325,23 +334,23 @@ export default async function FormImportsPage() {
                       {!hasRegistry ? (
                         <ActionForm action={createMissingRegistryEntry} id={String(item._id)}>
                           <Layers3 className="h-4 w-4" />
-                          Create registry
+                          Add to registry
                         </ActionForm>
                       ) : null}
                       <ActionForm action={syncImportedDropdowns} id={String(item._id)} tone="blue">
                         <DatabaseZap className="h-4 w-4" />
-                        Sync
+                        Update from spreadsheet
                       </ActionForm>
                       <Link
                         href={`/forms/${item.slug}`}
                         className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
                       >
                         <Eye className="h-4 w-4" />
-                        Open form
+                        Open preview
                       </Link>
                       <ActionForm action={publishFormImport} id={String(item._id)} tone="brand">
                         <CheckCircle2 className="h-4 w-4" />
-                        Publish
+                        Make live
                       </ActionForm>
                       <ActionForm action={deleteFormImport} id={String(item._id)} tone="danger">
                         <Trash2 className="h-4 w-4" />
@@ -355,7 +364,7 @@ export default async function FormImportsPage() {
                     <ProgressStep done={hasRegistry} label="Registry created" />
                     <ProgressStep
                       done={!hasSpreadsheet || hasSyncedDropdowns}
-                      label={hasSpreadsheet ? "Synced" : "No sheet linked"}
+                      label={hasSpreadsheet ? "Dropdowns updated" : "No spreadsheet linked"}
                     />
                     <ProgressStep done={Boolean(runtime?.fields.length)} label="Preview ready" />
                     <ProgressStep done={Boolean(isPublished)} label="Published" />
@@ -408,14 +417,14 @@ export default async function FormImportsPage() {
                           </div>
                         ) : (
                           <p className="text-sm text-amber-800">
-                            No registry entry yet. Create one before relying on dashboard visibility.
+                            No registry entry yet. Add this to the registry before relying on dashboard visibility.
                           </p>
                         )}
                       </div>
 
                       <form action={updateFormImportStatus} className="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="id" value={String(item._id)} />
-                        <Field label="Internal import status">
+                        <Field label="Internal draft status">
                           <select
                             name="status"
                             defaultValue={item.status}
@@ -468,7 +477,7 @@ export default async function FormImportsPage() {
                                 defaultChecked={Boolean((item as any).writeResponsesToSheet)}
                                 className="accent-brand-600"
                               />
-                              <span>Write imported submissions back to Sheets</span>
+                              <span>Also copy imported submissions to Sheets</span>
                             </label>
                           </div>
                           <Field label="Response sheet tab">
@@ -503,8 +512,8 @@ export default async function FormImportsPage() {
                           Spreadsheet ID: <code>{item.spreadsheetId || "not provided"}</code>
                         </p>
                         <p>
-                          Spreadsheet scan is now deferred to explicit sync/open-form actions so the
-                          importer stays fast even with large sheets.
+                          Spreadsheet scanning only happens when you explicitly update from spreadsheet or
+                          open the form, which keeps the importer fast even with large sheets.
                         </p>
                         <ScanBlock
                           title="Explicit bindings"
@@ -519,7 +528,7 @@ export default async function FormImportsPage() {
                           })) ?? []}
                         />
                         <p className="text-xs text-gray-500">
-                          Response export:{" "}
+                          Sheet copy:{" "}
                           <strong>{(item as any).writeResponsesToSheet ? "Enabled" : "Off"}</strong>
                           {" - "}
                           tab <code>{(item as any).responseSheetName || `${item.name} Responses`}</code>
@@ -549,7 +558,7 @@ export default async function FormImportsPage() {
             })}
           </div>
         )}
-      </section>
+      </AdminSection>
     </div>
   );
 }
@@ -620,14 +629,14 @@ function NextActionHint({
   previewReady: boolean;
   isPublished: boolean;
 }) {
-  let message = "Open the form and use Requester preview in the navbar before publishing.";
-  if (!hasRegistry) message = "Create the registry entry so this draft has a dashboard control record.";
+  let message = "Open the form and check the requester preview before making it live.";
+  if (!hasRegistry) message = "Add this draft to the registry so it can be controlled from the dashboard.";
   else if (hasSpreadsheet && !hasSyncedDropdowns) {
-    message = "Sync so Manage dropdowns, approvers, and processors can pull what the spreadsheet exposes.";
+    message = "Update from spreadsheet so dropdowns, approvers, and processors can use the latest sheet data.";
   } else if (!previewReady) {
-    message = "Open the technical details and review the imported source because no supported fields were detected.";
+    message = "Open the details and review the imported source because no supported fields were detected yet.";
   } else if (isPublished) {
-    message = "This form is live for requesters. Use Forms registry for later visibility changes.";
+    message = "This form is already live. Use Forms registry later if you need to hide or adjust it.";
   }
 
   return (

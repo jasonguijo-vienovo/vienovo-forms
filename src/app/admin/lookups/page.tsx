@@ -110,22 +110,7 @@ export default async function LookupsPage() {
       : []),
   ];
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Manage dropdowns</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Add, deactivate, or remove values that appear in form dropdowns.
-        </p>
-      </div>
-
-      <LookupsClient
-        categoryLabels={categoryLabels}
-        groups={groupsToRender}
-        itemsByCategory={itemsByCategory}
-      />
-    </div>
-  );
+  return <LookupsClient categoryLabels={categoryLabels} groups={groupsToRender} itemsByCategory={itemsByCategory} />;
 }
 
 function humanizeImportedField(input: string) {
