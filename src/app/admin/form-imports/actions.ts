@@ -58,6 +58,16 @@ function bindingsFromFormData(formData: FormData) {
   }
 }
 
+function messageFromError(error: unknown) {
+  if (typeof error === "object" && error && "code" in error && (error as { code?: unknown }).code === 11000) {
+    return "A form with this slug already exists. The import was not saved cleanly, so we blocked the duplicate.";
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return "The import could not be saved. Please try again.";
+}
+
 const RESERVED_NATIVE_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
 
 async function ensureImportedRegistryEntry(imported: {
@@ -98,61 +108,72 @@ async function ensureImportedRegistryEntry(imported: {
 }
 
 export async function createFormImport(formData: FormData) {
-  const { email, session } = await requireAdmin();
-  await connectMongo();
+  try {
+    const { email, session } = await requireAdmin();
+    await connectMongo();
 
-  const name = s(formData, "name");
-  if (!name) throw new Error("Form name is required.");
-  const requestedSlug = slugify(s(formData, "slug")) || slugify(name);
-  if (RESERVED_NATIVE_SLUGS.has(requestedSlug)) {
-    throw new Error(
-      `The slug "${requestedSlug}" is reserved by an existing built-in form. Use a different slug.`
-    );
+    const name = s(formData, "name");
+    if (!name) throw new Error("Form name is required.");
+    const requestedSlug = slugify(s(formData, "slug")) || slugify(name);
+    if (RESERVED_NATIVE_SLUGS.has(requestedSlug)) {
+      throw new Error(
+        `The slug "${requestedSlug}" is reserved by an existing built-in form. Use a different slug.`
+      );
+    }
+
+    const htmlSource = await readTextInput(formData, "htmlFile", "htmlSource");
+    const appsScriptSource = await readTextInput(formData, "gsFile", "appsScriptSource");
+
+    if (!htmlSource) {
+      throw new Error("Provide the form index.html source or upload the file.");
+    }
+    if (!appsScriptSource) {
+      throw new Error("Provide the code.gs source or upload the file.");
+    }
+
+    const payload = {
+      name,
+      slug: requestedSlug,
+      sourceType: "google-apps-script",
+      spreadsheetId: s(formData, "spreadsheetId"),
+      spreadsheetBindings: bindingsFromFormData(formData),
+      writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+      responseSheetName: s(formData, "responseSheetName"),
+      htmlSource,
+      appsScriptSource,
+      notes: s(formData, "notes"),
+      status: "draft" as const,
+      createdByEmail: email,
+      createdByName: session.user.name ?? email,
+      summary: summarize(htmlSource, appsScriptSource),
+    };
+
+    const existing = await FormImport.findOne({ slug: requestedSlug }).lean();
+    const created = await FormImport.findOneAndUpdate(
+      { slug: requestedSlug },
+      { $set: payload },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    if (!created) {
+      throw new Error("Failed to save the import draft.");
+    }
+
+    // Clean up any older duplicate drafts so the importer has one source of truth per slug.
+    await FormImport.deleteMany({ slug: requestedSlug, _id: { $ne: created._id } });
+
+    await ensureImportedRegistryEntry(created);
+    await setFlashToast({
+      tone: "success",
+      message: existing ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
+    });
+
+    revalidatePath("/admin/form-imports");
+    revalidatePath("/admin/forms");
+  } catch (error) {
+    console.error("createFormImport failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+    revalidatePath("/admin/form-imports");
   }
-
-  const htmlSource = await readTextInput(formData, "htmlFile", "htmlSource");
-  const appsScriptSource = await readTextInput(formData, "gsFile", "appsScriptSource");
-
-  if (!htmlSource) {
-    throw new Error("Provide the form index.html source or upload the file.");
-  }
-  if (!appsScriptSource) {
-    throw new Error("Provide the code.gs source or upload the file.");
-  }
-
-  const payload = {
-    name,
-    slug: requestedSlug,
-    sourceType: "google-apps-script",
-    spreadsheetId: s(formData, "spreadsheetId"),
-    spreadsheetBindings: bindingsFromFormData(formData),
-    writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
-    responseSheetName: s(formData, "responseSheetName"),
-    htmlSource,
-    appsScriptSource,
-    notes: s(formData, "notes"),
-    status: "draft" as const,
-    createdByEmail: email,
-    createdByName: session.user.name ?? email,
-    summary: summarize(htmlSource, appsScriptSource),
-  };
-
-  const existing = await FormImport.findOne({ slug: requestedSlug }).lean();
-  const created = existing
-    ? await FormImport.findByIdAndUpdate(existing._id, { $set: payload }, { new: true }).lean()
-    : await FormImport.create(payload);
-  if (!created) {
-    throw new Error("Failed to save the import draft.");
-  }
-
-  await ensureImportedRegistryEntry(created);
-  await setFlashToast({
-    tone: "success",
-    message: existing ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
-  });
-
-  revalidatePath("/admin/form-imports");
-  revalidatePath("/admin/forms");
 }
 
 export async function updateFormImportConfig(formData: FormData) {
