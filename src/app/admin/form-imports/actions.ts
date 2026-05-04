@@ -120,7 +120,7 @@ export async function createFormImport(formData: FormData) {
     throw new Error("Provide the code.gs source or upload the file.");
   }
 
-  const created = await FormImport.create({
+  const payload = {
     name,
     slug: requestedSlug,
     sourceType: "google-apps-script",
@@ -131,14 +131,25 @@ export async function createFormImport(formData: FormData) {
     htmlSource,
     appsScriptSource,
     notes: s(formData, "notes"),
-    status: "draft",
+    status: "draft" as const,
     createdByEmail: email,
     createdByName: session.user.name ?? email,
     summary: summarize(htmlSource, appsScriptSource),
-  });
+  };
+
+  const existing = await FormImport.findOne({ slug: requestedSlug }).lean();
+  const created = existing
+    ? await FormImport.findByIdAndUpdate(existing._id, { $set: payload }, { new: true }).lean()
+    : await FormImport.create(payload);
+  if (!created) {
+    throw new Error("Failed to save the import draft.");
+  }
 
   await ensureImportedRegistryEntry(created);
-  await setFlashToast({ tone: "success", message: `Import draft saved for ${name}.` });
+  await setFlashToast({
+    tone: "success",
+    message: existing ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
+  });
 
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/forms");

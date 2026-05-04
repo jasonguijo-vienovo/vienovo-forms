@@ -17,6 +17,7 @@
 - Added a one-click `Publish for users` action from the importer page.
 - Added admin controls to hide forms from users without deleting them.
 - Added delete controls for imported registry entries and imported form drafts.
+- Re-importing a form with the same slug now replaces the existing draft instead of creating duplicate importer records.
 
 ### Dashboard
 - The dashboard now hides unavailable or coming-soon forms from normal users.
