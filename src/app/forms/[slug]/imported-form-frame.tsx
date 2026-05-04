@@ -39,6 +39,15 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 (function () {
   var bridge = ${bridgeData};
   var hasSubmittedToParent = false;
+  var suppressAutoSubmitUntil = 0;
+
+  function markAutoSubmitSuppressed() {
+    suppressAutoSubmitUntil = Date.now() + 300;
+  }
+
+  function shouldSuppressAutoSubmit() {
+    return Date.now() < suppressAutoSubmitUntil;
+  }
 
   function normalize(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -279,6 +288,27 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   window.google.script = window.google.script || {};
   window.google.script.run = window.google.script.run || createGoogleScriptRunStub();
 
+  var nativeSubmit = HTMLFormElement.prototype.submit;
+  var nativeRequestSubmit = HTMLFormElement.prototype.requestSubmit;
+
+  HTMLFormElement.prototype.submit = function () {
+    if (shouldSuppressAutoSubmit()) {
+      postHeight();
+      return;
+    }
+    submitArgsToParent([this]);
+  };
+
+  if (nativeRequestSubmit) {
+    HTMLFormElement.prototype.requestSubmit = function (submitter) {
+      if (shouldSuppressAutoSubmit()) {
+        postHeight();
+        return;
+      }
+      submitArgsToParent([this, submitter]);
+    };
+  }
+
   window.addEventListener("load", function () {
     populateNativeSelects();
     postHeight();
@@ -288,7 +318,29 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
   document.addEventListener("submit", function (event) {
     event.preventDefault();
+    if (shouldSuppressAutoSubmit()) {
+      postHeight();
+      return;
+    }
     submitToParent();
+  }, true);
+
+  document.addEventListener("change", function (event) {
+    var target = event.target;
+    if (!target || !target.tagName) return;
+    var tagName = String(target.tagName).toLowerCase();
+    if (tagName === "select") {
+      markAutoSubmitSuppressed();
+      setTimeout(postHeight, 0);
+      return;
+    }
+    if (tagName === "input" || tagName === "textarea") {
+      var type = String(target.type || "").toLowerCase();
+      if (type === "checkbox" || type === "radio") {
+        markAutoSubmitSuppressed();
+        setTimeout(postHeight, 0);
+      }
+    }
   }, true);
 
   document.addEventListener("click", function (event) {
