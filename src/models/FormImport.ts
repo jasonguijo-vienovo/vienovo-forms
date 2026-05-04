@@ -10,6 +10,8 @@ const formImportSchema = new Schema(
     sourceType: { type: String, default: "google-apps-script" },
     spreadsheetId: { type: String, default: "", trim: true },
     spreadsheetBindings: { type: Schema.Types.Mixed, default: {} },
+    writeResponsesToSheet: { type: Boolean, default: false },
+    responseSheetName: { type: String, default: "", trim: true },
     htmlSource: { type: String, default: "" },
     appsScriptSource: { type: String, default: "" },
     notes: { type: String, default: "" },

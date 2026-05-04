@@ -3,7 +3,12 @@ import { hydrateImportedFormRuntime, type ImportedFormRuntime } from "@/lib/impo
 import Link from "next/link";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
-import { createFormImport, updateFormImportConfig, updateFormImportStatus } from "./actions";
+import {
+  createFormImport,
+  publishFormImport,
+  updateFormImportConfig,
+  updateFormImportStatus,
+} from "./actions";
 
 export default async function FormImportsPage() {
   await connectMongo();
@@ -100,6 +105,26 @@ export default async function FormImportsPage() {
               className="field-input font-mono text-xs"
             />
           </Field>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
+                <span>Also write submitted responses back to Google Sheets</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-2">
+                Optional. Mongo stays the main record, and Sheets gets a copy of each imported-form
+                submission.
+              </p>
+            </div>
+            <Field label="Response sheet tab">
+              <input
+                name="responseSheetName"
+                placeholder="Optional. Example: Imported Responses"
+                className="field-input"
+              />
+            </Field>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Field label="index.html file">
@@ -239,6 +264,24 @@ export default async function FormImportsPage() {
                     </form>
                   </div>
 
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <form action={publishFormImport}>
+                      <input type="hidden" name="id" value={String(item._id)} />
+                      <button
+                        type="submit"
+                        className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      >
+                        Publish for users
+                      </button>
+                    </form>
+                    <Link
+                      href="/admin/forms"
+                      className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                    >
+                      Open forms registry
+                    </Link>
+                  </div>
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-sm">
                     <Metric label="Inputs" value={item.summary?.inputCount ?? 0} />
                     <Metric label="Selects" value={item.summary?.selectCount ?? 0} />
@@ -309,6 +352,30 @@ export default async function FormImportsPage() {
                           className="field-input font-mono text-xs"
                         />
                       </Field>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                          <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                            <input
+                              type="checkbox"
+                              name="writeResponsesToSheet"
+                              defaultChecked={Boolean((item as any).writeResponsesToSheet)}
+                              className="accent-brand-600"
+                            />
+                            <span>Write imported submissions back to Sheets</span>
+                          </label>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Optional. App requests are still saved in Mongo even if this is enabled.
+                          </p>
+                        </div>
+                        <Field label="Response sheet tab">
+                          <input
+                            name="responseSheetName"
+                            defaultValue={(item as any).responseSheetName ?? ""}
+                            placeholder="Example: Imported Responses"
+                            className="field-input"
+                          />
+                        </Field>
+                      </div>
                       <Field label="Notes">
                         <textarea
                           name="notes"
@@ -358,9 +425,9 @@ export default async function FormImportsPage() {
 {JSON.stringify(runtime?.autoDetectedBindings ?? {}, null, 2)}
                           </pre>
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-800 mb-1">Warnings</p>
-                          {runtime?.warnings.length ? (
+                      <div>
+                        <p className="font-semibold text-gray-800 mb-1">Warnings</p>
+                        {runtime?.warnings.length ? (
                             <ul className="list-disc pl-5 space-y-1 text-xs text-amber-900">
                               {runtime.warnings.map((warning) => (
                                 <li key={warning}>{warning}</li>
@@ -368,11 +435,20 @@ export default async function FormImportsPage() {
                             </ul>
                           ) : (
                             <p className="text-xs text-gray-500">No scan warnings.</p>
-                          )}
-                        </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                      <div>
+                        <p className="font-semibold text-gray-800 mb-1">Response export</p>
+                        <p className="text-xs text-gray-500">
+                          Enabled:{" "}
+                          <strong>{(item as any).writeResponsesToSheet ? "Yes" : "No"}</strong>
+                          {" · "}
+                          Tab: <code>{(item as any).responseSheetName || `${item.name} Responses`}</code>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                   {item.notes ? (
                     <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 whitespace-pre-wrap">
