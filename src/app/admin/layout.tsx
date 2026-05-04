@@ -26,6 +26,7 @@ export default async function AdminLayout({
                 <AdminLink href="/admin/lookups">Dropdowns</AdminLink>
                 <AdminLink href="/admin/approvers">Approvers</AdminLink>
                 <AdminLink href="/admin/reimbursement-routing">Reimbursement routing</AdminLink>
+                <AdminLink href="/admin/form-imports">Form importer</AdminLink>
               </nav>
             </div>
           </aside>
