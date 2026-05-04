@@ -1,6 +1,8 @@
-import { signIn, auth } from "@/auth";
-import { redirect } from "next/navigation";
 import Image from "next/image";
+import { redirect } from "next/navigation";
+import { signIn, auth } from "@/auth";
+import { PendingFormState } from "@/components/pending-form-state";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 
 const devBypass = process.env.AUTH_DEV_BYPASS === "1";
 const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
@@ -30,12 +32,8 @@ export default async function SignInPage({
               className="h-9 w-auto"
             />
           </div>
-          <h1 className="text-xl font-bold text-white tracking-tight">
-            Vienovo Forms
-          </h1>
-          <p className="text-brand-100 text-sm mt-1">
-            Sign in to submit and track requests
-          </p>
+          <h1 className="text-xl font-bold text-white tracking-tight">Vienovo Forms</h1>
+          <p className="text-brand-100 text-sm mt-1">Sign in to submit and track requests</p>
         </div>
 
         <div className="p-8">
@@ -50,28 +48,30 @@ export default async function SignInPage({
               }}
               className="space-y-4"
             >
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-                <strong>Dev bypass mode.</strong> Microsoft sign-in not yet
-                configured — enter any <code>@vienovo.ph</code> email.
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                  Work email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  placeholder="yourname@vienovo.ph"
-                  className="w-full px-3.5 py-2.5 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none transition"
+              <PendingFormState className="space-y-4">
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  <strong>Dev bypass mode.</strong> Microsoft sign-in not yet configured - enter
+                  any <code>@vienovo.ph</code> email.
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Work email
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    required
+                    placeholder="yourname@vienovo.ph"
+                    className="w-full px-3.5 py-2.5 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none transition"
+                  />
+                </div>
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel="Continue"
+                  pendingLabel="Signing in..."
+                  className="w-full bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition"
                 />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition"
-              >
-                Continue
-              </button>
+              </PendingFormState>
             </form>
           ) : (
             <form
@@ -80,16 +80,22 @@ export default async function SignInPage({
                 await signIn("microsoft-entra-id", { redirectTo });
               }}
             >
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-3 bg-[#2f2f2f] hover:bg-black text-white font-semibold py-2.5 rounded-lg transition"
-              >
-                <MicrosoftLogo />
-                Sign in with Microsoft
-              </button>
-              <p className="text-xs text-gray-400 mt-4 text-center">
-                Only <strong>@vienovo.ph</strong> accounts can sign in.
-              </p>
+              <PendingFormState className="space-y-4">
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel={
+                    <span className="flex items-center justify-center gap-3">
+                      <MicrosoftLogo />
+                      <span>Sign in with Microsoft</span>
+                    </span>
+                  }
+                  pendingLabel="Signing in..."
+                  className="w-full bg-[#2f2f2f] hover:bg-black text-white font-semibold py-2.5 rounded-lg transition"
+                />
+                <p className="text-xs text-gray-400 text-center">
+                  Only <strong>@vienovo.ph</strong> accounts can sign in.
+                </p>
+              </PendingFormState>
             </form>
           )}
         </div>

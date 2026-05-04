@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { Lookup, type LookupCategory } from "@/models/Lookup";
 import { requireAdmin } from "@/lib/admin";
 
@@ -26,6 +27,7 @@ export async function addLookup(formData: FormData) {
     sortOrder: (last?.sortOrder ?? -1) + 1,
     isActive: true,
   });
+  await setFlashToast({ tone: "success", message: `Added dropdown value: ${value}` });
   revalidatePath("/admin/lookups");
 }
 
@@ -37,6 +39,10 @@ export async function toggleLookup(formData: FormData) {
   if (!doc) return;
   doc.isActive = !doc.isActive;
   await doc.save();
+  await setFlashToast({
+    tone: "success",
+    message: `${doc.value} ${doc.isActive ? "activated" : "deactivated"}.`,
+  });
   revalidatePath("/admin/lookups");
 }
 
@@ -44,7 +50,12 @@ export async function deleteLookup(formData: FormData) {
   await requireAdmin();
   await connectMongo();
   const id = String(formData.get("id") ?? "");
+  const doc = await Lookup.findById(id).lean();
   await Lookup.findByIdAndDelete(id);
+  await setFlashToast({
+    tone: "success",
+    message: `${doc?.value ?? "Dropdown value"} deleted.`,
+  });
   revalidatePath("/admin/lookups");
 }
 
@@ -58,5 +69,6 @@ export async function updateLookup(formData: FormData) {
   if (!doc) return;
   doc.value = value;
   await doc.save();
+  await setFlashToast({ tone: "success", message: "Dropdown value updated." });
   revalidatePath("/admin/lookups");
 }

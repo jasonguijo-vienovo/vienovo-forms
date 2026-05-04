@@ -1,4 +1,5 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { addRoute, deleteRoute, toggleRoute, updateRoute } from "./actions";
 
@@ -55,12 +56,12 @@ export default async function ReimbursementRoutingPage() {
             className="px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
           />
           <div className="lg:col-span-1 flex items-center justify-end">
-            <button
+            <PendingSubmitButton
               type="submit"
+              idleLabel="Add / Update"
+              pendingLabel="Saving..."
               className="w-full lg:w-auto bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-            >
-              Add / Update
-            </button>
+            />
           </div>
 
           <input
@@ -186,33 +187,33 @@ export default async function ReimbursementRoutingPage() {
                               placeholder="Department Head name"
                               className="w-full px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
                             />
-                            <button
+                            <PendingSubmitButton
                               type="submit"
+                              idleLabel="Save"
+                              pendingLabel="Saving..."
                               className="w-full bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                            >
-                              Save
-                            </button>
+                            />
                           </form>
                         </div>
                       </details>
 
                       <form action={toggleRoute} className="inline">
                         <input type="hidden" name="id" value={String(r._id)} />
-                        <button
+                        <PendingSubmitButton
                           type="submit"
+                          idleLabel={r.isActive ? "Deactivate" : "Activate"}
+                          pendingLabel="Updating..."
                           className="text-xs text-gray-500 hover:text-brand-700 px-2 py-1 transition"
-                        >
-                          {r.isActive ? "Deactivate" : "Activate"}
-                        </button>
+                        />
                       </form>
                       <form action={deleteRoute} className="inline">
                         <input type="hidden" name="id" value={String(r._id)} />
-                        <button
+                        <PendingSubmitButton
                           type="submit"
+                          idleLabel="Delete"
+                          pendingLabel="Deleting..."
                           className="text-xs text-red-500 hover:text-red-700 px-2 py-1 transition"
-                        >
-                          Delete
-                        </button>
+                        />
                       </form>
                     </td>
                   </tr>

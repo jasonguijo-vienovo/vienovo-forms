@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PendingFormState } from "@/components/pending-form-state";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { addLookup, deleteLookup, toggleLookup, updateLookup } from "./actions";
 
 export type LookupAdminItem = {
@@ -95,21 +97,23 @@ export default function LookupsClient(props: {
                   </summary>
 
                   <div className="mt-4">
-                    <form action={addLookup} className="flex gap-2 mb-4">
-                      <input type="hidden" name="category" value={cat} />
-                      <input
-                        type="text"
-                        name="value"
-                        placeholder="Add a new value..."
-                        required
-                        className="flex-1 px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
-                      />
-                      <button
-                        type="submit"
-                        className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 rounded-lg text-sm transition"
-                      >
-                        Add
-                      </button>
+                    <form action={addLookup} className="mb-4">
+                      <PendingFormState className="flex gap-2">
+                        <input type="hidden" name="category" value={cat} />
+                        <input
+                          type="text"
+                          name="value"
+                          placeholder="Add a new value..."
+                          required
+                          className="flex-1 px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
+                        />
+                        <PendingSubmitButton
+                          type="submit"
+                          idleLabel="Add"
+                          pendingLabel="Adding..."
+                          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 rounded-lg text-sm transition"
+                        />
+                      </PendingFormState>
                     </form>
 
                     {!itemsByCategory[cat] || itemsByCategory[cat].length === 0 ? (
@@ -141,45 +145,44 @@ export default function LookupsClient(props: {
                                 <summary className="text-xs text-gray-500 hover:text-brand-700 cursor-pointer select-none">
                                   Edit value
                                 </summary>
-                                <form
-                                  action={updateLookup}
-                                  className="flex gap-2 mt-2"
-                                >
-                                  <input type="hidden" name="id" value={item.id} />
-                                  <input
-                                    type="text"
-                                    name="value"
-                                    defaultValue={item.value}
-                                    required
-                                    className="flex-1 px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
-                                  />
-                                  <button
-                                    type="submit"
-                                    className="bg-gray-900 hover:bg-black text-white font-semibold px-4 rounded-lg text-sm transition"
-                                  >
-                                    Update
-                                  </button>
+                                <form action={updateLookup} className="mt-2">
+                                  <PendingFormState className="flex gap-2">
+                                    <input type="hidden" name="id" value={item.id} />
+                                    <input
+                                      type="text"
+                                      name="value"
+                                      defaultValue={item.value}
+                                      required
+                                      className="flex-1 px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
+                                    />
+                                    <PendingSubmitButton
+                                      type="submit"
+                                      idleLabel="Update"
+                                      pendingLabel="Updating..."
+                                      className="bg-gray-900 hover:bg-black text-white font-semibold px-4 rounded-lg text-sm transition"
+                                    />
+                                  </PendingFormState>
                                 </form>
                               </details>
                             </div>
                             <div className="flex gap-1">
                               <form action={toggleLookup}>
                                 <input type="hidden" name="id" value={item.id} />
-                                <button
+                                <PendingSubmitButton
                                   type="submit"
+                                  idleLabel={item.isActive ? "Deactivate" : "Activate"}
+                                  pendingLabel="Working..."
                                   className="text-xs text-gray-500 hover:text-brand-700 px-2 py-1 rounded transition"
-                                >
-                                  {item.isActive ? "Deactivate" : "Activate"}
-                                </button>
+                                />
                               </form>
                               <form action={deleteLookup}>
                                 <input type="hidden" name="id" value={item.id} />
-                                <button
+                                <PendingSubmitButton
                                   type="submit"
+                                  idleLabel="Delete"
+                                  pendingLabel="Deleting..."
                                   className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded transition"
-                                >
-                                  Delete
-                                </button>
+                                />
                               </form>
                             </div>
                           </li>

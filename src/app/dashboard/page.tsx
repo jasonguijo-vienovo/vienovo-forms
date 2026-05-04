@@ -2,6 +2,7 @@ import { Clock3, FileText, PlusCircle, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
 import { getCatalogForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
@@ -200,13 +201,17 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
       {showDelete ? (
         <form action={deleteDashboardRequest} className="mt-3 flex justify-end">
           <input type="hidden" name="referenceNo" value={request.referenceNo} />
-          <button
+          <PendingSubmitButton
             type="submit"
+            idleLabel={
+              <span className="inline-flex items-center gap-1.5">
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete request</span>
+              </span>
+            }
+            pendingLabel="Deleting..."
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 border border-red-200 bg-white hover:bg-red-50 rounded-lg px-3 py-1.5 transition"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Delete request
-          </button>
+          />
         </form>
       ) : null}
     </div>

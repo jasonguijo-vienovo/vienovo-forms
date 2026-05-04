@@ -3,12 +3,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { RequestModel } from "@/models/Request";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { uploadToDriveFolder } from "@/lib/google/drive";
-import { sendNotificationEmail } from "@/lib/notifications/email";
+import { sendFlowNotification } from "@/lib/notifications/flow";
 import { diffFields, reimbursementFieldMap } from "@/lib/request-fields";
 import {
   REIMBURSEMENT_EXPENSE_ACCOUNTS,
@@ -238,9 +239,13 @@ export async function submitReimbursement(formData: FormData) {
 
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+  await setFlashToast({ tone: "success", message: `Reimbursement submitted: ${referenceNo}` });
 
   try {
-    await sendNotificationEmail({
+    await sendFlowNotification({
+      formSlug: "reimbursement",
+      formName: "Reimbursement",
+      event: "submitted",
       to: [supervisor.email, processor.email, submitterEmail],
       subject: `Reimbursement request submitted (${referenceNo})`,
       text:
@@ -412,9 +417,13 @@ export async function updateReimbursement(referenceNo: string, formData: FormDat
 
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+  await setFlashToast({ tone: "success", message: `Reimbursement updated: ${referenceNo}` });
 
   try {
-    await sendNotificationEmail({
+    await sendFlowNotification({
+      formSlug: "reimbursement",
+      formName: "Reimbursement",
+      event: "resubmitted",
       to: [supervisor.email, submitterEmail],
       subject: `Reimbursement request updated (${referenceNo})`,
       text:

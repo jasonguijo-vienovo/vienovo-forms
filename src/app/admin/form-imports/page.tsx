@@ -9,8 +9,10 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { PendingFormState } from "@/components/pending-form-state";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
-import { hydrateImportedFormRuntime, type ImportedFormRuntime } from "@/lib/imported-forms";
+import { parseImportedFormHtml, type ImportedFormRuntime } from "@/lib/imported-forms";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
@@ -61,33 +63,33 @@ export default async function FormImportsPage() {
     syncedStatsBySlugKey.set(slugKey, current);
   }
 
-  const previewEntries: Array<[string, ImportedFormRuntime]> = await Promise.all(
-    imports.map(async (item) => {
-      try {
-        const runtime = await hydrateImportedFormRuntime({
-          slug: item.slug,
-          htmlSource: item.htmlSource ?? "",
-          spreadsheetId: item.spreadsheetId ?? "",
+  const previewEntries: Array<[string, ImportedFormRuntime]> = imports.map((item) => {
+    try {
+      const runtime = parseImportedFormHtml(item.htmlSource ?? "");
+      return [
+        item.slug,
+        {
+          ...runtime,
+          title: runtime.title || item.name,
           spreadsheetBindings: item.spreadsheetBindings ?? {},
-        });
-        return [item.slug, runtime];
-      } catch (error) {
-        return [
-          item.slug,
-          {
-            title: item.name,
-            description: "",
-            fields: [],
-            warnings: [error instanceof Error ? error.message : "Failed to scan spreadsheet."],
-            sheetNames: [],
-            spreadsheetBindings: {},
-            autoDetectedBindings: {},
-            hydratedHtml: "",
-          },
-        ];
-      }
-    })
-  );
+        },
+      ];
+    } catch (error) {
+      return [
+        item.slug,
+        {
+          title: item.name,
+          description: "",
+          fields: [],
+          warnings: [error instanceof Error ? error.message : "Failed to parse import source."],
+          sheetNames: [],
+          spreadsheetBindings: item.spreadsheetBindings ?? {},
+          autoDetectedBindings: {},
+          hydratedHtml: "",
+        },
+      ];
+    }
+  });
   const runtimePreviewBySlug = new Map(previewEntries);
 
   const readyForReview = imports.filter((item) => definitionBySlug.has(item.slug)).length;
@@ -128,126 +130,132 @@ export default async function FormImportsPage() {
         </div>
 
         <form action={createFormImport} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Form name" required>
-              <input
-                name="name"
-                required
-                placeholder="Example: Petty Cash Replenishment"
-                className="field-input"
-              />
-            </Field>
-            <Field label="Suggested slug">
-              <input
-                name="slug"
-                placeholder="Example: petty-cash-replenishment"
-                className="field-input"
-              />
-            </Field>
-          </div>
-
-          <Field label="Spreadsheet ID">
-            <input
-              name="spreadsheetId"
-              placeholder="Optional, but needed for sheet-driven dropdowns."
-              className="field-input"
-            />
-          </Field>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Field label="index.html file">
-              <input
-                type="file"
-                name="htmlFile"
-                accept=".html,.htm,text/html"
-                className="field-input"
-              />
-            </Field>
-            <Field label="code.gs file">
-              <input
-                type="file"
-                name="gsFile"
-                accept=".gs,.js,text/plain"
-                className="field-input"
-              />
-            </Field>
-          </div>
-
-          <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-              Paste source instead of uploading files
-            </summary>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-              <Field label="index.html source">
-                <textarea
-                  name="htmlSource"
-                  rows={12}
-                  placeholder="Paste the legacy form HTML here if you are not uploading the file."
-                  className="field-input font-mono text-xs"
+          <PendingFormState className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Form name" required>
+                <input
+                  name="name"
+                  required
+                  placeholder="Example: Petty Cash Replenishment"
+                  className="field-input"
                 />
               </Field>
-              <Field label="code.gs source">
-                <textarea
-                  name="appsScriptSource"
-                  rows={12}
-                  placeholder="Paste the Google Apps Script code here if you are not uploading the file."
-                  className="field-input font-mono text-xs"
-                />
-              </Field>
-            </div>
-          </details>
-
-          <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-            <summary className="cursor-pointer text-sm font-semibold text-gray-800">
-              Optional spreadsheet and notes settings
-            </summary>
-            <div className="space-y-4 mt-4">
-              <Field label="Spreadsheet bindings JSON">
-                <textarea
-                  name="spreadsheetBindings"
-                  rows={6}
-                  placeholder={`{\n  "department": "Departments!A2:A",\n  "destination": "Airports!A2:A"\n}`}
-                  className="field-input font-mono text-xs"
-                />
-              </Field>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                    <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
-                    <span>Write submitted responses back to Google Sheets</span>
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">
-                    MongoDB remains the main record. Sheets gets a copy when this is enabled.
-                  </p>
-                </div>
-                <Field label="Response sheet tab">
-                  <input
-                    name="responseSheetName"
-                    placeholder="Optional. Example: Imported Responses"
-                    className="field-input"
-                  />
-                </Field>
-              </div>
-              <Field label="Notes">
-                <textarea
-                  name="notes"
-                  rows={4}
-                  placeholder="Optional workflow rules, approver notes, or dropdown details."
+              <Field label="Suggested slug">
+                <input
+                  name="slug"
+                  placeholder="Example: petty-cash-replenishment"
                   className="field-input"
                 />
               </Field>
             </div>
-          </details>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
-            >
-              <FileInput className="h-4 w-4" />
-              Save import draft
-            </button>
-          </div>
+            <Field label="Spreadsheet ID">
+              <input
+                name="spreadsheetId"
+                placeholder="Optional, but needed for sheet-driven dropdowns."
+                className="field-input"
+              />
+            </Field>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Field label="index.html file">
+                <input
+                  type="file"
+                  name="htmlFile"
+                  accept=".html,.htm,text/html"
+                  className="field-input"
+                />
+              </Field>
+              <Field label="code.gs file">
+                <input
+                  type="file"
+                  name="gsFile"
+                  accept=".gs,.js,text/plain"
+                  className="field-input"
+                />
+              </Field>
+            </div>
+
+            <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+                Paste source instead of uploading files
+              </summary>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                <Field label="index.html source">
+                  <textarea
+                    name="htmlSource"
+                    rows={12}
+                    placeholder="Paste the legacy form HTML here if you are not uploading the file."
+                    className="field-input font-mono text-xs"
+                  />
+                </Field>
+                <Field label="code.gs source">
+                  <textarea
+                    name="appsScriptSource"
+                    rows={12}
+                    placeholder="Paste the Google Apps Script code here if you are not uploading the file."
+                    className="field-input font-mono text-xs"
+                  />
+                </Field>
+              </div>
+            </details>
+
+            <details className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-gray-800">
+                Optional spreadsheet and notes settings
+              </summary>
+              <div className="space-y-4 mt-4">
+                <Field label="Spreadsheet bindings JSON">
+                  <textarea
+                    name="spreadsheetBindings"
+                    rows={6}
+                    placeholder={`{\n  "department": "Departments!A2:A",\n  "destination": "Airports!A2:A"\n}`}
+                    className="field-input font-mono text-xs"
+                  />
+                </Field>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-brand-100 bg-brand-50/30 p-4">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                      <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
+                      <span>Write submitted responses back to Google Sheets</span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-2">
+                      MongoDB remains the main record. Sheets gets a copy when this is enabled.
+                    </p>
+                  </div>
+                  <Field label="Response sheet tab">
+                    <input
+                      name="responseSheetName"
+                      placeholder="Optional. Example: Imported Responses"
+                      className="field-input"
+                    />
+                  </Field>
+                </div>
+                <Field label="Notes">
+                  <textarea
+                    name="notes"
+                    rows={4}
+                    placeholder="Optional workflow rules, approver notes, or dropdown details."
+                    className="field-input"
+                  />
+                </Field>
+              </div>
+            </details>
+
+            <div className="flex justify-end">
+              <PendingSubmitButton
+                type="submit"
+                idleLabel={
+                  <span className="inline-flex items-center gap-2">
+                    <FileInput className="h-4 w-4" />
+                    <span>Save import draft</span>
+                  </span>
+                }
+                pendingLabel="Saving draft..."
+                className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-lg text-sm transition"
+              />
+            </div>
+          </PendingFormState>
         </form>
       </section>
 
@@ -356,7 +364,10 @@ export default async function FormImportsPage() {
                     <Metric label="Inputs" value={item.summary?.inputCount ?? 0} />
                     <Metric label="Selects" value={item.summary?.selectCount ?? 0} />
                     <Metric label="Synced values" value={syncedStats.valueCount} />
-                    <Metric label="Sheet tabs" value={runtime?.sheetNames.length ?? 0} />
+                    <Metric
+                      label="Spreadsheet"
+                      valueText={hasSpreadsheet ? "Linked" : "None"}
+                    />
                   </div>
 
                   <NextActionHint
@@ -416,13 +427,17 @@ export default async function FormImportsPage() {
                             ))}
                           </select>
                         </Field>
-                        <button
+                        <PendingSubmitButton
                           type="submit"
-                          className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                        >
-                          <Settings2 className="h-4 w-4" />
-                          Update status
-                        </button>
+                          idleLabel={
+                            <span className="inline-flex items-center gap-2">
+                              <Settings2 className="h-4 w-4" />
+                              <span>Update status</span>
+                            </span>
+                          }
+                          pendingLabel="Saving..."
+                          className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                        />
                       </form>
 
                       <form action={updateFormImportConfig} className="space-y-3">
@@ -473,12 +488,12 @@ export default async function FormImportsPage() {
                           />
                         </Field>
                         <div className="flex justify-end">
-                          <button
+                          <PendingSubmitButton
                             type="submit"
+                            idleLabel="Save settings"
+                            pendingLabel="Saving..."
                             className="bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                          >
-                            Save settings
-                          </button>
+                          />
                         </div>
                       </form>
 
@@ -487,15 +502,20 @@ export default async function FormImportsPage() {
                           Spreadsheet ID: <code>{item.spreadsheetId || "not provided"}</code>
                         </p>
                         <p>
-                          Detected sheet tabs: <code>{runtime?.sheetNames.join(", ") || "none"}</code>
+                          Spreadsheet scan is now deferred to explicit sync/open-form actions so the
+                          importer stays fast even with large sheets.
                         </p>
                         <ScanBlock
                           title="Explicit bindings"
                           value={runtime?.spreadsheetBindings ?? {}}
                         />
                         <ScanBlock
-                          title="Auto-detected field mappings"
-                          value={runtime?.autoDetectedBindings ?? {}}
+                          title="Parsed field names"
+                          value={runtime?.fields.map((field) => ({
+                            name: field.name,
+                            label: field.label,
+                            type: field.type,
+                          })) ?? []}
                         />
                         <p className="text-xs text-gray-500">
                           Response export:{" "}
@@ -639,12 +659,12 @@ function ActionForm({
   return (
     <form action={action}>
       <input type="hidden" name="id" value={id} />
-      <button
+      <PendingSubmitButton
         type="submit"
-        className={`inline-flex items-center gap-2 border font-semibold px-4 py-2 rounded-lg text-sm transition ${className}`}
-      >
-        {children}
-      </button>
+        idleLabel={children}
+        pendingLabel="Working..."
+        className={`border font-semibold px-4 py-2 rounded-lg text-sm transition ${className}`}
+      />
     </form>
   );
 }

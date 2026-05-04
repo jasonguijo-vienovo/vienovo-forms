@@ -356,6 +356,10 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       }
     }
 
+    await setFlashToast({
+      tone: "success",
+      message: `${imported.name} submitted: ${referenceNo}`,
+    });
     redirect(`/requests/${referenceNo}`);
   } catch (error) {
     console.error(`submitImportedForm failed for ${slug}:`, error);

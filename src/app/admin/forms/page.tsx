@@ -1,6 +1,7 @@
 import { Eye, FileInput, ListChecks, Save, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { connectMongo } from "@/lib/db/mongo";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import {
   FORM_DEFINITION_AVAILABILITIES,
@@ -226,13 +227,17 @@ export default async function AdminFormsPage() {
                   </div>
 
                   <div className="flex justify-end">
-                    <button
+                    <PendingSubmitButton
                       type="submit"
-                      className="inline-flex items-center gap-2 bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
-                    >
-                      <Save className="h-4 w-4" />
-                      Save settings
-                    </button>
+                      idleLabel={
+                        <span className="inline-flex items-center gap-2">
+                          <Save className="h-4 w-4" />
+                          <span>Save settings</span>
+                        </span>
+                      }
+                      pendingLabel="Saving..."
+                      className="bg-gray-900 hover:bg-black text-white font-semibold px-4 py-2 rounded-lg text-sm transition"
+                    />
                   </div>
                 </form>
 
@@ -240,25 +245,33 @@ export default async function AdminFormsPage() {
                   <form action={hideFormDefinition}>
                     <input type="hidden" name="id" value={form._id ?? ""} />
                     <input type="hidden" name="slug" value={form.slug} />
-                    <button
+                    <PendingSubmitButton
                       type="submit"
-                      className="inline-flex items-center gap-2 bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                    >
-                      <Undo2 className="h-4 w-4" />
-                      Hide from users
-                    </button>
+                      idleLabel={
+                        <span className="inline-flex items-center gap-2">
+                          <Undo2 className="h-4 w-4" />
+                          <span>Hide from users</span>
+                        </span>
+                      }
+                      pendingLabel="Hiding..."
+                      className="bg-white border border-amber-200 text-amber-700 hover:bg-amber-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                    />
                   </form>
                   {form.source === "imported" ? (
                     <form action={deleteFormDefinition}>
                       <input type="hidden" name="id" value={form._id ?? ""} />
                       <input type="hidden" name="slug" value={form.slug} />
-                      <button
+                      <PendingSubmitButton
                         type="submit"
-                        className="inline-flex items-center gap-2 bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete registry entry
-                      </button>
+                        idleLabel={
+                          <span className="inline-flex items-center gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            <span>Delete registry entry</span>
+                          </span>
+                        }
+                        pendingLabel="Deleting..."
+                        className="bg-white border border-red-200 text-red-700 hover:bg-red-50 font-semibold px-4 py-2 rounded-lg text-sm transition"
+                      />
                     </form>
                   ) : null}
                 </div>

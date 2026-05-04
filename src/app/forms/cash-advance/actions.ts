@@ -3,11 +3,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { RequestModel } from "@/models/Request";
 import { Approver } from "@/models/Approver";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { uploadToDriveFolder } from "@/lib/google/drive";
-import { sendNotificationEmail } from "@/lib/notifications/email";
+import { sendFlowNotification } from "@/lib/notifications/flow";
 import { cashAdvanceFieldMap, diffFields } from "@/lib/request-fields";
 
 function s(formData: FormData, key: string) {
@@ -132,9 +133,13 @@ export async function submitCashAdvance(formData: FormData) {
 
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+  await setFlashToast({ tone: "success", message: `Cash Advance submitted: ${referenceNo}` });
 
   try {
-    await sendNotificationEmail({
+    await sendFlowNotification({
+      formSlug: "cash-advance",
+      formName: "Cash Advance",
+      event: "submitted",
       to: [approver.email, processor.email, submitterEmail],
       subject: `Cash Advance request submitted (${referenceNo})`,
       text:
@@ -268,9 +273,13 @@ export async function updateCashAdvance(referenceNo: string, formData: FormData)
 
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+  await setFlashToast({ tone: "success", message: `Cash Advance updated: ${referenceNo}` });
 
   try {
-    await sendNotificationEmail({
+    await sendFlowNotification({
+      formSlug: "cash-advance",
+      formName: "Cash Advance",
+      event: "resubmitted",
       to: [approver.email, submitterEmail],
       subject: `Cash Advance request updated (${referenceNo})`,
       text:

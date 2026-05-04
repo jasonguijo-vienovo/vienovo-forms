@@ -3,12 +3,13 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { RequestModel } from "@/models/Request";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { uploadToDriveFolder } from "@/lib/google/drive";
-import { sendNotificationEmail } from "@/lib/notifications/email";
+import { sendFlowNotification } from "@/lib/notifications/flow";
 import { diffFields, travelBookingFieldMap } from "@/lib/request-fields";
 
 function s(formData: FormData, key: string) {
@@ -182,9 +183,13 @@ export async function submitTravelBooking(formData: FormData) {
 
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+  await setFlashToast({ tone: "success", message: `Travel Booking submitted: ${referenceNo}` });
 
   try {
-    await sendNotificationEmail({
+    await sendFlowNotification({
+      formSlug: "travel-booking",
+      formName: "Travel Booking",
+      event: "submitted",
       to: [supervisor.email, processor.email, submitterEmail],
       subject: `Travel Booking request submitted (${referenceNo})`,
       text:
@@ -367,9 +372,13 @@ export async function updateTravelBooking(referenceNo: string, formData: FormDat
 
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+  await setFlashToast({ tone: "success", message: `Travel Booking updated: ${referenceNo}` });
 
   try {
-    await sendNotificationEmail({
+    await sendFlowNotification({
+      formSlug: "travel-booking",
+      formName: "Travel Booking",
+      event: "resubmitted",
       to: [supervisor.email, submitterEmail],
       subject: `Travel Booking request updated (${referenceNo})`,
       text:

@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
+import { PendingFormState } from "@/components/pending-form-state";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { RequestModel } from "@/models/Request";
@@ -49,31 +51,35 @@ export default async function ApproveRequestPage({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
             <form action={approveAction} className="space-y-2">
-              <textarea
-                name="comment"
-                placeholder="Optional approval note"
-                className="w-full field-input min-h-[88px]"
-              />
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
-              >
-                Approve
-              </button>
+              <PendingFormState className="space-y-2">
+                <textarea
+                  name="comment"
+                  placeholder="Optional approval note"
+                  className="w-full field-input min-h-[88px]"
+                />
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel="Approve"
+                  pendingLabel="Approving..."
+                  className="w-full bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
+                />
+              </PendingFormState>
             </form>
 
             <form action={rejectAction} className="space-y-2">
-              <textarea
-                name="comment"
-                placeholder="Reason for rejection (recommended)"
-                className="w-full field-input min-h-[88px]"
-              />
-              <button
-                type="submit"
-                className="w-full bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 active:scale-[0.99] transition"
-              >
-                Reject
-              </button>
+              <PendingFormState className="space-y-2">
+                <textarea
+                  name="comment"
+                  placeholder="Reason for rejection (recommended)"
+                  className="w-full field-input min-h-[88px]"
+                />
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel="Reject"
+                  pendingLabel="Rejecting..."
+                  className="w-full bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 active:scale-[0.99] transition"
+                />
+              </PendingFormState>
             </form>
           </div>
 

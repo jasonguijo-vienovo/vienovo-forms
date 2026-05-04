@@ -69,6 +69,7 @@ export async function updateFormDefinition(formData: FormData) {
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
 }
@@ -96,6 +97,7 @@ export async function hideFormDefinition(formData: FormData) {
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
 }
@@ -125,6 +127,7 @@ export async function deleteFormDefinition(formData: FormData) {
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
+  revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
 }

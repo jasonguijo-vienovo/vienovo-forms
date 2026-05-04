@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
+import { sendFlowNotification } from "@/lib/notifications/flow";
 import { RequestModel } from "@/models/Request";
 
 function s(formData: FormData, key: string) {
@@ -58,6 +60,47 @@ export async function approveCurrentStep(referenceNo: string, formData: FormData
     }
   );
 
+  const formSlug = doc.formSlug || doc.formType;
+  const formName = doc.formName || doc.formType;
+  const submittedByEmail = doc.submittedBy?.email ?? "";
+  const nextApprover = chain.find((step) => step.step === nextStep) ?? null;
+  const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
+  const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+
+  await setFlashToast({
+    tone: "success",
+    message: isFinal ? `Request approved: ${referenceNo}` : `Approval recorded for ${referenceNo}`,
+  });
+
+  try {
+    if (!isFinal && nextApprover?.approverEmail) {
+      await sendFlowNotification({
+        formSlug,
+        formName,
+        event: "next-approver",
+        to: nextApprover.approverEmail,
+        subject: `${formName} request needs your approval (${referenceNo})`,
+        text:
+          `${formName} request ${referenceNo} moved to your approval step.\n\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+      });
+    } else if (submittedByEmail) {
+      await sendFlowNotification({
+        formSlug,
+        formName,
+        event: "approved",
+        to: submittedByEmail,
+        subject: `${formName} request approved (${referenceNo})`,
+        text:
+          `Your ${formName} request has been fully approved.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+      });
+    }
+  } catch (error) {
+    console.error("Approval notification failed:", error);
+  }
+
   redirect(`/requests/${referenceNo}`);
 }
 
@@ -102,6 +145,33 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
       },
     }
   );
+
+  const formSlug = doc.formSlug || doc.formType;
+  const formName = doc.formName || doc.formType;
+  const submittedByEmail = doc.submittedBy?.email ?? "";
+  const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
+  const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+
+  await setFlashToast({ tone: "success", message: `Request rejected: ${referenceNo}` });
+
+  try {
+    if (submittedByEmail) {
+      await sendFlowNotification({
+        formSlug,
+        formName,
+        event: "rejected",
+        to: submittedByEmail,
+        subject: `${formName} request rejected (${referenceNo})`,
+        text:
+          `Your ${formName} request was rejected.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (comment ? `Comment: ${comment}\n` : "") +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+      });
+    }
+  } catch (error) {
+    console.error("Rejection notification failed:", error);
+  }
 
   redirect(`/requests/${referenceNo}`);
 }

@@ -1,4 +1,5 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { Approver, APPROVER_ROLES } from "@/models/Approver";
 import {
   addApprover,
@@ -55,12 +56,12 @@ export default async function ApproversPage() {
             placeholder="email@vienovo.ph"
             className="px-3 py-2 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none"
           />
-          <button
+          <PendingSubmitButton
             type="submit"
+            idleLabel="Add"
+            pendingLabel="Adding..."
             className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 rounded-lg text-sm transition"
-          >
-            Add
-          </button>
+          />
           <div className="sm:col-span-3 flex flex-wrap gap-3 text-sm text-gray-600">
             {APPROVER_ROLES.map((r) => (
               <label key={r} className="flex items-center gap-1.5">
@@ -144,12 +145,12 @@ export default async function ApproversPage() {
                               : "border-gray-200"
                           }`}
                         />
-                        <button
+                        <PendingSubmitButton
                           type="submit"
+                          idleLabel="save"
+                          pendingLabel="saving..."
                           className="text-xs text-brand-700 hover:underline"
-                        >
-                          save
-                        </button>
+                        />
                       </form>
                     </td>
                     <td className="py-2.5 pr-3 text-xs text-gray-600">
@@ -181,12 +182,12 @@ export default async function ApproversPage() {
                           name="id"
                           value={String(a._id)}
                         />
-                        <button
+                        <PendingSubmitButton
                           type="submit"
+                          idleLabel={a.isActive ? "Deactivate" : "Activate"}
+                          pendingLabel="Updating..."
                           className="text-xs text-gray-500 hover:text-brand-700 px-2 py-1 transition"
-                        >
-                          {a.isActive ? "Deactivate" : "Activate"}
-                        </button>
+                        />
                       </form>
                       <form action={deleteApprover} className="inline">
                         <input
@@ -194,12 +195,12 @@ export default async function ApproversPage() {
                           name="id"
                           value={String(a._id)}
                         />
-                        <button
+                        <PendingSubmitButton
                           type="submit"
+                          idleLabel="Delete"
+                          pendingLabel="Deleting..."
                           className="text-xs text-red-500 hover:text-red-700 px-2 py-1 transition"
-                        >
-                          Delete
-                        </button>
+                        />
                       </form>
                     </td>
                   </tr>

@@ -32,7 +32,7 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
         <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-current opacity-75" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">
-            {toast.tone === "error" ? "Action failed" : "Saved to system"}
+            {toast.tone === "error" ? "Action failed" : "Success"}
           </p>
           <p className="mt-0.5 text-sm leading-relaxed">{toast.message}</p>
         </div>

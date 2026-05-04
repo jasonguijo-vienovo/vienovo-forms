@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { signOut } from "@/auth";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { isAdminEmail } from "@/lib/admin";
 import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
@@ -71,12 +72,12 @@ export async function Navbar({
                 await signOut({ redirectTo: "/sign-in" });
               }}
             >
-              <button
+              <PendingSubmitButton
                 type="submit"
+                idleLabel="Sign out"
+                pendingLabel="Signing out..."
                 className="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition text-sm font-medium"
-              >
-                Sign out
-              </button>
+              />
             </form>
           </div>
         ) : (

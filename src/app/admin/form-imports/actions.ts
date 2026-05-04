@@ -173,6 +173,7 @@ export async function createFormImport(formData: FormData) {
 
     revalidatePath(FORM_IMPORTS_PATH);
     revalidatePath("/admin/forms");
+    revalidatePath("/admin/notifications");
   } catch (error) {
     console.error("createFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
@@ -204,6 +205,7 @@ export async function updateFormImportConfig(formData: FormData) {
   await setFlashToast({ tone: "success", message: "Import settings saved." });
 
   revalidatePath(FORM_IMPORTS_PATH);
+  revalidatePath("/admin/notifications");
   redirect(FORM_IMPORTS_PATH);
 }
 
@@ -242,6 +244,7 @@ export async function publishFormImport(formData: FormData) {
 
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
   redirect(FORM_IMPORTS_PATH);
@@ -262,6 +265,7 @@ export async function createMissingRegistryEntry(formData: FormData) {
 
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  revalidatePath("/admin/notifications");
   redirect(FORM_IMPORTS_PATH);
 }
 
@@ -280,6 +284,7 @@ export async function updateFormImportStatus(formData: FormData) {
   await setFlashToast({ tone: "success", message: `Import status saved as ${status}.` });
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  revalidatePath("/admin/notifications");
   redirect(FORM_IMPORTS_PATH);
 }
 
@@ -303,6 +308,7 @@ export async function deleteFormImport(formData: FormData) {
 
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
   redirect(FORM_IMPORTS_PATH);
