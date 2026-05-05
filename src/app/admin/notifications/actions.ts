@@ -28,13 +28,28 @@ function parseEmails(raw: string) {
   );
 }
 
+function isValidEmail(input: string) {
+  if (!input || input.length > 254) return false;
+  // Practical validation for admin input; strict RFC parsing is unnecessary here.
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+}
+
 const NOTIFICATIONS_PATH = "/admin/notifications";
 
 export async function sendNotificationTestEmail(formData: FormData) {
   const { email: adminEmail } = await requireAdmin();
-  const targetEmail = s(formData, "testEmail").toLowerCase() || adminEmail;
+  const rawInput = s(formData, "testEmail").toLowerCase();
+  const targetEmail = rawInput || adminEmail;
   const sentAt = new Date().toISOString();
   const appEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown";
+
+  if (!isValidEmail(targetEmail)) {
+    await setFlashToast({
+      tone: "error",
+      message: "Invalid test email address. Please enter a valid email format (example@company.com).",
+    });
+    redirect(NOTIFICATIONS_PATH);
+  }
 
   try {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.SMTP_FROM) {
