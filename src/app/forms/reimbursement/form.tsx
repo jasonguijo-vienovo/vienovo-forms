@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import { SearchableSelect } from "@/components/searchable-select";
+import { useRouter } from "next/navigation";
+import type { FormActionResult } from "@/lib/forms/action-result";
 import {
   REIMBURSEMENT_EXPENSE_ACCOUNTS,
   reimbursementExpenseFieldName,
@@ -59,7 +61,7 @@ export type ReimbursementFormProps = {
   requesterPreview?: boolean;
   prefill: EmployeePrefill;
   initial?: ReimbursementInitialValues;
-  submitAction: (formData: FormData) => void | Promise<void>;
+  submitAction: (formData: FormData) => Promise<FormActionResult>;
   submitLabel?: string;
   routes: ReimbursementRouteOption[];
   formTypeOptions: string[];
@@ -72,6 +74,7 @@ export type ReimbursementFormProps = {
 const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
 
 export function ReimbursementForm(props: ReimbursementFormProps) {
+  const router = useRouter();
   const {
     user,
     requesterPreview,
@@ -103,6 +106,7 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
 
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<string[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [firstName, setFirstName] = useState(initial?.firstName ?? prefill.firstName ?? "");
   const [lastName, setLastName] = useState(initial?.lastName ?? prefill.lastName ?? "");
@@ -284,12 +288,25 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
     const errs = validate();
     if (errs.length) {
       setErrors(errs);
+      setSubmitError(null);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     setErrors([]);
+    setSubmitError(null);
     const fd = new FormData(e.currentTarget);
-    startTransition(() => submitAction(fd));
+    startTransition(() => {
+      void submitAction(fd).then((result) => {
+        if (!result.ok) {
+          setSubmitError(result.error);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+
+        router.push(result.redirectTo);
+        router.refresh();
+      });
+    });
   }
 
   return (
@@ -343,6 +360,13 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
               <li key={e}>{e}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800">
+          <p className="font-semibold mb-1">Submission failed.</p>
+          <p>{submitError}</p>
         </div>
       )}
 
