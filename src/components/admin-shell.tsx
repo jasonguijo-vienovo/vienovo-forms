@@ -37,21 +37,32 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
             V
           </div>
           <div className="min-w-0 flex-1">
-            <div className={collapsed ? "hidden" : "block"}>
-              <p className="text-sm font-black uppercase tracking-wider text-brand-700">Admin Console</p>
-              <p className="text-xs text-surface-muted">Enterprise Management</p>
+            <div className={collapsed ? "hidden" : "flex items-start justify-between gap-2"}>
+              <div>
+                <p className="text-sm font-black uppercase tracking-wider text-brand-700">Admin Console</p>
+                <p className="text-xs text-surface-muted">Enterprise Management</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCollapsed(true)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
+                aria-label="Collapse admin sidebar"
+                title="Collapse admin sidebar"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>
-          <div className={collapsed ? "mt-3 flex justify-center" : "mt-3"}>
+          <div className={collapsed ? "mt-3 flex justify-center" : "hidden"}>
             <button
               type="button"
-              onClick={() => setCollapsed((value) => !value)}
+              onClick={() => setCollapsed(false)}
               className="grid h-9 w-9 shrink-0 place-items-center rounded border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
               aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
               title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
             >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              <PanelLeftOpen className="h-4 w-4" />
             </button>
           </div>
         </div>
