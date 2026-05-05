@@ -40,17 +40,31 @@ export async function sendNotificationTestEmail(formData: FormData) {
 
     await sendNotificationEmail({
       to: targetEmail,
-      subject: "Vienovo Forms SMTP test",
+      subject: "Vienovo Forms SMTP Test - Sample Notification",
       text:
-        `This is a test email from Vienovo Forms.\n\n` +
-        `If you received this, the SMTP settings on the current deployment are working.\n\n` +
+        `Hello,\n\n` +
+        `This is a SAMPLE SMTP test message from Vienovo Forms.\n` +
+        `If you received this, the SMTP configuration is working correctly.\n\n` +
+        `Sample content preview:\n` +
+        `- Request Type: Travel Booking\n` +
+        `- Reference No: TB-20260505-0001\n` +
+        `- Status: Pending Approval\n\n` +
+        `This is only a test message. No action is required.\n\n` +
         `SMTP host: ${process.env.SMTP_HOST || "smtp.office365.com"}\n` +
         `From: ${process.env.SMTP_FROM || "(missing SMTP_FROM)"}`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-          <h2 style="margin: 0 0 12px;">Vienovo Forms SMTP test</h2>
-          <p style="margin: 0 0 12px;">This is a test email from the admin notification flow page.</p>
-          <p style="margin: 0 0 12px;">If you received this, the SMTP settings on the current deployment are working.</p>
+          <h2 style="margin: 0 0 12px;">Vienovo Forms SMTP Test - Sample Notification</h2>
+          <p style="margin: 0 0 12px;">Hello,</p>
+          <p style="margin: 0 0 12px;">This is a <strong>sample SMTP test message</strong> from Vienovo Forms.</p>
+          <p style="margin: 0 0 12px;">If you received this, your SMTP configuration is working correctly.</p>
+          <div style="padding: 12px; border: 1px solid #bfdbfe; border-radius: 10px; background: #eff6ff; margin: 0 0 12px;">
+            <p style="margin: 0 0 6px;"><strong>Sample content preview:</strong></p>
+            <p style="margin: 0;">Request Type: Travel Booking</p>
+            <p style="margin: 0;">Reference No: TB-20260505-0001</p>
+            <p style="margin: 0;">Status: Pending Approval</p>
+          </div>
+          <p style="margin: 0 0 12px;">This is only a test message. No action is required.</p>
           <div style="padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; background: #f9fafb;">
             <p style="margin: 0 0 6px;"><strong>SMTP host:</strong> ${process.env.SMTP_HOST || "smtp.office365.com"}</p>
             <p style="margin: 0;"><strong>From:</strong> ${process.env.SMTP_FROM || "(missing SMTP_FROM)"}</p>
