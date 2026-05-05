@@ -28,6 +28,21 @@ async function readTextInput(formData: FormData, fileKey: string, textKey: strin
   return s(formData, textKey);
 }
 
+async function readMultipleTextInput(
+  formData: FormData,
+  fileKey: string,
+  fallbackSingleFileKey: string,
+  textKey: string
+) {
+  const files = formData.getAll(fileKey).filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (files.length > 0) {
+    const chunks = await Promise.all(files.map(async (file) => `\n\n/* FILE: ${file.name} */\n${await file.text()}`));
+    return chunks.join("\n").trim();
+  }
+
+  return readTextInput(formData, fallbackSingleFileKey, textKey);
+}
+
 function slugify(input: string) {
   return input
     .toLowerCase()
@@ -125,8 +140,8 @@ export async function createFormImport(formData: FormData) {
       );
     }
 
-    const htmlSource = await readTextInput(formData, "htmlFile", "htmlSource");
-    const appsScriptSource = await readTextInput(formData, "gsFile", "appsScriptSource");
+    const htmlSource = await readMultipleTextInput(formData, "htmlFiles", "htmlFile", "htmlSource");
+    const appsScriptSource = await readMultipleTextInput(formData, "gsFiles", "gsFile", "appsScriptSource");
 
     if (!htmlSource) {
       throw new Error("Provide the form index.html source or upload the file.");
