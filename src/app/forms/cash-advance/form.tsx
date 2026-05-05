@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import type { FormActionResult } from "@/lib/forms/action-result";
 
 type Approver = {
   id: string;
@@ -30,11 +32,12 @@ export type CashAdvanceFormProps = {
   initial?: CashAdvanceInitialValues;
   payableToOptions: string[];
   approvers: Approver[];
-  submitAction: (formData: FormData) => void | Promise<void>;
+  submitAction: (formData: FormData) => Promise<FormActionResult>;
   submitLabel?: string;
 };
 
 export function CashAdvanceForm(props: CashAdvanceFormProps) {
+  const router = useRouter();
   const {
     user,
     prefill,
@@ -96,11 +99,15 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
     setSubmitError(null);
     const fd = new FormData(e.currentTarget);
     startTransition(() => {
-      void Promise.resolve(submitAction(fd)).catch((err: unknown) => {
-        const message =
-          err instanceof Error ? err.message : "Could not submit this Cash Advance request.";
-        setSubmitError(message);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      void submitAction(fd).then((result) => {
+        if (!result.ok) {
+          setSubmitError(result.error);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+
+        router.push(result.redirectTo);
+        router.refresh();
       });
     });
   }
