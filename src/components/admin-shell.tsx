@@ -54,6 +54,7 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </button>
         </div>
+        </div>
         <AdminNav collapsed={collapsed} />
       </aside>
 
