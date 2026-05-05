@@ -44,7 +44,7 @@ export function AdminNav({ collapsed = false }: { collapsed?: boolean }) {
 
   return (
     <>
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-6 text-[13px] font-semibold">
+      <nav className="flex flex-1 flex-col gap-1.5 px-3 py-6 text-[13px] font-semibold">
         {primaryLinks.map((item) => (
           <AdminNavLink
             key={item.href}
@@ -93,9 +93,8 @@ function AdminNavLink({
       href={href}
       title={typeof children === "string" ? children : undefined}
       className={cn(
-        "flex items-center gap-3 border-l-4 border-transparent px-3 py-2 uppercase tracking-[0.08em] text-slate-500 transition hover:bg-white hover:text-brand-700",
-        collapsed && "justify-center px-2",
-        active && "border-brand-700 bg-white text-brand-700 shadow-sm"
+        "flex items-center gap-3 rounded-r-md border-l-4 border-transparent px-3 py-2 uppercase tracking-[0.08em] text-slate-500 transition hover:bg-white hover:text-brand-700",
+        active && "border-brand-700 bg-white text-brand-700 shadow-sm ring-1 ring-brand-100"
       )}
     >
       <Icon className="h-5 w-5 shrink-0" />
