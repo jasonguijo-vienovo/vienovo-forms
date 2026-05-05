@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
+import { setFlashToast } from "@/lib/flash";
 import { Approver, APPROVER_ROLES, type ApproverRole } from "@/models/Approver";
 import { requireAdmin } from "@/lib/admin";
 
@@ -18,15 +19,35 @@ export async function addApprover(formData: FormData) {
   await connectMongo();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!name) return;
+  if (!name) {
+    await setFlashToast({ tone: "error", message: "Name is required." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
   const roles = parseRoles(formData);
-  await Approver.create({
-    name,
-    email,
-    roles,
-    emailNeedsReview: !email,
-    isActive: true,
-  });
+
+  try {
+    await Approver.create({
+      name,
+      email,
+      roles,
+      emailNeedsReview: !email,
+      isActive: true,
+    });
+    await setFlashToast({ tone: "success", message: `Approver ${name} added.` });
+  } catch (error) {
+    const duplicateName =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === 11000;
+    await setFlashToast({
+      tone: "error",
+      message: duplicateName
+        ? `Approver "${name}" already exists. Use a different name or edit the existing record.`
+        : "Could not add approver. Please try again.",
+    });
+  }
   revalidatePath("/admin/approvers");
 }
 
