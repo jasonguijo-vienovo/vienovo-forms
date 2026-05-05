@@ -10,11 +10,11 @@ import {
   okRedirect,
   type FormActionResult,
 } from "@/lib/forms/action-result";
-import { uploadToDriveFolder } from "@/lib/google/drive";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -145,11 +145,9 @@ export async function submitReimbursement(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID for Reimbursement attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "reimbursement",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -382,11 +380,9 @@ export async function updateReimbursement(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID for Reimbursement attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "reimbursement",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,

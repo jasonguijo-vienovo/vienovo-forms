@@ -125,7 +125,7 @@ export default async function ImportedFormPage({
               </div>
             ) : (
               <ImportedFormFrame
-                htmlSource={imported.htmlSource ?? ""}
+                htmlSource={runtime.hydratedHtml || imported.htmlSource || ""}
                 fields={runtime.fields}
                 submitAction={submitAction}
               />

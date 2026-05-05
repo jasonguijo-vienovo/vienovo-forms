@@ -10,11 +10,11 @@ import {
   okRedirect,
   type FormActionResult,
 } from "@/lib/forms/action-result";
-import { uploadToDriveFolder } from "@/lib/google/drive";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -69,7 +69,8 @@ export async function submitTravelBooking(
       const maxBytes = 10 * 1024 * 1024;
       if (activityFile.size > maxBytes) throw new Error("Activity Schedule file must be 10 MB or less.");
       const bytes = Buffer.from(await activityFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
+      const uploaded = await uploadAttachment({
+        folder: "travel-booking",
         fileName: `${referenceNo}_${activityFile.name}`,
         mimeType: activityFile.type || "application/octet-stream",
         bytes,
@@ -306,7 +307,8 @@ export async function updateTravelBooking(
       const maxBytes = 10 * 1024 * 1024;
       if (activityFile.size > maxBytes) throw new Error("Activity Schedule file must be 10 MB or less.");
       const bytes = Buffer.from(await activityFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
+      const uploaded = await uploadAttachment({
+        folder: "travel-booking",
         fileName: `${referenceNo}_${activityFile.name}`,
         mimeType: activityFile.type || "application/octet-stream",
         bytes,

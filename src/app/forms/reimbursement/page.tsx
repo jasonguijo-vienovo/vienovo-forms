@@ -7,6 +7,7 @@ import { Lookup } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { getEmployeeByEmail } from "@/lib/employee";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { ReimbursementForm } from "./form";
 import { submitReimbursement } from "./actions";
 import { RequestModel } from "@/models/Request";
@@ -30,6 +31,8 @@ export default async function ReimbursementPage({
   const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
+  const definition = await getFormDefinitionBySlug("reimbursement");
+  if (!definition) redirect("/forms");
   const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
 

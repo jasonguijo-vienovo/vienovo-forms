@@ -6,6 +6,7 @@ import { connectMongo } from "@/lib/db/mongo";
 import { Lookup } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { getEmployeeByEmail } from "@/lib/employee";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { TravelBookingForm } from "./form";
 import { submitTravelBooking } from "./actions";
 
@@ -17,6 +18,8 @@ export default async function TravelBookingPage({
   const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
+  const definition = await getFormDefinitionBySlug("travel-booking");
+  if (!definition) redirect("/forms");
   const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
 
