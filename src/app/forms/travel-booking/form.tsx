@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
+import { SearchableSelect } from "@/components/searchable-select";
 import { useRouter } from "next/navigation";
 import type { FormActionResult } from "@/lib/forms/action-result";
 
@@ -320,20 +321,7 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
           </Field>
 
           <Field label="Department" required>
-            <select
-              name="department"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              required
-              className="field-input"
-            >
-              <option value="">-- Select Department --</option>
-              {departments.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect name="department" value={department} onChange={setDepartment} required placeholder="-- Select Department --" options={departments.map((d) => ({ value: d, label: d }))} />
           </Field>
         </div>
 
@@ -408,36 +396,10 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <Field label="From (Origin)" required>
-                <select
-                  name="origin"
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  required
-                  className="field-input"
-                >
-                  <option value="">-- Select Origin --</option>
-                  {airports.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect name="origin" value={origin} onChange={setOrigin} required placeholder="-- Select Origin --" options={airports.map((a) => ({ value: a, label: a }))} />
               </Field>
               <Field label="To (Destination)" required>
-                <select
-                  name="destination"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  required
-                  className="field-input"
-                >
-                  <option value="">-- Select Destination --</option>
-                  {airports.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect name="destination" value={destination} onChange={setDestination} required placeholder="-- Select Destination --" options={airports.map((a) => ({ value: a, label: a }))} />
               </Field>
             </div>
 
@@ -522,20 +484,7 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
         <SectionTitle>Flight &amp; Baggage</SectionTitle>
 
         <Field label="Airlines" required>
-          <select
-            name="airline"
-            value={airline}
-            onChange={(e) => setAirline(e.target.value)}
-            required
-            className="field-input"
-          >
-            <option value="">-- Select Airlines --</option>
-            {airlines.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect name="airline" value={airline} onChange={setAirline} required placeholder="-- Select Airlines --" options={airlines.map((a) => ({ value: a, label: a }))} />
         </Field>
 
         <Field label="Travel Purpose" required className="mt-4">
@@ -551,20 +500,7 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
         </Field>
 
         <Field label="Baggage (Kg)" required className="mt-4">
-          <select
-            name="baggage"
-            value={baggage}
-            onChange={(e) => setBaggage(e.target.value)}
-            required
-            className="field-input"
-          >
-            <option value="">-- Select --</option>
-            {baggageOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect name="baggage" value={baggage} onChange={setBaggage} required placeholder="-- Select --" options={baggageOptions.map((b) => ({ value: b, label: b }))} />
         </Field>
       </Card>
 
@@ -684,20 +620,7 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Immediate Superior" required>
-            <select
-              name="supervisorId"
-              value={supervisorId}
-              onChange={(e) => setSupervisorId(e.target.value)}
-              required
-              className="field-input"
-            >
-              <option value="">-- Select --</option>
-              {supervisors.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect name="supervisorId" value={supervisorId} onChange={setSupervisorId} required placeholder="-- Select --" options={supervisors.map((s) => ({ value: s.id, label: s.name }))} />
           </Field>
           <Field label="Immediate Superior Email">
             <input
@@ -712,20 +635,7 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Field label="Department Head" required>
-            <select
-              name="headId"
-              value={headId}
-              onChange={(e) => setHeadId(e.target.value)}
-              required
-              className="field-input"
-            >
-              <option value="">-- Select --</option>
-              {heads.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect name="headId" value={headId} onChange={setHeadId} required placeholder="-- Select --" options={heads.map((h) => ({ value: h.id, label: h.name }))} />
           </Field>
           <Field label="Department Head Email">
             <input
@@ -873,36 +783,10 @@ function MultiCityLeg(props: {
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         <Field label="From" required>
-          <select
-            name={props.originName}
-            value={props.origin}
-            onChange={(e) => props.setOrigin(e.target.value)}
-            required
-            className="field-input"
-          >
-            <option value="">-- Select --</option>
-            {props.origins.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect name={props.originName} value={props.origin} onChange={props.setOrigin} required placeholder="-- Select --" options={props.origins.map((a) => ({ value: a, label: a }))} />
         </Field>
         <Field label="To" required>
-          <select
-            name={props.destinationName}
-            value={props.destination}
-            onChange={(e) => props.setDestination(e.target.value)}
-            required
-            className="field-input"
-          >
-            <option value="">-- Select --</option>
-            {props.destinations.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect name={props.destinationName} value={props.destination} onChange={props.setDestination} required placeholder="-- Select --" options={props.destinations.map((a) => ({ value: a, label: a }))} />
         </Field>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -930,3 +814,4 @@ function MultiCityLeg(props: {
     </div>
   );
 }
+
