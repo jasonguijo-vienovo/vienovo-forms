@@ -11,6 +11,7 @@ import {
   type FormActionResult,
 } from "@/lib/forms/action-result";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
@@ -127,6 +128,49 @@ export async function submitTravelBooking(
       activitySchedule,
     };
 
+    const approvalChain = [
+      {
+        step: 1,
+        role: "supervisor",
+        approverEmail: supervisor.email,
+        approverName: supervisor.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "head",
+        approverEmail: head.email,
+        approverName: head.name,
+        status: "waiting",
+      },
+      {
+        step: 3,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+    const history = [
+      {
+        at: new Date(),
+        byEmail: submitterEmail,
+        byName: submitterName,
+        action: "submitted",
+        details: {},
+      },
+    ];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain,
+      currentStep: 1,
+      history,
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+    });
+
     const createdRequest = await RequestModel.create({
       formType: "travel-booking",
       formSlug: "travel-booking",
@@ -137,40 +181,11 @@ export async function submitTravelBooking(
         name: submitterName,
       },
       formData: formDataObj,
-      approvalChain: [
-        {
-          step: 1,
-          role: "supervisor",
-          approverEmail: supervisor.email,
-          approverName: supervisor.name,
-          status: "pending",
-        },
-        {
-          step: 2,
-          role: "head",
-          approverEmail: head.email,
-          approverName: head.name,
-          status: "waiting",
-        },
-        {
-          step: 3,
-          role: "processor",
-          approverEmail: processor.email,
-          approverName: processor.name,
-          status: "waiting",
-        },
-      ],
+      approvalChain,
       currentStep: 1,
       status: "pending",
-      history: [
-        {
-          at: new Date(),
-          byEmail: submitterEmail,
-          byName: submitterName,
-          action: "submitted",
-          details: {},
-        },
-      ],
+      history,
+      ...queueFields,
     });
 
     await syncRequestMirror({
@@ -394,6 +409,27 @@ export async function updateTravelBooking(
       },
     ];
 
+    const historyEntry = {
+      at: new Date(),
+      byEmail: submitterEmail,
+      byName: submitterName,
+      action: "edited",
+      details: { resetToStep: 1, changedFields },
+    };
+    const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      history: nextHistory as any[],
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+    });
+
     await RequestModel.updateOne(
       { _id: (doc as any)._id },
       {
@@ -402,15 +438,10 @@ export async function updateTravelBooking(
           approvalChain: nextApprovalChain,
           currentStep: 1,
           status: "pending",
+          ...queueFields,
         },
         $push: {
-          history: {
-            at: new Date(),
-            byEmail: submitterEmail,
-            byName: submitterName,
-            action: "edited",
-            details: { resetToStep: 1, changedFields },
-          },
+          history: historyEntry,
         },
       },
     );
@@ -446,18 +477,9 @@ export async function updateTravelBooking(
       approvalChain: nextApprovalChain,
       currentStep: 1,
       status: "pending",
-      history: [
-        ...(((doc as any).history ?? []) as unknown[]),
-        {
-          at: new Date(),
-          byEmail: submitterEmail,
-          byName: submitterName,
-          action: "edited",
-          details: { resetToStep: 1, changedFields },
-        },
-      ],
+      history: nextHistory,
       createdAt: (doc as any).createdAt,
-      updatedAt: new Date(),
+      updatedAt: historyEntry.at,
     });
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");

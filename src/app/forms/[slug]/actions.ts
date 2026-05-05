@@ -7,6 +7,7 @@ import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
@@ -166,6 +167,23 @@ export async function submitImportedForm(slug: string, formData: FormData) {
 
     const referenceNo = await generateReferenceNo("imported");
 
+    const history = [
+      {
+        at: new Date(),
+        byEmail: email,
+        byName: name,
+        action: "submitted",
+        details: { importedSlug: slug },
+      },
+    ];
+    const queueFields = deriveRequestQueueFields({
+      status: "submitted",
+      approvalChain: [],
+      currentStep: 0,
+      history,
+      submittedBy: { email, name },
+    });
+
     const createdRequest = await RequestModel.create({
       formType: "imported",
       formSlug: slug,
@@ -182,15 +200,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       approvalChain: [],
       currentStep: 0,
       status: "submitted",
-      history: [
-        {
-          at: new Date(),
-          byEmail: email,
-          byName: name,
-          action: "submitted",
-          details: { importedSlug: slug },
-        },
-      ],
+      history,
+      ...queueFields,
     });
 
     await syncRequestMirror({

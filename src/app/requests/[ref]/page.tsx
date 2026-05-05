@@ -31,10 +31,13 @@ const STATUS_TONES: Record<string, string> = {
 
 export default async function RequestDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ ref: string }>;
+  searchParams?: Promise<{ from?: string }>;
 }) {
   const { ref } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
 
@@ -83,6 +86,11 @@ export default async function RequestDetailPage({
       : currentStep?.approverName
         ? `Pending approval from ${currentStep.approverName}`
         : `Current status: ${doc.status}`;
+  const returnHref =
+    typeof resolvedSearchParams.from === "string" && resolvedSearchParams.from.startsWith("/")
+      ? resolvedSearchParams.from
+      : "/dashboard";
+  const returnLabel = returnHref.startsWith("/admin/requests") ? "Back to admin queue" : "Back to dashboard";
 
   return (
     <>
@@ -234,10 +242,10 @@ export default async function RequestDetailPage({
                 </Link>
               )}
               <Link
-                href="/dashboard"
+                href={returnHref}
                 className="flex-1 text-center bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
               >
-                Back to dashboard
+                {returnLabel}
               </Link>
             </div>
           </div>

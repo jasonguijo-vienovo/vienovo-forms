@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 
 function collectionNameForFormSlug(formSlug: string) {
   const normalized = String(formSlug || "requests")
@@ -28,6 +29,15 @@ export async function syncRequestMirror(opts: {
 
   const now = new Date();
   const collection = db.collection(collectionNameForFormSlug(opts.formSlug));
+  const queueFields = deriveRequestQueueFields({
+    status: opts.status,
+    approvalChain: opts.approvalChain as any[] | undefined,
+    currentStep: opts.currentStep ?? 0,
+    history: opts.history as any[] | undefined,
+    createdAt: opts.createdAt ?? now,
+    updatedAt: opts.updatedAt ?? now,
+    submittedBy: opts.submittedBy,
+  });
   await collection.updateOne(
     { referenceNo: opts.referenceNo },
     {
@@ -42,6 +52,7 @@ export async function syncRequestMirror(opts: {
         currentStep: opts.currentStep ?? 0,
         status: opts.status,
         history: opts.history ?? [],
+        ...queueFields,
         mirroredAt: now,
         createdAt: opts.createdAt ?? now,
         updatedAt: opts.updatedAt ?? now,
