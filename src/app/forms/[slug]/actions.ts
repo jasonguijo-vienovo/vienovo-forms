@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
@@ -264,7 +264,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       throw new Error("Imported form not found.");
     }
 
-    const isAdmin = isAdminEmail(email);
+    const isAdmin = await isAdminUser(email);
     if (definition.visibility === "admin" && !isAdmin) {
       throw new Error("This form is not available to you.");
     }
