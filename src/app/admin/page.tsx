@@ -1,6 +1,11 @@
 import { BellRing, Cog, FileInput, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
-import { AdminHelpPanel, AdminMetricCard, AdminPageHeader, AdminSection } from "@/components/admin-ui";
+import {
+  AdminHelpPanel,
+  AdminMetricCard,
+  AdminPageHeader,
+  AdminSection,
+} from "@/components/admin-ui";
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import { Approver } from "@/models/Approver";
@@ -61,14 +66,28 @@ export default async function AdminOverviewPage() {
       />
 
       <AdminHelpPanel title="What this page does">
-        Use the cards below to see whether forms are live, whether imported drafts still need work,
-        and whether people or dropdown data still need cleanup.
+        Use the cards below to see whether forms are live, whether imported
+        drafts still need work, and whether people or dropdown data still need
+        cleanup.
       </AdminHelpPanel>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Live forms" value={liveFormCount} tone="ok" hint="Visible to requesters now" />
-        <AdminMetricCard label="Import drafts" value={importedDraftCount} hint="Waiting in the importer" />
-        <AdminMetricCard label="Dropdown values" value={lookupCount} hint="Across native and imported forms" />
+        <AdminMetricCard
+          label="Live forms"
+          value={liveFormCount}
+          tone="ok"
+          hint="Visible to requesters now"
+        />
+        <AdminMetricCard
+          label="Import drafts"
+          value={importedDraftCount}
+          hint="Waiting in the importer"
+        />
+        <AdminMetricCard
+          label="Dropdown values"
+          value={lookupCount}
+          hint="Across native and imported forms"
+        />
         <AdminMetricCard
           label="Approvers needing review"
           value={approverNeedsReview}
@@ -83,9 +102,15 @@ export default async function AdminOverviewPage() {
       >
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {nextSteps.map((step) => (
-            <Link key={step.title} href={step.href} className="border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm">
+            <Link
+              key={step.title}
+              href={step.href}
+              className="border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm"
+            >
               <p className="font-semibold text-surface-text">{step.title}</p>
-              <p className="mt-1 text-sm text-surface-muted">{step.description}</p>
+              <p className="mt-1 text-sm text-surface-muted">
+                {step.description}
+              </p>
             </Link>
           ))}
         </div>
@@ -145,10 +170,13 @@ export default async function AdminOverviewPage() {
               <Send className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-semibold text-surface-text">Seed default dropdowns and people</p>
+              <p className="font-semibold text-surface-text">
+                Seed default dropdowns and people
+              </p>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-surface-muted">
-                Loads departments, airports, airlines, baggage options, approvers, and imported-form
-                sync candidates that have not been created yet.
+                Loads departments, airports, airlines, baggage options,
+                approvers, and imported-form sync candidates that have not been
+                created yet.
               </p>
             </div>
           </div>
@@ -171,14 +199,19 @@ function AdminCard({
   description: string;
 }) {
   return (
-    <Link href={href} className="border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm">
+    <Link
+      href={href}
+      className="border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm"
+    >
       <div className="flex items-start gap-3">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
           {icon}
         </div>
         <div>
           <p className="font-semibold text-surface-text">{title}</p>
-          <p className="mt-1 text-sm leading-6 text-surface-muted">{description}</p>
+          <p className="mt-1 text-sm leading-6 text-surface-muted">
+            {description}
+          </p>
         </div>
       </div>
     </Link>
@@ -194,7 +227,8 @@ function buildNextSteps({
   approverNeedsReview: number;
   liveFormCount: number;
 }) {
-  const steps: Array<{ title: string; description: string; href: string }> = [];
+  const steps: Array<{ title: string; description: string; href: string }> =
+    [];
 
   if (importedDraftCount > 0) {
     steps.push({
@@ -215,7 +249,8 @@ function buildNextSteps({
   if (liveFormCount === 0) {
     steps.push({
       title: "Publish your first live form",
-      description: "No forms are visible to requesters yet. Open the registry or importer to publish one.",
+      description:
+        "No forms are visible to requesters yet. Open the registry or importer to publish one.",
       href: "/admin/forms",
     });
   }
@@ -223,7 +258,8 @@ function buildNextSteps({
   if (steps.length === 0) {
     steps.push({
       title: "System looks ready",
-      description: "Your main setup areas are in a healthy state. You can review the queue or test notifications next.",
+      description:
+        "Your main setup areas are in a healthy state. You can review the queue or test notifications next.",
       href: "/admin/requests",
     });
   }

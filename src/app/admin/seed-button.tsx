@@ -9,6 +9,15 @@ type SeedResult = {
   error?: string;
 };
 
+function formatSeedError(res: Response, bodyText: string) {
+  const trimmed = bodyText.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  return `${res.status} ${res.statusText}`.trim() || "Unknown error";
+}
+
 export function SeedButton() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -17,9 +26,29 @@ export function SeedButton() {
   async function run() {
     setLoading(true);
     setResult(null);
+
     try {
       const res = await fetch("/api/admin/seed", { method: "POST" });
-      const data = (await res.json()) as SeedResult;
+      const contentType = res.headers.get("content-type") ?? "";
+      let data: SeedResult;
+
+      if (contentType.includes("application/json")) {
+        data = (await res.json()) as SeedResult;
+      } else {
+        data = {
+          ok: false,
+          error: formatSeedError(res, await res.text()),
+        };
+      }
+
+      if (!res.ok) {
+        setResult({
+          ok: false,
+          error: data.error ?? `${res.status} ${res.statusText}`.trim(),
+        });
+        return;
+      }
+
       setResult(data);
       router.refresh();
     } catch (err) {
@@ -36,7 +65,7 @@ export function SeedButton() {
         disabled={loading}
         className="bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold px-5 py-2 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 text-sm"
       >
-        {loading ? "Seeding…" : "Run seed"}
+        {loading ? "Seeding..." : "Run seed"}
       </button>
 
       {result?.ok && result.added && (
@@ -54,7 +83,7 @@ export function SeedButton() {
 
       {result && !result.ok && (
         <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-          Seed failed: {result.error ?? "unknown error"}
+          Seed failed: {result.error ?? "Unknown error"}
         </div>
       )}
     </div>
