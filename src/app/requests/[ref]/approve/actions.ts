@@ -5,6 +5,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { syncRequestMirror } from "@/lib/request-mirror";
 import { RequestModel } from "@/models/Request";
 
 function s(formData: FormData, key: string) {
@@ -63,6 +64,33 @@ export async function approveCurrentStep(referenceNo: string, formData: FormData
   const formSlug = doc.formSlug || doc.formType;
   const formName = doc.formName || doc.formType;
   const submittedByEmail = doc.submittedBy?.email ?? "";
+
+  await syncRequestMirror({
+    requestId: String((doc as any)._id),
+    referenceNo,
+    formSlug,
+    formName,
+    submittedBy: {
+      email: submittedByEmail,
+      name: doc.submittedBy?.name ?? "",
+    },
+    formData: (doc as any).formData ?? {},
+    approvalChain: chain,
+    currentStep: isFinal ? doc.currentStep : nextStep,
+    status: isFinal ? "approved" : doc.status,
+    history: [
+      ...(((doc as any).history ?? []) as unknown[]),
+      {
+        at: new Date(),
+        byEmail: userEmail,
+        byName: userName,
+        action: "approved",
+        details: { step: doc.currentStep, role: current.role, comment },
+      },
+    ],
+    createdAt: (doc as any).createdAt,
+    updatedAt: new Date(),
+  });
   const nextApprover = chain.find((step) => step.step === nextStep) ?? null;
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
@@ -149,6 +177,33 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
   const formSlug = doc.formSlug || doc.formType;
   const formName = doc.formName || doc.formType;
   const submittedByEmail = doc.submittedBy?.email ?? "";
+
+  await syncRequestMirror({
+    requestId: String((doc as any)._id),
+    referenceNo,
+    formSlug,
+    formName,
+    submittedBy: {
+      email: submittedByEmail,
+      name: doc.submittedBy?.name ?? "",
+    },
+    formData: (doc as any).formData ?? {},
+    approvalChain: chain,
+    currentStep: doc.currentStep,
+    status: "rejected",
+    history: [
+      ...(((doc as any).history ?? []) as unknown[]),
+      {
+        at: new Date(),
+        byEmail: userEmail,
+        byName: userName,
+        action: "rejected",
+        details: { step: doc.currentStep, role: current.role, comment },
+      },
+    ],
+    createdAt: (doc as any).createdAt,
+    updatedAt: new Date(),
+  });
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
 

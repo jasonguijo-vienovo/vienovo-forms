@@ -18,6 +18,9 @@ export type AppFormDefinition = {
   isImplemented: boolean;
   showInNavbar: boolean;
   sortOrder: number;
+  writeResponsesToSheet: boolean;
+  responseSpreadsheetId: string;
+  responseSheetName: string;
   notes: string;
   _id?: string;
 };
@@ -49,6 +52,9 @@ export const BUILTIN_FORMS: AppFormDefinition[] = [
     isImplemented: true,
     showInNavbar: true,
     sortOrder: 10,
+    writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
+    responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    responseSheetName: "Travel Booking Responses",
     notes: "",
   },
   {
@@ -63,6 +69,9 @@ export const BUILTIN_FORMS: AppFormDefinition[] = [
     isImplemented: true,
     showInNavbar: true,
     sortOrder: 20,
+    writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
+    responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    responseSheetName: "Cash Advance Responses",
     notes: "",
   },
   {
@@ -77,6 +86,9 @@ export const BUILTIN_FORMS: AppFormDefinition[] = [
     isImplemented: true,
     showInNavbar: true,
     sortOrder: 30,
+    writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
+    responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    responseSheetName: "Reimbursement Responses",
     notes: "",
   },
   {
@@ -91,6 +103,9 @@ export const BUILTIN_FORMS: AppFormDefinition[] = [
     isImplemented: false,
     showInNavbar: false,
     sortOrder: 40,
+    writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
+    responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    responseSheetName: "Request for Payment Responses",
     notes: "",
   },
   {
@@ -105,6 +120,9 @@ export const BUILTIN_FORMS: AppFormDefinition[] = [
     isImplemented: false,
     showInNavbar: false,
     sortOrder: 50,
+    writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
+    responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    responseSheetName: "Cashiering Responses",
     notes: "",
   },
 ];
@@ -137,6 +155,9 @@ async function syncBuiltInForms() {
             isImplemented: form.isImplemented,
             showInNavbar: form.showInNavbar,
             sortOrder: form.sortOrder,
+            writeResponsesToSheet: form.writeResponsesToSheet,
+            responseSpreadsheetId: form.responseSpreadsheetId,
+            responseSheetName: form.responseSheetName,
             notes: form.notes,
           },
         },
@@ -162,6 +183,9 @@ function normalizeForms(rows: Array<any>): AppFormDefinition[] {
     isImplemented: Boolean(row.isImplemented),
     showInNavbar: Boolean(row.showInNavbar),
     sortOrder: row.sortOrder ?? 0,
+    writeResponsesToSheet: Boolean(row.writeResponsesToSheet),
+    responseSpreadsheetId: row.responseSpreadsheetId ?? "",
+    responseSheetName: row.responseSheetName ?? "",
     notes: row.notes ?? "",
   }));
 }
