@@ -6,6 +6,8 @@ import {
   type FormDefinitionVisibility,
 } from "@/models/FormDefinition";
 
+const DEFAULT_RESPONSE_SPREADSHEET_ID = process.env.GOOGLE_SHEETS_MASTER_ID ?? "";
+
 export type AppFormDefinition = {
   slug: string;
   name: string;
