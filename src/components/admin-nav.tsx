@@ -39,7 +39,7 @@ function isActive(pathname: string, href: string, exact?: boolean) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AdminNav() {
+export function AdminNav({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -50,6 +50,7 @@ export function AdminNav() {
             key={item.href}
             href={item.href}
             icon={item.icon}
+            collapsed={collapsed}
             active={isActive(pathname, item.href, "exact" in item ? item.exact : false)}
           >
             {item.label}
@@ -63,6 +64,7 @@ export function AdminNav() {
             key={item.href}
             href={item.href}
             icon={item.icon}
+            collapsed={collapsed}
             active={isActive(pathname, item.href)}
           >
             {item.label}
@@ -77,23 +79,27 @@ function AdminNavLink({
   href,
   icon: Icon,
   active,
+  collapsed,
   children,
 }: {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   active: boolean;
+  collapsed: boolean;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
+      title={typeof children === "string" ? children : undefined}
       className={cn(
         "flex items-center gap-3 border-l-4 border-transparent px-3 py-2 uppercase tracking-[0.08em] text-slate-500 transition hover:bg-white hover:text-brand-700",
+        collapsed && "justify-center px-2",
         active && "border-brand-700 bg-white text-brand-700 shadow-sm"
       )}
     >
       <Icon className="h-5 w-5 shrink-0" />
-      <span className="truncate">{children}</span>
+      <span className={cn("truncate", collapsed && "hidden")}>{children}</span>
     </Link>
   );
 }
