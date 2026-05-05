@@ -232,10 +232,34 @@ export function FormsRegistryClient({
                         <Field label="Form name">
                           <input name="name" defaultValue={form.name} className="field-input" />
                         </Field>
-                        <Field label="Route path">
-                          <input name="routePath" defaultValue={form.routePath} className="field-input" />
+                        <Field label="Form ID">
+                          <input
+                            name="newSlug"
+                            defaultValue={form.slug}
+                            readOnly={form.source === "native"}
+                            className="field-input"
+                          />
+                          <p className="mt-1 text-xs text-surface-muted">
+                            {form.source === "imported"
+                              ? "Changing the form ID also changes the route, importer record, notification flow, and related database links."
+                              : "Native form IDs are code-backed and cannot be renamed here."}
+                          </p>
                         </Field>
                       </div>
+
+                      <Field label="Route path">
+                        <input
+                          name="routePath"
+                          defaultValue={form.routePath}
+                          readOnly={form.source === "imported"}
+                          className="field-input"
+                        />
+                        <p className="mt-1 text-xs text-surface-muted">
+                          {form.source === "imported"
+                            ? "Imported form routes are generated automatically from the form ID."
+                            : "Native form routes stay tied to the code route folder."}
+                        </p>
+                      </Field>
 
                       <Field label="Short description">
                         <textarea name="description" rows={3} defaultValue={form.description} className="field-input" />

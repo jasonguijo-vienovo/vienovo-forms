@@ -16,7 +16,7 @@ export const LOOKUP_CATEGORIES = [
 export type BuiltInLookupCategory = (typeof LOOKUP_CATEGORIES)[number];
 export type LookupCategory = BuiltInLookupCategory | string;
 
-function normalizeLookupKey(input: string) {
+export function normalizeLookupKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
