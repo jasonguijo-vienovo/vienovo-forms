@@ -132,8 +132,36 @@ export async function deleteFormDefinition(formData: FormData) {
     ? await FormDefinition.findById(id).lean()
     : await FormDefinition.findOne({ slug }).lean();
   if (!form) return;
+
   if (form.source === "native" || BUILTIN_FORM_SLUGS.has(form.slug)) {
-    throw new Error("Built-in forms cannot be deleted. Hide them by changing status/availability instead.");
+    await FormDefinition.updateOne(
+      id ? { _id: id } : { slug: form.slug },
+      {
+        $set: {
+          isDeleted: true,
+          status: "archived",
+          visibility: "admin",
+          availability: "coming-soon",
+          showInNavbar: false,
+          writeResponsesToSheet: false,
+        },
+      }
+    );
+    await setFlashToast({ tone: "success", message: "Native form deleted from the system." });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "delete_native_form_definition",
+      targetType: "form-definition",
+      targetId: form.slug,
+      details: { source: form.source },
+    });
+
+    revalidatePath("/admin/forms");
+    revalidatePath("/admin/form-imports");
+    revalidatePath("/admin/notifications");
+    revalidatePath("/dashboard");
+    revalidatePath("/forms");
+    return;
   }
 
   await FormDefinition.deleteOne(id ? { _id: id } : { slug: form.slug });

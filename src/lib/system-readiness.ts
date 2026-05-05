@@ -26,12 +26,11 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
       hasValue(process.env.GOOGLE_SHEETS_MASTER_ID),
   );
 
-  const driveFolderIds = [
-    process.env.GOOGLE_DRIVE_TRAVEL_BOOKING_FOLDER_ID,
-    process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID,
-    process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID,
-  ].filter((value) => hasValue(value));
-  const driveReady = driveFolderIds.length === 3;
+  const attachmentStorageReady = Boolean(
+    hasValue(process.env.CLOUDINARY_CLOUD_NAME) &&
+      hasValue(process.env.CLOUDINARY_API_KEY) &&
+      hasValue(process.env.CLOUDINARY_API_SECRET),
+  );
 
   const entraReady = Boolean(
     process.env.AUTH_DEV_BYPASS === "1" ||
@@ -64,12 +63,12 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
         : "Missing GOOGLE_SERVICE_ACCOUNT_KEY_PATH or GOOGLE_SHEETS_MASTER_ID.",
     },
     {
-      key: "google-drive",
-      label: "Google Drive",
-      ready: driveReady,
-      detail: driveReady
-        ? "Travel, cash advance, and reimbursement folders are all configured."
-        : `${driveFolderIds.length}/3 Drive folders are configured for attachments.`,
+      key: "cloudinary",
+      label: "Cloudinary",
+      ready: attachmentStorageReady,
+      detail: attachmentStorageReady
+        ? "Cloudinary cloud name, API key, and API secret are set for attachments."
+        : "Missing CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, or CLOUDINARY_API_SECRET.",
     },
     {
       key: "auth",

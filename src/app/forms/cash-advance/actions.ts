@@ -10,11 +10,11 @@ import {
   okRedirect,
   type FormActionResult,
 } from "@/lib/forms/action-result";
-import { uploadToDriveFolder } from "@/lib/google/drive";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { RequestModel } from "@/models/Request";
 import { cashAdvanceFieldMap, diffFields } from "@/lib/request-fields";
@@ -63,11 +63,9 @@ export async function submitCashAdvance(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID for Cash Advance attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "cash-advance",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -252,11 +250,9 @@ export async function updateCashAdvance(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID for Cash Advance attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "cash-advance",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,

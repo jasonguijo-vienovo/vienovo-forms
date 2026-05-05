@@ -376,23 +376,21 @@ export function FormsRegistryClient({
                         className="border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
                       />
                     </form>
-                    {form.source === "imported" ? (
-                      <form action={deleteFormDefinition}>
-                        <input type="hidden" name="id" value={form._id ?? ""} />
-                        <input type="hidden" name="slug" value={form.slug} />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel={
-                            <span className="inline-flex items-center gap-2">
-                              <Trash2 className="h-4 w-4" />
-                              <span>Delete registry entry</span>
-                            </span>
-                          }
-                          pendingLabel="Deleting..."
-                          className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                        />
-                      </form>
-                    ) : null}
+                    <form action={deleteFormDefinition}>
+                      <input type="hidden" name="id" value={form._id ?? ""} />
+                      <input type="hidden" name="slug" value={form.slug} />
+                      <PendingSubmitButton
+                        type="submit"
+                        idleLabel={
+                          <span className="inline-flex items-center gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            <span>{form.source === "native" ? "Delete native form" : "Delete registry entry"}</span>
+                          </span>
+                        }
+                        pendingLabel="Deleting..."
+                        className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+                      />
+                    </form>
                   </div>
                 </article>
               );

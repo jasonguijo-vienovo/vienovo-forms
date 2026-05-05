@@ -124,7 +124,16 @@ const BUILTIN_FORM_BY_SLUG = new Map(BUILTIN_FORMS.map((form) => [form.slug, for
 const BUILTIN_FORM_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
 
 async function syncBuiltInForms() {
+  const deletedNativeSlugs = new Set(
+    (
+      await FormDefinition.find({ source: "native", isDeleted: true })
+        .select({ slug: 1 })
+        .lean()
+    ).map((row) => row.slug),
+  );
+
   for (const form of BUILTIN_FORMS) {
+    if (deletedNativeSlugs.has(form.slug)) continue;
     try {
       await FormDefinition.updateOne(
         { slug: form.slug },
@@ -179,15 +188,21 @@ function normalizeForms(rows: Array<any>): AppFormDefinition[] {
   }));
 }
 
-function withBuiltInForms(rows: AppFormDefinition[]) {
-  const rowBySlug = new Map(rows.map((row) => [row.slug, row]));
-  const builtInRows = BUILTIN_FORMS.map((form) => ({
+function withBuiltInForms(rows: Array<any>) {
+  const deletedNativeSlugs = new Set(
+    rows
+      .filter((row) => Boolean(row.isDeleted) && (row.source === "native" || BUILTIN_FORM_SLUGS.has(row.slug)))
+      .map((row) => row.slug),
+  );
+  const normalizedRows = normalizeForms(rows.filter((row) => !row.isDeleted));
+  const rowBySlug = new Map(normalizedRows.map((row) => [row.slug, row]));
+  const builtInRows = BUILTIN_FORMS.filter((form) => !deletedNativeSlugs.has(form.slug)).map((form) => ({
     ...form,
     ...(rowBySlug.get(form.slug) ?? {}),
     source: "native" as const,
     routePath: rowBySlug.get(form.slug)?.routePath || form.routePath,
   }));
-  const importedRows = rows.filter(
+  const importedRows = normalizedRows.filter(
     (row) => row.source === "imported" && !BUILTIN_FORM_SLUGS.has(row.slug)
   );
   return [...builtInRows, ...importedRows].sort((a, b) => {
@@ -200,7 +215,7 @@ async function loadAllFromDb(): Promise<AppFormDefinition[]> {
   await connectMongo();
   await syncBuiltInForms();
   const rows = await FormDefinition.find({}).sort({ sortOrder: 1, name: 1 }).lean();
-  return withBuiltInForms(normalizeForms(rows));
+  return withBuiltInForms(rows);
 }
 
 export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition[]> {
