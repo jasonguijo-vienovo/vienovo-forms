@@ -17,117 +17,163 @@ import {
   SEED_APPROVERS,
 } from "@/lib/seed-data";
 
+export const maxDuration = 60;
+
 async function seedCategory(category: LookupCategory, values: string[]) {
-  let added = 0;
-  for (let i = 0; i < values.length; i++) {
-    const result = await Lookup.updateOne(
-      { category, value: values[i] },
-      {
-        $setOnInsert: {
-          category,
-          value: values[i],
-          sortOrder: i,
-          isActive: true,
-        },
-      },
-      { upsert: true }
-    );
-    if (result.upsertedCount > 0) added++;
+  if (values.length === 0) {
+    return 0;
   }
-  return added;
+
+  const result = await Lookup.bulkWrite(
+    values.map((value, index) => ({
+      updateOne: {
+        filter: { category, value },
+        update: {
+          $setOnInsert: {
+            category,
+            value,
+            sortOrder: index,
+            isActive: true,
+          },
+        },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
+
+  return result.upsertedCount ?? 0;
 }
 
 async function seedApprovers() {
-  let added = 0;
-  let rolesAdded = 0;
-  for (const a of SEED_APPROVERS) {
-    const result = await Approver.updateOne(
-      { name: a.name },
-      {
-        $setOnInsert: {
-          name: a.name,
-          email: a.email,
-          emailNeedsReview: a.emailNeedsReview,
-          isActive: true,
-        },
-        $addToSet: { roles: { $each: a.roles } },
-      },
-      { upsert: true }
-    );
-    if (result.upsertedCount > 0) added++;
-    else if (result.modifiedCount > 0) rolesAdded++;
+  if (SEED_APPROVERS.length === 0) {
+    return { added: 0, rolesAdded: 0 };
   }
-  return { added, rolesAdded };
+
+  const result = await Approver.bulkWrite(
+    SEED_APPROVERS.map((approver) => ({
+      updateOne: {
+        filter: { name: approver.name },
+        update: {
+          $setOnInsert: {
+            name: approver.name,
+            email: approver.email,
+            emailNeedsReview: approver.emailNeedsReview,
+            isActive: true,
+          },
+          $addToSet: { roles: { $each: approver.roles } },
+        },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
+
+  return {
+    added: result.upsertedCount ?? 0,
+    rolesAdded: result.modifiedCount ?? 0,
+  };
 }
 
 async function seedReimbursementRoutes() {
-  let added = 0;
-  let updated = 0;
-  for (let i = 0; i < SEED_REIMBURSEMENT_ROUTES.length; i++) {
-    const r = SEED_REIMBURSEMENT_ROUTES[i];
-    const res = await ReimbursementRoute.updateOne(
-      { department: r.department, costCenter: r.costCenter, location: r.location },
-      {
-        $setOnInsert: {
-          department: r.department,
-          costCenter: r.costCenter,
-          location: r.location,
-          sortOrder: i,
-          isActive: true,
-        },
-        $set: {
-          supervisorEmail: r.supervisorEmail,
-          supervisorName: r.supervisorName,
-          headEmail: r.headEmail,
-          headName: r.headName,
-        },
-      },
-      { upsert: true }
-    );
-    if (res.upsertedCount > 0) added++;
-    else if (res.modifiedCount > 0) updated++;
+  if (SEED_REIMBURSEMENT_ROUTES.length === 0) {
+    return { added: 0, updated: 0 };
   }
-  return { added, updated };
+
+  const result = await ReimbursementRoute.bulkWrite(
+    SEED_REIMBURSEMENT_ROUTES.map((route, index) => ({
+      updateOne: {
+        filter: {
+          department: route.department,
+          costCenter: route.costCenter,
+          location: route.location,
+        },
+        update: {
+          $setOnInsert: {
+            department: route.department,
+            costCenter: route.costCenter,
+            location: route.location,
+            sortOrder: index,
+            isActive: true,
+          },
+          $set: {
+            supervisorEmail: route.supervisorEmail,
+            supervisorName: route.supervisorName,
+            headEmail: route.headEmail,
+            headName: route.headName,
+          },
+        },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
+
+  return {
+    added: result.upsertedCount ?? 0,
+    updated: result.modifiedCount ?? 0,
+  };
 }
 
 export async function POST() {
-  await requireAdmin();
-  await connectMongo();
+  try {
+    await requireAdmin();
+    await connectMongo();
 
-  const result = {
-    departments: await seedCategory("department", SEED_DEPARTMENTS),
-    airports: await seedCategory("airport", SEED_AIRPORTS),
-    multiCityDeparture: await seedCategory(
-      "multiCityDeparture",
-      SEED_DOMESTIC_AIRPORTS
-    ),
-    airlines: await seedCategory("airline", SEED_AIRLINES),
-    baggage: await seedCategory("baggage", SEED_BAGGAGE),
-    reimbursementCostCenter: await seedCategory(
-      "reimbursementCostCenter",
-      SEED_REIMBURSEMENT_COST_CENTERS
-    ),
-    reimbursementFormType: await seedCategory(
-      "reimbursementFormType",
-      SEED_REIMBURSEMENT_FORM_TYPES
-    ),
-    reimbursementLocation: await seedCategory(
-      "reimbursementLocation",
-      SEED_REIMBURSEMENT_LOCATIONS
-    ),
-    reimbursementRoutes: 0,
-    reimbursementRoutesUpdated: 0,
-    approvers: 0,
-    approverRolesUpdated: 0,
-  };
+    const [
+      departments,
+      airports,
+      multiCityDeparture,
+      airlines,
+      baggage,
+      reimbursementCostCenter,
+      reimbursementFormType,
+      reimbursementLocation,
+      routeResult,
+      approverResult,
+    ] = await Promise.all([
+      seedCategory("department", SEED_DEPARTMENTS),
+      seedCategory("airport", SEED_AIRPORTS),
+      seedCategory("multiCityDeparture", SEED_DOMESTIC_AIRPORTS),
+      seedCategory("airline", SEED_AIRLINES),
+      seedCategory("baggage", SEED_BAGGAGE),
+      seedCategory(
+        "reimbursementCostCenter",
+        SEED_REIMBURSEMENT_COST_CENTERS
+      ),
+      seedCategory(
+        "reimbursementFormType",
+        SEED_REIMBURSEMENT_FORM_TYPES
+      ),
+      seedCategory(
+        "reimbursementLocation",
+        SEED_REIMBURSEMENT_LOCATIONS
+      ),
+      seedReimbursementRoutes(),
+      seedApprovers(),
+    ]);
 
-  const routeResult = await seedReimbursementRoutes();
-  result.reimbursementRoutes = routeResult.added;
-  result.reimbursementRoutesUpdated = routeResult.updated;
+    return NextResponse.json({
+      ok: true,
+      added: {
+        departments,
+        airports,
+        multiCityDeparture,
+        airlines,
+        baggage,
+        reimbursementCostCenter,
+        reimbursementFormType,
+        reimbursementLocation,
+        reimbursementRoutes: routeResult.added,
+        reimbursementRoutesUpdated: routeResult.updated,
+        approvers: approverResult.added,
+        approverRolesUpdated: approverResult.rolesAdded,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to seed admin data.";
 
-  const approverResult = await seedApprovers();
-  result.approvers = approverResult.added;
-  result.approverRolesUpdated = approverResult.rolesAdded;
-
-  return NextResponse.json({ ok: true, added: result });
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
 }
