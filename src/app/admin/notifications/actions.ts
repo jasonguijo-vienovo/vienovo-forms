@@ -32,6 +32,8 @@ const NOTIFICATIONS_PATH = "/admin/notifications";
 export async function sendNotificationTestEmail(formData: FormData) {
   const { email: adminEmail } = await requireAdmin();
   const targetEmail = s(formData, "testEmail").toLowerCase() || adminEmail;
+  const sentAt = new Date().toISOString();
+  const appEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown";
 
   try {
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.SMTP_FROM) {
@@ -49,6 +51,10 @@ export async function sendNotificationTestEmail(formData: FormData) {
         `- Request Type: Travel Booking\n` +
         `- Reference No: TB-20260505-0001\n` +
         `- Status: Pending Approval\n\n` +
+        `Verification details:\n` +
+        `- Sent At (UTC): ${sentAt}\n` +
+        `- Target Email: ${targetEmail}\n` +
+        `- Environment: ${appEnv}\n\n` +
         `This is only a test message. No action is required.\n\n` +
         `SMTP host: ${process.env.SMTP_HOST || "smtp.office365.com"}\n` +
         `From: ${process.env.SMTP_FROM || "(missing SMTP_FROM)"}`,
@@ -63,6 +69,12 @@ export async function sendNotificationTestEmail(formData: FormData) {
             <p style="margin: 0;">Request Type: Travel Booking</p>
             <p style="margin: 0;">Reference No: TB-20260505-0001</p>
             <p style="margin: 0;">Status: Pending Approval</p>
+          </div>
+          <div style="padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; background: #f9fafb; margin: 0 0 12px;">
+            <p style="margin: 0 0 6px;"><strong>Verification details:</strong></p>
+            <p style="margin: 0;">Sent At (UTC): ${sentAt}</p>
+            <p style="margin: 0;">Target Email: ${targetEmail}</p>
+            <p style="margin: 0;">Environment: ${appEnv}</p>
           </div>
           <p style="margin: 0 0 12px;">This is only a test message. No action is required.</p>
           <div style="padding: 12px; border: 1px solid #d1d5db; border-radius: 10px; background: #f9fafb;">
