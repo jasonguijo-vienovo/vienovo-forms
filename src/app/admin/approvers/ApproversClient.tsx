@@ -35,6 +35,7 @@ export function ApproversClient({
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const filtered = approvers.filter((approver) => {
     const matchesQuery =
@@ -156,11 +157,12 @@ export function ApproversClient({
                           name="email"
                           defaultValue={approver.email}
                           placeholder="email@vienovo.ph"
+                          readOnly={editingId !== approver._id}
                           className={`field-input w-[260px] ${approver.emailNeedsReview ? "border-amber-300 bg-amber-50" : ""}`}
                         />
                         <PendingSubmitButton
                           type="submit"
-                          idleLabel="Save email"
+                          idleLabel={editingId === approver._id ? "Save email" : "Save"}
                           pendingLabel="Saving..."
                           className="text-sm font-semibold text-brand-700 hover:underline"
                         />
@@ -202,6 +204,13 @@ export function ApproversClient({
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId((current) => (current === approver._id ? null : approver._id))}
+                          className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                        >
+                          {editingId === approver._id ? "Cancel edit" : "Edit"}
+                        </button>
                         <form action={toggleApprover}>
                           <input type="hidden" name="id" value={approver._id} />
                           <PendingSubmitButton
