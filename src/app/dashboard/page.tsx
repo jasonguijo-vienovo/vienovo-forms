@@ -43,7 +43,11 @@ export default async function DashboardPage() {
   if (!session?.user?.email) redirect("/sign-in");
   const name = session?.user?.name ?? session?.user?.email ?? "there";
   const userEmail = session.user.email.toLowerCase();
-  const forms = await getCatalogForms({ allowFallback: true });
+  const forms = await getCatalogForms({
+    allowFallback: true,
+    includeUnavailable: true,
+    includeDrafts: true,
+  });
   await connectMongo();
   const [myRequests, pendingApprovals] = await Promise.all([
     RequestModel.find({ "submittedBy.email": userEmail }).sort({ createdAt: -1 }).limit(6).lean(),
@@ -136,6 +140,7 @@ function FormCard({
   slug,
   name,
   description,
+  status,
   availability,
   isImplemented,
   routePath,
@@ -143,12 +148,14 @@ function FormCard({
   slug: string;
   name: string;
   description: string;
+  status: "published" | "draft" | "archived";
   availability: "available" | "coming-soon";
   isImplemented: boolean;
   routePath: string;
 }) {
-  const available = availability === "available" && isImplemented;
+  const available = status === "published" && availability === "available" && isImplemented;
   const Icon = formIcon(slug);
+  const badgeText = status !== "published" ? "Pending" : "Soon";
 
   const inner = (
     <div
@@ -169,7 +176,7 @@ function FormCard({
         {available ? (
           <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-brand-700" />
         ) : (
-          <span className="status-pill border-surface-border bg-slate-50 text-surface-muted">Soon</span>
+          <span className="status-pill border-surface-border bg-slate-50 text-surface-muted">{badgeText}</span>
         )}
       </div>
     </div>
