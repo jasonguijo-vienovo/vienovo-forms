@@ -34,6 +34,10 @@ export async function sendNotificationTestEmail(formData: FormData) {
   const targetEmail = s(formData, "testEmail").toLowerCase() || adminEmail;
 
   try {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.SMTP_FROM) {
+      throw new Error("Missing SMTP setup. Please set SMTP_USER, SMTP_PASS, and SMTP_FROM in environment variables.");
+    }
+
     await sendNotificationEmail({
       to: targetEmail,
       subject: "Vienovo Forms SMTP test",
