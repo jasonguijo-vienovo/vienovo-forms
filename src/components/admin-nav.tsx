@@ -7,7 +7,6 @@ import {
   Boxes,
   ClipboardList,
   FileInput,
-  FileText,
   GitBranch,
   Grid2X2,
   KeyRound,
@@ -32,8 +31,6 @@ const primaryLinks = [
 ] as const;
 
 const secondaryLinks = [
-  { href: "/forms/travel-booking", label: "Travel form", icon: FileText },
-  { href: "/forms/cash-advance", label: "Cash advance form", icon: FileText },
   { href: "/dashboard", label: "Requester mode", icon: UserCircle },
 ] as const;
 
