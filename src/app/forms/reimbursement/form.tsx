@@ -912,7 +912,7 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end items-center gap-3 pt-6">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !agreed}
             className="bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold px-8 py-2.5 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 w-full sm:w-auto"
           >
             {pending ? "Submitting..." : submitLabel ?? "Submit Request"}
