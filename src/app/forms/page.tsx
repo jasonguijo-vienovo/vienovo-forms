@@ -18,7 +18,11 @@ import { safeAuth } from "@/lib/safe-auth";
 export default async function FormsIndexPage() {
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
-  const forms = await getCatalogForms({ allowFallback: true });
+  const forms = await getCatalogForms({
+    allowFallback: true,
+    includeUnavailable: true,
+    includeDrafts: true,
+  });
 
   return (
     <>
@@ -66,6 +70,7 @@ function FormCard({
   slug,
   name,
   description,
+  status,
   availability,
   isImplemented,
   routePath,
@@ -73,12 +78,14 @@ function FormCard({
   slug: string;
   name: string;
   description: string;
+  status: "published" | "draft" | "archived";
   availability: "available" | "coming-soon";
   isImplemented: boolean;
   routePath: string;
 }) {
-  const available = availability === "available" && isImplemented;
+  const available = status === "published" && availability === "available" && isImplemented;
   const Icon = formIcon(slug);
+  const badgeText = status !== "published" ? "Pending" : "Coming soon";
 
   const inner = (
     <div
@@ -99,7 +106,7 @@ function FormCard({
         {available ? (
           <span className="text-sm font-semibold text-brand-700">Start request</span>
         ) : (
-          <span className="status-pill border-surface-border bg-slate-50 text-surface-muted">Coming soon</span>
+          <span className="status-pill border-surface-border bg-slate-50 text-surface-muted">{badgeText}</span>
         )}
         {available ? (
           <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-brand-700" />
