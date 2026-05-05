@@ -184,13 +184,18 @@ export function ApproversClient({
                                 type="checkbox"
                                 name={`role_${role}`}
                                 defaultChecked={approver.roles.includes(role)}
-                                disabled={editingId !== approver._id}
                                 className="accent-brand-600"
                               />
                               <span className="capitalize text-surface-text">{role}</span>
                             </label>
                           ))}
                         </div>
+                        <PendingSubmitButton
+                          type="submit"
+                          idleLabel="Edit roles"
+                          pendingLabel="Saving..."
+                          className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                        />
                       </form>
                     </td>
                     <td className="px-4 py-4">

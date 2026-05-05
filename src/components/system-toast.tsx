@@ -25,25 +25,35 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
       : "border-emerald-200 bg-emerald-50 text-emerald-900";
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
       <div
-        className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-sm ${toneClass}`}
+        className={`w-full max-w-md rounded-2xl border px-5 py-4 shadow-2xl ${toneClass}`}
+        role="alertdialog"
+        aria-live="polite"
+        aria-modal="false"
       >
-        <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-current opacity-75" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">
-            {toast.tone === "error" ? "Action failed" : "Success"}
-          </p>
-          <p className="mt-0.5 text-sm leading-relaxed">{toast.message}</p>
+        <div className="flex items-start gap-3">
+          <div className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-current opacity-75" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">
+              {toast.tone === "error" ? "Action failed" : "Success"}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed">{toast.message}</p>
+            <p className="mt-3 text-xs opacity-70">
+              This closes automatically in 5 seconds.
+            </p>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setToast(null)}
-          className="rounded-lg px-2 py-1 text-xs font-semibold opacity-70 transition hover:bg-black/5 hover:opacity-100"
-          aria-label="Dismiss notification"
-        >
-          Close
-        </button>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="rounded-xl border border-current/20 px-4 py-2 text-sm font-semibold transition hover:bg-black/5"
+            aria-label="Okay"
+          >
+            OK
+          </button>
+        </div>
       </div>
     </div>
   );
