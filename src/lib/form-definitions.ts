@@ -22,6 +22,20 @@ export type AppFormDefinition = {
   _id?: string;
 };
 
+function isStartRequestAvailable(form: Pick<AppFormDefinition, "status" | "availability" | "isImplemented">) {
+  return form.status === "published" && form.availability === "available" && form.isImplemented;
+}
+
+function sortCatalogForRequester(forms: AppFormDefinition[]) {
+  return [...forms].sort((a, b) => {
+    const aAvailable = isStartRequestAvailable(a);
+    const bAvailable = isStartRequestAvailable(b);
+    if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+    const orderDiff = a.sortOrder - b.sortOrder;
+    return orderDiff || a.name.localeCompare(b.name);
+  });
+}
+
 export const BUILTIN_FORMS: AppFormDefinition[] = [
   {
     slug: "travel-booking",
@@ -210,7 +224,7 @@ export async function getCatalogForms(opts?: {
 
   try {
     const forms = await loadAllFromDb();
-    return forms.filter((form) => {
+    const filtered = forms.filter((form) => {
       if (!includeDrafts && form.status !== "published") return false;
       if (!includeAdminOnly && form.visibility === "admin") return false;
       if (!includeUnavailable && (form.availability !== "available" || !form.isImplemented)) {
@@ -219,14 +233,16 @@ export async function getCatalogForms(opts?: {
       if (form.status === "archived") return false;
       return true;
     });
+    return sortCatalogForRequester(filtered);
   } catch (error) {
     if (!allowFallback) throw error;
     console.error("Form registry fallback:", error);
-    return fallbackForms().filter(
+    const filtered = fallbackForms().filter(
       (form) =>
         form.status === "published" &&
         (includeUnavailable || (form.availability === "available" && form.isImplemented))
     );
+    return sortCatalogForRequester(filtered);
   }
 }
 
