@@ -164,19 +164,21 @@ export default async function FormImportsPage() {
             </Field>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Field label="index.html file">
+              <Field label="index.html file(s)">
                 <input
                   type="file"
-                  name="htmlFile"
+                  name="htmlFiles"
                   accept=".html,.htm,text/html"
+                  multiple
                   className="field-input"
                 />
               </Field>
-              <Field label="code.gs file">
+              <Field label="code.gs file(s)">
                 <input
                   type="file"
-                  name="gsFile"
+                  name="gsFiles"
                   accept=".gs,.js,text/plain"
+                  multiple
                   className="field-input"
                 />
               </Field>
