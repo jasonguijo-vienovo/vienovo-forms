@@ -47,6 +47,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
 
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<string[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [firstName, setFirstName] = useState(prefill.firstName || "");
   const [lastName, setLastName] = useState(prefill.lastName || "");
@@ -87,12 +88,21 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
     const errs = validate();
     if (errs.length) {
       setErrors(errs);
+      setSubmitError(null);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     setErrors([]);
+    setSubmitError(null);
     const fd = new FormData(e.currentTarget);
-    startTransition(() => submitAction(fd));
+    startTransition(() => {
+      void Promise.resolve(submitAction(fd)).catch((err: unknown) => {
+        const message =
+          err instanceof Error ? err.message : "Could not submit this Cash Advance request.";
+        setSubmitError(message);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
   }
 
   return (
@@ -148,6 +158,13 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
               <li key={e}>{e}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800">
+          <p className="font-semibold mb-1">Submission failed.</p>
+          <p>{submitError}</p>
         </div>
       )}
 
