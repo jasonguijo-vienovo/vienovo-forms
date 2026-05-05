@@ -1,4 +1,5 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { projectFormRuntimeState, type FormRuntimeState } from "@/lib/forms/runtime-state";
 import {
   FormDefinition,
   type FormDefinitionAvailability,
@@ -25,23 +26,20 @@ export type AppFormDefinition = {
   responseSheetName: string;
   notes: string;
   _id?: string;
+  runtime: FormRuntimeState;
 };
 
-function isStartRequestAvailable(form: Pick<AppFormDefinition, "status" | "availability" | "isImplemented">) {
-  return form.status === "published" && form.availability === "available" && form.isImplemented;
-}
-
-function sortCatalogForRequester(forms: AppFormDefinition[]) {
+function sortCatalog(forms: AppFormDefinition[]) {
   return [...forms].sort((a, b) => {
-    const aAvailable = isStartRequestAvailable(a);
-    const bAvailable = isStartRequestAvailable(b);
-    if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+    if (a.runtime.requesterCanOpen !== b.runtime.requesterCanOpen) {
+      return a.runtime.requesterCanOpen ? -1 : 1;
+    }
     const orderDiff = a.sortOrder - b.sortOrder;
     return orderDiff || a.name.localeCompare(b.name);
   });
 }
 
-export const BUILTIN_FORMS: AppFormDefinition[] = [
+export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
   {
     slug: "travel-booking",
     name: "Travel Booking",
@@ -146,14 +144,72 @@ export const BUILTIN_FORMS: AppFormDefinition[] = [
   },
 ];
 
-function fallbackForms() {
-  return [...BUILTIN_FORMS].sort((a, b) => a.sortOrder - b.sortOrder);
-}
-
 const BUILTIN_FORM_BY_SLUG = new Map(BUILTIN_FORMS.map((form) => [form.slug, form]));
 const BUILTIN_FORM_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
 
-async function syncBuiltInForms() {
+function withRuntime(form: Omit<AppFormDefinition, "runtime">): AppFormDefinition {
+  return {
+    ...form,
+    runtime: projectFormRuntimeState(form),
+  };
+}
+
+function normalizeFormDefinitionRow(row: any): Omit<AppFormDefinition, "runtime"> {
+  return {
+    _id: row._id ? String(row._id) : undefined,
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? "",
+    routePath: row.routePath || `/forms/${row.slug}`,
+    source: row.source,
+    status: row.status,
+    visibility: row.visibility,
+    availability: row.availability,
+    isImplemented: Boolean(row.isImplemented),
+    showInNavbar: Boolean(row.showInNavbar),
+    sortOrder: row.sortOrder ?? 0,
+    writeResponsesToSheet: Boolean(row.writeResponsesToSheet),
+    responseSpreadsheetId: row.responseSpreadsheetId ?? "",
+    responseSheetName: row.responseSheetName ?? "",
+    notes: row.notes ?? "",
+  };
+}
+
+function mergeBuiltInWithOverride(
+  builtin: Omit<AppFormDefinition, "runtime">,
+  override?: any,
+): Omit<AppFormDefinition, "runtime"> | null {
+  if (override?.isDeleted) return null;
+  if (!override) return builtin;
+  const normalized = normalizeFormDefinitionRow(override);
+  return {
+    ...builtin,
+    ...normalized,
+    source: "native",
+    routePath: normalized.routePath || builtin.routePath,
+  };
+}
+
+function fallbackForms() {
+  return BUILTIN_FORMS.map(withRuntime).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function shouldIncludeForCatalog(
+  form: AppFormDefinition,
+  opts: {
+    includeAdminOnly: boolean;
+    includeDrafts: boolean;
+    includeUnavailable: boolean;
+  },
+) {
+  if (form.status === "archived") return false;
+  if (!opts.includeDrafts && form.status !== "published") return false;
+  if (!opts.includeAdminOnly && form.visibility === "admin") return false;
+  if (!opts.includeUnavailable && !form.runtime.requesterCanOpen) return false;
+  return true;
+}
+
+export async function syncBuiltInForms() {
   const deletedNativeSlugs = new Set(
     (
       await FormDefinition.find({ source: "native", isDeleted: true })
@@ -189,7 +245,7 @@ async function syncBuiltInForms() {
             notes: form.notes,
           },
         },
-        { upsert: true }
+        { upsert: true },
       );
     } catch (error) {
       console.error(`Failed to sync built-in form ${form.slug}:`, error);
@@ -197,60 +253,24 @@ async function syncBuiltInForms() {
   }
 }
 
-function normalizeForms(rows: Array<any>): AppFormDefinition[] {
-  return rows.map((row) => ({
-    _id: row._id ? String(row._id) : undefined,
-    slug: row.slug,
-    name: row.name,
-    description: row.description ?? "",
-    routePath: row.routePath || `/forms/${row.slug}`,
-    source: row.source,
-    status: row.status,
-    visibility: row.visibility,
-    availability: row.availability,
-    isImplemented: Boolean(row.isImplemented),
-    showInNavbar: Boolean(row.showInNavbar),
-    sortOrder: row.sortOrder ?? 0,
-    writeResponsesToSheet: Boolean(row.writeResponsesToSheet),
-    responseSpreadsheetId: row.responseSpreadsheetId ?? "",
-    responseSheetName: row.responseSheetName ?? "",
-    notes: row.notes ?? "",
-  }));
-}
-
-function withBuiltInForms(rows: Array<any>) {
-  const deletedNativeSlugs = new Set(
-    rows
-      .filter((row) => Boolean(row.isDeleted) && (row.source === "native" || BUILTIN_FORM_SLUGS.has(row.slug)))
-      .map((row) => row.slug),
-  );
-  const normalizedRows = normalizeForms(rows.filter((row) => !row.isDeleted));
-  const rowBySlug = new Map(normalizedRows.map((row) => [row.slug, row]));
-  const builtInRows = BUILTIN_FORMS.filter((form) => !deletedNativeSlugs.has(form.slug)).map((form) => ({
-    ...form,
-    ...(rowBySlug.get(form.slug) ?? {}),
-    source: "native" as const,
-    routePath: rowBySlug.get(form.slug)?.routePath || form.routePath,
-  }));
-  const importedRows = normalizedRows.filter(
-    (row) => row.source === "imported" && !BUILTIN_FORM_SLUGS.has(row.slug)
-  );
-  return [...builtInRows, ...importedRows].sort((a, b) => {
-    const orderDiff = a.sortOrder - b.sortOrder;
-    return orderDiff || a.name.localeCompare(b.name);
-  });
-}
-
-async function loadAllFromDb(): Promise<AppFormDefinition[]> {
-  await connectMongo();
-  await syncBuiltInForms();
-  const rows = await FormDefinition.find({}).sort({ sortOrder: 1, name: 1 }).lean();
-  return withBuiltInForms(rows);
-}
-
 export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition[]> {
   try {
-    return await loadAllFromDb();
+    await connectMongo();
+    await syncBuiltInForms();
+    const rows = await FormDefinition.find({}).sort({ sortOrder: 1, name: 1 }).lean();
+    const rowBySlug = new Map(rows.map((row) => [row.slug, row]));
+    const builtIns = BUILTIN_FORMS.map((form) => mergeBuiltInWithOverride(form, rowBySlug.get(form.slug)))
+      .filter(Boolean)
+      .map((form) => withRuntime(form as Omit<AppFormDefinition, "runtime">));
+    const imported = rows
+      .filter((row) => row.source === "imported" && !row.isDeleted && !BUILTIN_FORM_SLUGS.has(row.slug))
+      .map(normalizeFormDefinitionRow)
+      .map(withRuntime);
+
+    return [...builtIns, ...imported].sort((a, b) => {
+      const orderDiff = a.sortOrder - b.sortOrder;
+      return orderDiff || a.name.localeCompare(b.name);
+    });
   } catch (error) {
     console.error("Admin form registry fallback:", error);
     return fallbackForms();
@@ -259,13 +279,21 @@ export async function getAllFormDefinitionsForAdmin(): Promise<AppFormDefinition
 
 export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefinition | null> {
   try {
-    const forms = await loadAllFromDb();
-    return forms.find((form) => form.slug === slug) ?? null;
+    await connectMongo();
+    const row = await FormDefinition.findOne({ slug }).lean();
+    const builtin = BUILTIN_FORM_BY_SLUG.get(slug);
+
+    if (builtin) {
+      const merged = mergeBuiltInWithOverride(builtin, row);
+      return merged ? withRuntime(merged) : null;
+    }
+
+    if (!row || row.isDeleted) return null;
+    return withRuntime(normalizeFormDefinitionRow(row));
   } catch (error) {
     console.error("Form registry lookup failed:", error);
-    const builtIn = BUILTIN_FORM_BY_SLUG.get(slug);
-    if (builtIn) return builtIn;
-    return fallbackForms().find((form) => form.slug === slug) ?? null;
+    const builtin = BUILTIN_FORM_BY_SLUG.get(slug);
+    return builtin ? withRuntime(builtin) : null;
   }
 }
 
@@ -281,30 +309,45 @@ export async function getCatalogForms(opts?: {
   const allowFallback = opts?.allowFallback ?? true;
 
   try {
-    const forms = await loadAllFromDb();
-    const filtered = forms.filter((form) => {
-      if (!includeDrafts && form.status !== "published") return false;
-      if (!includeAdminOnly && form.visibility === "admin") return false;
-      if (!includeUnavailable && (form.availability !== "available" || !form.isImplemented)) {
-        return false;
-      }
-      if (form.status === "archived") return false;
-      return true;
-    });
-    return sortCatalogForRequester(filtered);
+    await connectMongo();
+
+    const [builtinRows, importedRows] = await Promise.all([
+      FormDefinition.find({ slug: { $in: [...BUILTIN_FORM_SLUGS] } }).lean(),
+      FormDefinition.find({
+        source: "imported",
+        isDeleted: { $ne: true },
+        status: includeDrafts ? { $ne: "archived" } : "published",
+        ...(includeAdminOnly ? {} : { visibility: { $ne: "admin" } }),
+        ...(includeUnavailable ? {} : { availability: "available", isImplemented: true }),
+      })
+        .sort({ sortOrder: 1, name: 1 })
+        .lean(),
+    ]);
+
+    const builtInBySlug = new Map(builtinRows.map((row) => [row.slug, row]));
+    const builtIns = BUILTIN_FORMS.map((form) => mergeBuiltInWithOverride(form, builtInBySlug.get(form.slug)))
+      .filter(Boolean)
+      .map((form) => withRuntime(form as Omit<AppFormDefinition, "runtime">))
+      .filter((form) => shouldIncludeForCatalog(form, { includeAdminOnly, includeDrafts, includeUnavailable }));
+
+    const imported = importedRows
+      .map(normalizeFormDefinitionRow)
+      .map(withRuntime)
+      .filter((form) => shouldIncludeForCatalog(form, { includeAdminOnly, includeDrafts, includeUnavailable }));
+
+    return sortCatalog([...builtIns, ...imported]);
   } catch (error) {
     if (!allowFallback) throw error;
     console.error("Form registry fallback:", error);
-    const filtered = fallbackForms().filter(
-      (form) =>
-        form.status === "published" &&
-        (includeUnavailable || (form.availability === "available" && form.isImplemented))
+    return sortCatalog(
+      fallbackForms().filter((form) =>
+        shouldIncludeForCatalog(form, { includeAdminOnly, includeDrafts, includeUnavailable }),
+      ),
     );
-    return sortCatalogForRequester(filtered);
   }
 }
 
 export async function getNavbarForms(): Promise<AppFormDefinition[]> {
-  const forms = await getCatalogForms({ allowFallback: true });
-  return forms.filter((form) => form.showInNavbar && form.availability === "available" && form.isImplemented);
+  const forms = await getCatalogForms({ allowFallback: true, includeUnavailable: false, includeDrafts: false });
+  return forms.filter((form) => form.runtime.shouldShowInNavbar);
 }
