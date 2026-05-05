@@ -86,9 +86,9 @@ export default async function DashboardPage() {
               View all
             </Link>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {forms.length > 0 ? (
-              forms.slice(0, 4).map((form) => <FormCard key={form.slug} {...form} />)
+              forms.slice(0, 8).map((form) => <FormCard key={form.slug} {...form} />)
             ) : (
               <div className="app-panel p-8 text-center text-sm text-surface-muted sm:col-span-2">
                 No available request forms right now.
