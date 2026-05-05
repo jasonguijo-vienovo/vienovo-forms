@@ -44,6 +44,14 @@ export default async function AdminOverviewPage() {
   const responseConnectedCount = forms.filter(
     (form) => form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim()),
   ).length;
+  const formsNeedingResponseSetup = forms.filter(
+    (form) =>
+      form.status === "published" &&
+      form.visibility === "everyone" &&
+      form.availability === "available" &&
+      form.isImplemented &&
+      (!form.writeResponsesToSheet || !form.responseSpreadsheetId?.trim()),
+  ).length;
   const readiness = getSystemReadinessSnapshot();
 
   const nextSteps = buildNextSteps({
@@ -77,7 +85,7 @@ export default async function AdminOverviewPage() {
         cleanup.
       </AdminHelpPanel>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <AdminMetricCard
           label="Live forms"
           value={liveFormCount}
@@ -105,6 +113,12 @@ export default async function AdminOverviewPage() {
           value={responseConnectedCount}
           tone={responseConnectedCount > 0 ? "ok" : "warn"}
           hint="Writing submissions to Sheets"
+        />
+        <AdminMetricCard
+          label="Live forms needing setup"
+          value={formsNeedingResponseSetup}
+          tone={formsNeedingResponseSetup > 0 ? "warn" : "ok"}
+          hint="Live forms missing response-sheet setup"
         />
       </div>
       <div className="mt-4">
