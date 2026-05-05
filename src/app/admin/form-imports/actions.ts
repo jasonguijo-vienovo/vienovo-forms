@@ -1,19 +1,26 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { writeAuditLog } from "@/lib/audit";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
-import { writeAuditLog } from "@/lib/audit";
-import { BUILTIN_FORMS } from "@/lib/form-definitions";
+import {
+  createImportedRegistryEntry,
+  deleteImportedForm,
+  publishImportedForm,
+  saveImportDraft,
+  slugifyFormId,
+  updateImportConfig,
+  updateImportStatus,
+} from "@/lib/forms/import-registry-service";
 import { syncImportedLookupsForImport } from "@/lib/imported-lookups";
 import { parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
-import { FormDefinition } from "@/models/FormDefinition";
 
-const DEFAULT_RESPONSE_SPREADSHEET_ID =
-  process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() || process.env.GOOGLE_SHEETS_MASTER_ID?.trim() || "";
+const FORM_IMPORTS_PATH = "/admin/form-imports";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -36,36 +43,17 @@ async function readMultipleTextInput(
   formData: FormData,
   fileKey: string,
   fallbackSingleFileKey: string,
-  textKey: string
+  textKey: string,
 ) {
   const files = formData.getAll(fileKey).filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (files.length > 0) {
-    const chunks = await Promise.all(files.map(async (file) => `\n\n/* FILE: ${file.name} */\n${await file.text()}`));
+    const chunks = await Promise.all(
+      files.map(async (file) => `\n\n/* FILE: ${file.name} */\n${await file.text()}`),
+    );
     return chunks.join("\n").trim();
   }
 
   return readTextInput(formData, fallbackSingleFileKey, textKey);
-}
-
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
-function summarize(htmlSource: string, appsScriptSource: string) {
-  const html = htmlSource || "";
-  const gs = appsScriptSource || "";
-  const matchCount = (source: string, regex: RegExp) => source.match(regex)?.length ?? 0;
-
-  return {
-    inputCount: matchCount(html, /<input\b/gi),
-    selectCount: matchCount(html, /<select\b/gi),
-    textareaCount: matchCount(html, /<textarea\b/gi),
-    scriptFunctionCount: matchCount(gs, /\bfunction\s+[A-Za-z0-9_]+\s*\(/g),
-  };
 }
 
 function bindingsFromFormData(formData: FormData) {
@@ -89,52 +77,13 @@ function messageFromError(error: unknown) {
   return "The import could not be saved. Please try again.";
 }
 
-const RESERVED_NATIVE_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
-
-async function ensureImportedRegistryEntry(imported: {
-  _id: unknown;
-  slug: string;
-  name: string;
-  notes?: string;
-  writeResponsesToSheet?: boolean;
-  responseSheetName?: string;
-  spreadsheetId?: string;
-}) {
-  if (RESERVED_NATIVE_SLUGS.has(imported.slug)) {
-    throw new Error(
-      `The slug "${imported.slug}" is reserved by an existing built-in form. Create a new import with a different slug.`
-    );
-  }
-
-  await FormDefinition.updateOne(
-    { slug: imported.slug },
-    {
-      $set: {
-        slug: imported.slug,
-        name: imported.name,
-        routePath: `/forms/${imported.slug}`,
-        source: "imported",
-        importSourceId: imported._id,
-        writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
-        responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || imported.spreadsheetId || "",
-        responseSheetName: imported.responseSheetName || `${imported.name} Responses`,
-        notes: imported.notes || "",
-      },
-      $setOnInsert: {
-        description: "Imported legacy form draft. Review and implement before publishing.",
-        status: "draft",
-        visibility: "admin",
-        availability: "coming-soon",
-        isImplemented: true,
-        showInNavbar: false,
-        sortOrder: 1000,
-      },
-    },
-    { upsert: true }
-  );
+function revalidateImportSurfaces() {
+  revalidatePath(FORM_IMPORTS_PATH);
+  revalidatePath("/admin/forms");
+  revalidatePath("/admin/notifications");
+  revalidatePath("/dashboard");
+  revalidatePath("/forms");
 }
-
-const FORM_IMPORTS_PATH = "/admin/form-imports";
 
 export async function createFormImport(formData: FormData) {
   try {
@@ -143,13 +92,7 @@ export async function createFormImport(formData: FormData) {
 
     const name = s(formData, "name");
     if (!name) throw new Error("Form name is required.");
-    const requestedSlug = slugify(s(formData, "slug")) || slugify(name);
-    if (RESERVED_NATIVE_SLUGS.has(requestedSlug)) {
-      throw new Error(
-        `The slug "${requestedSlug}" is reserved by an existing built-in form. Use a different slug.`
-      );
-    }
-
+    const requestedSlug = slugifyFormId(s(formData, "slug")) || slugifyFormId(name);
     const htmlSource = await readMultipleTextInput(formData, "htmlFiles", "htmlFile", "htmlSource");
     const appsScriptSource = await readMultipleTextInput(formData, "gsFiles", "gsFile", "appsScriptSource");
 
@@ -160,10 +103,9 @@ export async function createFormImport(formData: FormData) {
       throw new Error("Provide the code.gs source or upload the file.");
     }
 
-    const payload = {
+    const result = await saveImportDraft({
       name,
       slug: requestedSlug,
-      sourceType: "google-apps-script",
       spreadsheetId: s(formData, "spreadsheetId"),
       spreadsheetBindings: bindingsFromFormData(formData),
       writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
@@ -171,79 +113,87 @@ export async function createFormImport(formData: FormData) {
       htmlSource,
       appsScriptSource,
       notes: s(formData, "notes"),
-      status: "draft" as const,
       createdByEmail: email,
       createdByName: session.user.name ?? email,
-      summary: summarize(htmlSource, appsScriptSource),
-    };
-
-    const existing = await FormImport.findOne({ slug: requestedSlug }).lean();
-    const created = await FormImport.findOneAndUpdate(
-      { slug: requestedSlug },
-      { $set: payload },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean();
-    if (!created) {
-      throw new Error("Failed to save the import draft.");
-    }
-
-    // Clean up any older duplicate drafts so the importer has one source of truth per slug.
-    await FormImport.deleteMany({ slug: requestedSlug, _id: { $ne: created._id } });
-
-    await ensureImportedRegistryEntry(created);
-    await setFlashToast({
-      tone: "success",
-      message: existing ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
     });
 
-    revalidatePath(FORM_IMPORTS_PATH);
-    revalidatePath("/admin/forms");
-    revalidatePath("/admin/notifications");
+    await setFlashToast({
+      tone: "success",
+      message: result.replaced ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "save_form_import",
+      targetType: "form-import",
+      targetId: String(result.importRecord._id),
+      correlationId: randomUUID(),
+      after: {
+        slug: result.importRecord.slug,
+        sourceVersion: result.importRecord.sourceVersion,
+        readinessState: result.diagnostics.readinessState,
+      },
+      details: {
+        replaced: result.replaced,
+        blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+        warningCount: result.diagnostics.parseDiagnostics.warningCount,
+      },
+    });
   } catch (error) {
     console.error("createFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
-    revalidatePath(FORM_IMPORTS_PATH);
   }
 
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function updateFormImportConfig(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
   if (!id) return;
-  const writeResponsesToSheet = bool(formData, "writeResponsesToSheet");
-  const responseSheetName = s(formData, "responseSheetName");
-  const spreadsheetId = s(formData, "spreadsheetId");
 
-  await FormImport.updateOne(
-    { _id: id },
-    {
-      $set: {
-        spreadsheetId,
-        spreadsheetBindings: bindingsFromFormData(formData),
-        writeResponsesToSheet,
-        responseSheetName,
-        notes: s(formData, "notes"),
-      },
-    }
-  );
-  await FormDefinition.updateOne(
-    { importSourceId: id },
-    {
-      $set: {
-        writeResponsesToSheet,
-        responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || spreadsheetId,
-        responseSheetName,
-      },
-    }
-  );
+  const result = await updateImportConfig({
+    id,
+    spreadsheetId: s(formData, "spreadsheetId"),
+    spreadsheetBindings: bindingsFromFormData(formData),
+    writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+    responseSheetName: s(formData, "responseSheetName"),
+    notes: s(formData, "notes"),
+  });
+
   await setFlashToast({ tone: "success", message: "Import settings saved." });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "update_form_import_config",
+    targetType: "form-import",
+    targetId: id,
+    correlationId: randomUUID(),
+    before: result.before
+      ? {
+          spreadsheetId: result.before.spreadsheetId,
+          writeResponsesToSheet: result.before.writeResponsesToSheet,
+          responseSheetName: result.before.responseSheetName,
+          notes: result.before.notes,
+        }
+      : null,
+    after: result.after
+      ? {
+          spreadsheetId: result.after.spreadsheetId,
+          writeResponsesToSheet: result.after.writeResponsesToSheet,
+          responseSheetName: result.after.responseSheetName,
+          notes: result.after.notes,
+          readinessState: result.after.readinessState,
+        }
+      : null,
+    details: {
+      blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+      warningCount: result.diagnostics.parseDiagnostics.warningCount,
+    },
+  });
 
-  revalidatePath(FORM_IMPORTS_PATH);
-  revalidatePath("/admin/notifications");
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
@@ -266,111 +216,124 @@ export async function publishFormImport(formData: FormData) {
     redirect(FORM_IMPORTS_PATH);
   }
 
-  const imported = await FormImport.findByIdAndUpdate(
-    id,
-    { $set: { status: "implemented" } },
-    { new: true }
-  ).lean();
-  if (!imported) return;
-
-  await ensureImportedRegistryEntry(imported);
-
-  await FormDefinition.updateOne(
-    { slug: imported.slug },
-    {
-      $set: {
-        name: imported.name,
-        description:
-          imported.notes?.trim() ||
-          "Imported legacy form, now published for end users through the in-app runtime.",
-        status: "published",
-        visibility: "everyone",
-        availability: "available",
-        isImplemented: true,
-        writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
-        responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || imported.spreadsheetId || "",
-        responseSheetName: imported.responseSheetName || `${imported.name} Responses`,
-      },
-    }
-  );
-  await setFlashToast({ tone: "success", message: `${imported.name} is now published for users.` });
+  const result = await publishImportedForm({ id, actorEmail: email });
+  await setFlashToast({
+    tone: "success",
+    message: `${result.importRecord.name} is now published for users.`,
+  });
   await writeAuditLog({
     actorEmail: email,
     action: "publish_form_import",
     targetType: "form-import",
-    targetId: String(imported._id),
-    details: { slug: imported.slug, name: imported.name },
+    targetId: String(result.importRecord._id),
+    correlationId: randomUUID(),
+    before: result.definitionBefore
+      ? {
+          status: result.definitionBefore.status,
+          visibility: result.definitionBefore.visibility,
+          availability: result.definitionBefore.availability,
+          isImplemented: result.definitionBefore.isImplemented,
+        }
+      : null,
+    after: result.definitionAfter
+      ? {
+          status: result.definitionAfter.status,
+          visibility: result.definitionAfter.visibility,
+          availability: result.definitionAfter.availability,
+          isImplemented: result.definitionAfter.isImplemented,
+        }
+      : null,
+    details: {
+      slug: result.importRecord.slug,
+      name: result.importRecord.name,
+      readinessState: result.diagnostics.readinessState,
+    },
   });
 
-  revalidatePath(FORM_IMPORTS_PATH);
-  revalidatePath("/admin/forms");
-  revalidatePath("/admin/notifications");
-  revalidatePath("/dashboard");
-  revalidatePath("/forms");
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function createMissingRegistryEntry(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
   if (!id) return;
 
-  const imported = await FormImport.findById(id).lean();
-  if (!imported) return;
-
-  await ensureImportedRegistryEntry(imported);
+  const result = await createImportedRegistryEntry({ id });
   await setFlashToast({ tone: "success", message: "Registry entry created from import draft." });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "create_import_registry_entry",
+    targetType: "form-import",
+    targetId: id,
+    correlationId: randomUUID(),
+    after: result.definition
+      ? {
+          slug: result.definition.slug,
+          status: result.definition.status,
+          visibility: result.definition.visibility,
+          availability: result.definition.availability,
+        }
+      : null,
+    details: {
+      importSlug: result.importRecord.slug,
+      importName: result.importRecord.name,
+    },
+  });
 
-  revalidatePath(FORM_IMPORTS_PATH);
-  revalidatePath("/admin/forms");
-  revalidatePath("/admin/notifications");
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function updateFormImportStatus(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
   const status = s(formData, "status") as FormImportStatus;
   if (!id || !FORM_IMPORT_STATUSES.includes(status)) return;
 
-  await FormImport.updateOne({ _id: id }, { $set: { status } });
-  if (status === "implemented") {
-    await FormDefinition.updateOne({ importSourceId: id }, { $set: { isImplemented: true } });
-  }
+  const result = await updateImportStatus({ id, status });
   await setFlashToast({ tone: "success", message: `Import status saved as ${status}.` });
-  revalidatePath(FORM_IMPORTS_PATH);
-  revalidatePath("/admin/forms");
-  revalidatePath("/admin/notifications");
+  await writeAuditLog({
+    actorEmail: email,
+    action: "update_form_import_status",
+    targetType: "form-import",
+    targetId: id,
+    correlationId: randomUUID(),
+    before: result.before ? { status: result.before.status } : null,
+    after: result.after ? { status: result.after.status } : null,
+  });
+
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function deleteFormImport(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
   if (!id) return;
 
-  const imported = await FormImport.findById(id).lean();
-  if (!imported) return;
+  const result = await deleteImportedForm({ id });
+  await setFlashToast({ tone: "success", message: `${result.importRecord.name} import was deleted.` });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "delete_form_import",
+    targetType: "form-import",
+    targetId: id,
+    correlationId: randomUUID(),
+    before: {
+      slug: result.importRecord.slug,
+      name: result.importRecord.name,
+      status: result.importRecord.status,
+    },
+  });
 
-  await Promise.all([
-    FormImport.deleteOne({ _id: id }),
-    FormDefinition.deleteMany({
-      $or: [{ importSourceId: id }, { source: "imported", slug: imported.slug }],
-    }),
-  ]);
-  await setFlashToast({ tone: "success", message: `${imported.name} import was deleted.` });
-
-  revalidatePath(FORM_IMPORTS_PATH);
-  revalidatePath("/admin/forms");
-  revalidatePath("/admin/notifications");
-  revalidatePath("/dashboard");
-  revalidatePath("/forms");
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
@@ -404,6 +367,7 @@ export async function syncImportedDropdowns(formData: FormData) {
     action: "sync_imported_dropdowns",
     targetType: "form-import",
     targetId: id,
+    correlationId: randomUUID(),
     details: {
       importName: result.importName,
       categoriesSynced: result.categoriesSynced,

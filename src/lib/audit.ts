@@ -5,6 +5,11 @@ export async function writeAuditLog(input: {
   action: string;
   targetType: string;
   targetId?: string;
+  correlationId?: string;
+  outcome?: string;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  context?: Record<string, unknown>;
   details?: Record<string, unknown>;
 }) {
   try {
@@ -13,6 +18,11 @@ export async function writeAuditLog(input: {
       action: input.action,
       targetType: input.targetType,
       targetId: input.targetId ?? "",
+      correlationId: input.correlationId ?? "",
+      outcome: input.outcome ?? "success",
+      before: input.before ?? null,
+      after: input.after ?? null,
+      context: input.context ?? {},
       details: input.details ?? {},
     });
   } catch (error) {

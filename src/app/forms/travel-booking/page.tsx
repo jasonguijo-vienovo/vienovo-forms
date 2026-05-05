@@ -7,6 +7,7 @@ import { Lookup } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { getEmployeeByEmail } from "@/lib/employee";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { TravelBookingForm } from "./form";
 import { submitTravelBooking } from "./actions";
 
@@ -22,6 +23,8 @@ export default async function TravelBookingPage({
   if (!definition) redirect("/forms");
   const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
+  const access = getFormUserAccess(definition, { isAdmin, requesterPreview });
+  if (!access.canOpen) redirect("/dashboard");
 
   await connectMongo();
 

@@ -8,6 +8,7 @@ import { Approver } from "@/models/Approver";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { getEmployeeByEmail } from "@/lib/employee";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { ReimbursementForm } from "./form";
 import { submitReimbursement } from "./actions";
 import { RequestModel } from "@/models/Request";
@@ -35,6 +36,8 @@ export default async function ReimbursementPage({
   if (!definition) redirect("/forms");
   const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
+  const access = getFormUserAccess(definition, { isAdmin, requesterPreview });
+  if (!access.canOpen) redirect("/dashboard");
 
   await connectMongo();
 

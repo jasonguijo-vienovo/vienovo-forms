@@ -3,6 +3,7 @@ import { Navbar } from "@/components/navbar";
 import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { hydrateImportedFormRuntime } from "@/lib/imported-forms";
 import { safeAuth } from "@/lib/safe-auth";
 import { FormImport } from "@/models/FormImport";
@@ -27,9 +28,8 @@ export default async function ImportedFormPage({
   const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
   const showAdminDiagnostics = isAdmin && !requesterPreview;
-  if (definition.visibility === "admin" && !isAdmin) redirect("/dashboard");
-  if (definition.status !== "published" && !isAdmin) redirect("/dashboard");
-  if ((definition.availability !== "available" || !definition.isImplemented) && !isAdmin) {
+  const access = getFormUserAccess(definition, { isAdmin, requesterPreview });
+  if (!access.canOpen) {
     redirect("/dashboard");
   }
 
@@ -80,12 +80,24 @@ export default async function ImportedFormPage({
           </div>
 
           <div className="p-6 space-y-5">
-            {showAdminDiagnostics && runtime.warnings.length > 0 && (
+            {showAdminDiagnostics &&
+            ((imported.parseDiagnostics?.warnings?.length ?? 0) > 0 || runtime.warnings.length > 0) && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold mb-1">Things to review</p>
                 <ul className="space-y-1 text-xs list-disc pl-4">
-                  {runtime.warnings.map((warning) => (
+                  {[...(imported.parseDiagnostics?.warnings ?? []), ...runtime.warnings].map((warning) => (
                     <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {showAdminDiagnostics && (imported.parseDiagnostics?.blockers?.length ?? 0) > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                <p className="font-semibold mb-1">Publish blockers</p>
+                <ul className="space-y-1 text-xs list-disc pl-4">
+                  {(imported.parseDiagnostics?.blockers ?? []).map((blocker) => (
+                    <li key={blocker}>{blocker}</li>
                   ))}
                 </ul>
               </div>

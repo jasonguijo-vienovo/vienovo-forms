@@ -6,6 +6,11 @@ const auditLogSchema = new Schema(
     action: { type: String, required: true, trim: true, index: true },
     targetType: { type: String, required: true, trim: true },
     targetId: { type: String, default: "", trim: true },
+    correlationId: { type: String, default: "", trim: true, index: true },
+    outcome: { type: String, default: "success", trim: true },
+    before: { type: Schema.Types.Mixed, default: null },
+    after: { type: Schema.Types.Mixed, default: null },
+    context: { type: Schema.Types.Mixed, default: {} },
     details: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import {
   errorMessage,
   fail,
@@ -40,6 +41,10 @@ export async function submitTravelBooking(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("travel-booking");
+    if (!definition || !getFormUserAccess(definition, { isAdmin: false }).canSubmit) {
+      throw new Error("This form is not available right now.");
+    }
 
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
@@ -225,16 +230,15 @@ export async function submitTravelBooking(
     );
 
     try {
-      const definition = await getFormDefinitionBySlug("travel-booking");
-      const spreadsheetId =
-        definition?.responseSpreadsheetId?.trim() ||
+      const responseSpreadsheetId =
+        definition.responseSpreadsheetId?.trim() ||
         process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
         process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
         "";
-      const sheetTitle = definition?.responseSheetName?.trim() || "Travel Booking Responses";
-      if (definition?.writeResponsesToSheet && spreadsheetId) {
+      const sheetTitle = definition.responseSheetName?.trim() || "Travel Booking Responses";
+      if (definition.writeResponsesToSheet && responseSpreadsheetId) {
         await appendResponseSheetRow({
-          spreadsheetId,
+          spreadsheetId: responseSpreadsheetId,
           sheetTitle,
           rowValues: buildResponseSheetRows({
             referenceNo,

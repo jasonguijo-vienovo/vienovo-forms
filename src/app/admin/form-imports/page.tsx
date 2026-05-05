@@ -13,7 +13,6 @@ import { AdminHelpPanel, AdminMetricCard, AdminPageHeader, AdminSection } from "
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
-import { parseImportedFormHtml, type ImportedFormRuntime } from "@/lib/imported-forms";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
@@ -63,35 +62,6 @@ export default async function FormImportsPage() {
     current.valueCount += 1;
     syncedStatsBySlugKey.set(slugKey, current);
   }
-
-  const previewEntries: Array<[string, ImportedFormRuntime]> = imports.map((item) => {
-    try {
-      const runtime = parseImportedFormHtml(item.htmlSource ?? "");
-      return [
-        item.slug,
-        {
-          ...runtime,
-          title: runtime.title || item.name,
-          spreadsheetBindings: item.spreadsheetBindings ?? {},
-        },
-      ];
-    } catch (error) {
-      return [
-        item.slug,
-        {
-          title: item.name,
-          description: "",
-          fields: [],
-          warnings: [error instanceof Error ? error.message : "Failed to parse import source."],
-          sheetNames: [],
-          spreadsheetBindings: item.spreadsheetBindings ?? {},
-          autoDetectedBindings: {},
-          hydratedHtml: "",
-        },
-      ];
-    }
-  });
-  const runtimePreviewBySlug = new Map(previewEntries);
 
   const readyForReview = imports.filter((item) => definitionBySlug.has(item.slug)).length;
   const published = definitions.filter(
@@ -295,7 +265,12 @@ export default async function FormImportsPage() {
         ) : (
           <div className="space-y-4">
             {imports.map((item) => {
-              const runtime = runtimePreviewBySlug.get(item.slug);
+              const diagnostics = item.parseDiagnostics ?? {
+                parsedFieldCount: 0,
+                warnings: [],
+                blockers: [],
+                fieldNames: [],
+              };
               const definition = definitionBySlug.get(item.slug);
               const slugKey = normalizeLookupKey(item.slug);
               const syncedStats = syncedStatsBySlugKey.get(slugKey) ?? {
@@ -321,6 +296,9 @@ export default async function FormImportsPage() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-lg font-semibold text-gray-800">{item.name}</h3>
                         <Badge>{item.status}</Badge>
+                        <Badge tone={item.readinessState === "ready" ? "ok" : item.readinessState === "blocked" ? "warn" : "brand"}>
+                          {item.readinessState}
+                        </Badge>
                         {isPublished ? <Badge tone="ok">live</Badge> : <Badge tone="warn">internal only</Badge>}
                       </div>
                       <p className="text-sm text-gray-500 mt-1">
@@ -374,7 +352,7 @@ export default async function FormImportsPage() {
                       done={!hasSpreadsheet || hasSyncedDropdowns}
                       label={hasSpreadsheet ? "Dropdowns updated" : "No spreadsheet linked"}
                     />
-                    <ProgressStep done={Boolean(runtime?.fields.length)} label="Preview ready" />
+                    <ProgressStep done={Boolean(diagnostics.parsedFieldCount)} label="Preview ready" />
                     <ProgressStep done={Boolean(isPublished)} label="Published" />
                   </div>
 
@@ -392,15 +370,26 @@ export default async function FormImportsPage() {
                     hasRegistry={hasRegistry}
                     hasSpreadsheet={hasSpreadsheet}
                     hasSyncedDropdowns={hasSyncedDropdowns}
-                    previewReady={Boolean(runtime?.fields.length)}
+                    previewReady={Boolean(diagnostics.parsedFieldCount)}
                     isPublished={Boolean(isPublished)}
                   />
 
-                  {runtime?.warnings.length ? (
+                  {(diagnostics.blockers?.length ?? 0) > 0 ? (
+                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                      <p className="font-semibold mb-1">Publish blockers</p>
+                      <ul className="list-disc pl-5 space-y-1 text-xs">
+                        {(diagnostics.blockers ?? []).map((blocker) => (
+                          <li key={blocker}>{blocker}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {(diagnostics.warnings?.length ?? 0) > 0 ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       <p className="font-semibold mb-1">Needs review</p>
                       <ul className="list-disc pl-5 space-y-1 text-xs">
-                        {runtime.warnings.map((warning) => (
+                        {(diagnostics.warnings ?? []).map((warning) => (
                           <li key={warning}>{warning}</li>
                         ))}
                       </ul>
@@ -525,15 +514,11 @@ export default async function FormImportsPage() {
                         </p>
                         <ScanBlock
                           title="Explicit bindings"
-                          value={runtime?.spreadsheetBindings ?? {}}
+                          value={item.spreadsheetBindings ?? {}}
                         />
                         <ScanBlock
                           title="Parsed field names"
-                          value={runtime?.fields.map((field) => ({
-                            name: field.name,
-                            label: field.label,
-                            type: field.type,
-                          })) ?? []}
+                          value={diagnostics.fieldNames ?? []}
                         />
                         <p className="text-xs text-gray-500">
                           Sheet copy:{" "}

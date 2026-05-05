@@ -46,6 +46,15 @@ const formDefinitionSchema = new Schema(
 );
 
 formDefinitionSchema.index({ status: 1, visibility: 1, sortOrder: 1 });
+formDefinitionSchema.index({
+  visibility: 1,
+  availability: 1,
+  status: 1,
+  isImplemented: 1,
+  showInNavbar: 1,
+  sortOrder: 1,
+});
+formDefinitionSchema.index({ source: 1, status: 1, sortOrder: 1 });
 
 export type FormDefinitionDoc = InferSchemaType<typeof formDefinitionSchema> & {
   _id: mongoose.Types.ObjectId;

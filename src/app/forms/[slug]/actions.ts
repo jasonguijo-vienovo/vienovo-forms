@@ -6,6 +6,7 @@ import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
@@ -121,14 +122,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     }
 
     const isAdmin = await isAdminUser(email);
-    if (definition.visibility === "admin" && !isAdmin) {
-      throw new Error("This form is not available to you.");
-    }
-    if (definition.status !== "published" && !isAdmin) {
-      throw new Error("This form is not published yet.");
-    }
-    if ((definition.availability !== "available" || !definition.isImplemented) && !isAdmin) {
-      throw new Error("This form is not available yet.");
+    const access = getFormUserAccess(definition, { isAdmin });
+    if (!access.canSubmit) {
+      throw new Error(access.blockerMessage || "This form is not available right now.");
     }
 
     const imported = await FormImport.findOne({ slug }).lean();

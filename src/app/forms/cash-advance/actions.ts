@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import {
   errorMessage,
   fail,
@@ -39,6 +40,10 @@ export async function submitCashAdvance(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("cash-advance");
+    if (!definition || !getFormUserAccess(definition, { isAdmin: false }).canSubmit) {
+      throw new Error("This form is not available right now.");
+    }
 
     const approverId = s(formData, "approverId");
     const [approver, processor] = await Promise.all([

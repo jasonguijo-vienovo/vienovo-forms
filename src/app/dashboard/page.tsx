@@ -17,6 +17,7 @@ import { Navbar } from "@/components/navbar";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
 import { getCatalogForms } from "@/lib/form-definitions";
+import type { FormRuntimeState } from "@/lib/forms/runtime-state";
 import { safeAuth } from "@/lib/safe-auth";
 import { RequestModel } from "@/models/Request";
 import { deleteDashboardRequest } from "./actions";
@@ -144,6 +145,7 @@ function FormCard({
   availability,
   isImplemented,
   routePath,
+  runtime,
 }: {
   slug: string;
   name: string;
@@ -152,8 +154,9 @@ function FormCard({
   availability: "available" | "coming-soon";
   isImplemented: boolean;
   routePath: string;
+  runtime: FormRuntimeState;
 }) {
-  const available = status === "published" && availability === "available" && isImplemented;
+  const available = runtime.requesterCanOpen;
   const Icon = formIcon(slug);
   const badgeText = status !== "published" ? "Pending" : "Soon";
 
