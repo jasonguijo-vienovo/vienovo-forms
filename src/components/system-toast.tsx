@@ -13,7 +13,7 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 4200);
+    const timer = window.setTimeout(() => setToast(null), 5000);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -25,7 +25,7 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
       : "border-emerald-200 bg-emerald-50 text-emerald-900";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-[100] flex justify-center px-4">
+    <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center px-4">
       <div
         className={`pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-sm ${toneClass}`}
       >
