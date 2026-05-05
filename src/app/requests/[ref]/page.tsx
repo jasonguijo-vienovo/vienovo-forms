@@ -4,7 +4,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
 import { RequestModel } from "@/models/Request";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import {
   cashAdvanceFieldMap,
   importedFieldMap,
@@ -47,7 +47,7 @@ export default async function RequestDetailPage({
   const submittedByName = doc.submittedBy?.name ?? "";
   const isOwner = submittedByEmail === userEmail;
   const isApprover = doc.approvalChain.some((s) => s.approverEmail === userEmail);
-  const canView = isOwner || isApprover || isAdminEmail(userEmail);
+  const canView = isOwner || isApprover || (await isAdminUser(userEmail));
   if (!canView) redirect("/dashboard");
 
   const currentStep = doc.approvalChain.find((s) => s.step === doc.currentStep) ?? null;

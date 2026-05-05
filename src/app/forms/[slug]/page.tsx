@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { hydrateImportedFormRuntime } from "@/lib/imported-forms";
@@ -24,7 +24,7 @@ export default async function ImportedFormPage({
   const definition = await getFormDefinitionBySlug(slug);
   if (!definition || definition.source !== "imported") notFound();
 
-  const isAdmin = isAdminEmail(session.user.email);
+  const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
   const showAdminDiagnostics = isAdmin && !requesterPreview;
   if (definition.visibility === "admin" && !isAdmin) redirect("/dashboard");

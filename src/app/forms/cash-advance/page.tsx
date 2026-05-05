@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
@@ -28,7 +28,7 @@ export default async function CashAdvancePage({
   const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
-  const isAdmin = isAdminEmail(session.user.email);
+  const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
 
   await connectMongo();

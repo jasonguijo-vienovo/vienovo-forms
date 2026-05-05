@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BellRing, RotateCcw, Save, Send } from "lucide-react";
+import { AdminSystemReadiness } from "@/components/admin-system-readiness";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -12,6 +13,7 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
+import type { SystemReadinessSnapshot } from "@/lib/system-readiness";
 import { resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
 
 type Flow = {
@@ -28,7 +30,13 @@ type Flow = {
 
 type ViewFilter = "all" | "active" | "off";
 
-export function NotificationsClient({ flows }: { flows: Flow[] }) {
+export function NotificationsClient({
+  flows,
+  readiness,
+}: {
+  flows: Flow[];
+  readiness: SystemReadinessSnapshot;
+}) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
 
@@ -54,6 +62,11 @@ export function NotificationsClient({ flows }: { flows: Flow[] }) {
         Default recipients still come from the form logic. This page only turns those emails on or off
         and lets you add extra recipients for each form.
       </AdminHelpPanel>
+
+      <AdminSystemReadiness
+        readiness={readiness}
+        description="Open this to see whether SMTP, Google integrations, auth, and the current database connection are ready before testing notification flow."
+      />
 
       <AdminSection
         title="SMTP test email"
@@ -191,7 +204,7 @@ export function NotificationsClient({ flows }: { flows: Flow[] }) {
                         idleLabel={
                           <span className="inline-flex items-center gap-2">
                             <Save className="h-4 w-4" />
-                            <span>Save notification settings</span>
+                            <span>Save notification flow</span>
                           </span>
                         }
                         pendingLabel="Saving..."

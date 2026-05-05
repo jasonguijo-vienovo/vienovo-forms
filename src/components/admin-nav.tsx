@@ -9,8 +9,8 @@ import {
   FileInput,
   GitBranch,
   Grid2X2,
+  KeyRound,
   ListChecks,
-  Settings,
   ShieldCheck,
   UserCircle,
   UsersRound,
@@ -24,6 +24,7 @@ const primaryLinks = [
   { href: "/admin/lookups", label: "Dropdowns", icon: ListChecks },
   { href: "/admin/approvers", label: "Approvers", icon: ShieldCheck },
   { href: "/admin/processors", label: "Processors", icon: UsersRound },
+  { href: "/admin/user-roles", label: "User roles", icon: KeyRound },
   { href: "/admin/notifications", label: "Notification flow", icon: BellRing },
   { href: "/admin/reimbursement-routing", label: "Reimbursement routing", icon: GitBranch },
   { href: "/admin/requests", label: "Admin queue", icon: ClipboardList },
@@ -31,7 +32,6 @@ const primaryLinks = [
 
 const secondaryLinks = [
   { href: "/dashboard", label: "Requester mode", icon: UserCircle },
-  { href: "/admin/notifications", label: "Settings", icon: Settings },
 ] as const;
 
 function isActive(pathname: string, href: string, exact?: boolean) {
