@@ -191,13 +191,6 @@ export function ApproversClient({
                             </label>
                           ))}
                         </div>
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Edit roles"
-                          pendingLabel="Saving..."
-                          disabled={editingId !== approver._id}
-                          className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
-                        />
                       </form>
                     </td>
                     <td className="px-4 py-4">
