@@ -41,6 +41,9 @@ export default async function AdminOverviewPage() {
       form.availability === "available" &&
       form.isImplemented,
   ).length;
+  const responseConnectedCount = forms.filter(
+    (form) => form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim()),
+  ).length;
   const readiness = getSystemReadinessSnapshot();
 
   const nextSteps = buildNextSteps({
@@ -96,6 +99,12 @@ export default async function AdminOverviewPage() {
           value={approverNeedsReview}
           tone={approverNeedsReview > 0 ? "warn" : "ok"}
           hint="Emails that likely need fixing"
+        />
+        <AdminMetricCard
+          label="Forms with response tabs"
+          value={responseConnectedCount}
+          tone={responseConnectedCount > 0 ? "ok" : "warn"}
+          hint="Writing submissions to Sheets"
         />
       </div>
       <div className="mt-4">
@@ -172,6 +181,54 @@ export default async function AdminOverviewPage() {
             title="Notification flow"
             description="Turn per-form emails on or off and add extra recipients without changing routing."
           />
+        </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Response tab connections"
+        description="Each form can copy submissions to one Google Sheets tab. This helps us scale as more forms are added."
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {forms.map((form) => {
+            const connected = form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim());
+            return (
+              <div key={form.slug} className="border border-surface-border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-surface-text">{form.name}</p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      Form ID: <code>{form.slug}</code>
+                    </p>
+                  </div>
+                  <span
+                    className={
+                      connected
+                        ? "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200"
+                        : "inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"
+                    }
+                  >
+                    {connected ? "Connected" : "Needs setup"}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-surface-muted">
+                  <p>
+                    Export:{" "}
+                    <strong className="text-surface-text">
+                      {form.writeResponsesToSheet ? "Enabled" : "Off"}
+                    </strong>
+                  </p>
+                  <p>
+                    Spreadsheet:{" "}
+                    <code>{form.responseSpreadsheetId?.trim() || "not set"}</code>
+                  </p>
+                  <p>
+                    Tab:{" "}
+                    <code>{form.responseSheetName?.trim() || `${form.name} Responses`}</code>
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </AdminSection>
 

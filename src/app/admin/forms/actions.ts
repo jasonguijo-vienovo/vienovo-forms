@@ -63,6 +63,9 @@ export async function updateFormDefinition(formData: FormData) {
         availability,
         showInNavbar: bool(formData, "showInNavbar"),
         isImplemented: bool(formData, "isImplemented"),
+        writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+        responseSpreadsheetId: s(formData, "responseSpreadsheetId"),
+        responseSheetName: s(formData, "responseSheetName"),
       },
     }
   );

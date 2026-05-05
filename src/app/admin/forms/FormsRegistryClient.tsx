@@ -27,6 +27,9 @@ type RegistryForm = {
   availability: string;
   isImplemented: boolean;
   showInNavbar: boolean;
+  writeResponsesToSheet: boolean;
+  responseSpreadsheetId: string;
+  responseSheetName: string;
   notes: string;
 };
 
@@ -210,6 +213,10 @@ export function FormsRegistryClient({
                     <QuickMetric label="Publishing state" value={humanizeStatus(form.status)} />
                     <QuickMetric label="Can users open it?" value={form.availability === "available" ? "Yes" : "No"} />
                     <QuickMetric label="Top menu" value={form.showInNavbar ? "Shown" : "Hidden"} />
+                    <QuickMetric
+                      label="Responses to Sheets"
+                      value={form.writeResponsesToSheet ? "Enabled" : "Off"}
+                    />
                   </div>
 
                   <details className="mt-4">
@@ -292,6 +299,41 @@ export function FormsRegistryClient({
                             <span>Show this in the quick request menu</span>
                           </label>
                         </div>
+                      </div>
+
+                      <div className="border border-surface-border bg-slate-50 p-4">
+                        <p className="text-sm font-semibold text-surface-text">Response export</p>
+                        <p className="mt-1 text-xs text-surface-muted">
+                          Each form can copy submitted responses into one Google Sheets tab. This is how we keep
+                          one response tab per form as more forms are added.
+                        </p>
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <Field label="Response spreadsheet ID">
+                            <input
+                              name="responseSpreadsheetId"
+                              defaultValue={form.responseSpreadsheetId}
+                              placeholder="Leave blank to rely on the default response spreadsheet env"
+                              className="field-input"
+                            />
+                          </Field>
+                          <Field label="Response sheet tab">
+                            <input
+                              name="responseSheetName"
+                              defaultValue={form.responseSheetName}
+                              placeholder={`${form.name} Responses`}
+                              className="field-input"
+                            />
+                          </Field>
+                        </div>
+                        <label className="mt-3 flex items-center gap-2 text-sm text-surface-text">
+                          <input
+                            type="checkbox"
+                            name="writeResponsesToSheet"
+                            defaultChecked={form.writeResponsesToSheet}
+                            className="accent-brand-600"
+                          />
+                          <span>Copy new submissions to this form’s response tab</span>
+                        </label>
                       </div>
 
                       <div className="border border-surface-border bg-slate-50 p-4 text-sm text-surface-muted">
