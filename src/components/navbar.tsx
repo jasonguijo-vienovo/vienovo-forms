@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -14,7 +14,7 @@ export async function Navbar({
   adminShortcut?: { href: string; label: string } | null;
 } = {}) {
   const session = await safeAuth();
-  const showAdmin = isAdminEmail(session?.user?.email);
+  const showAdmin = await isAdminUser(session?.user?.email);
   const navbarForms = await getNavbarForms();
 
   return (

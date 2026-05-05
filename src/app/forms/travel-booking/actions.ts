@@ -183,7 +183,6 @@ export async function submitTravelBooking(
           departmentHeadEmail: head.email,
           isActive: true,
         },
-        $setOnInsert: { employeeId: "" },
       },
       { upsert: true },
     );
@@ -379,7 +378,6 @@ export async function updateTravelBooking(
           departmentHeadEmail: head.email,
           isActive: true,
         },
-        $setOnInsert: { employeeId: "" },
       },
       { upsert: true },
     );

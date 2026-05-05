@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Bell, CircleHelp, LogOut, Menu, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
-import { AdminNav } from "@/components/admin-nav";
-import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { AdminShell } from "@/components/admin-shell";
 import { getAdminSession } from "@/lib/admin";
 
 export default async function AdminLayout({

@@ -1,4 +1,4 @@
-import { BellRing, Cog, FileInput, ListChecks, Route, Send, Users } from "lucide-react";
+import { BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
 import {
   AdminHelpPanel,
@@ -6,8 +6,10 @@ import {
   AdminPageHeader,
   AdminSection,
 } from "@/components/admin-ui";
+import { AdminSystemReadiness } from "@/components/admin-system-readiness";
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
+import { getSystemReadinessSnapshot } from "@/lib/system-readiness";
 import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
@@ -39,15 +41,7 @@ export default async function AdminOverviewPage() {
       form.availability === "available" &&
       form.isImplemented,
   ).length;
-  const smtpReady = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_FROM);
-  const googleSheetsReady = Boolean(
-    process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH && process.env.GOOGLE_SHEETS_MASTER_ID
-  );
-  const driveReady = Boolean(
-    process.env.GOOGLE_DRIVE_TRAVEL_BOOKING_FOLDER_ID ||
-      process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID ||
-      process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID
-  );
+  const readiness = getSystemReadinessSnapshot();
 
   const nextSteps = buildNextSteps({
     importedDraftCount,
@@ -104,14 +98,11 @@ export default async function AdminOverviewPage() {
           hint="Emails that likely need fixing"
         />
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <AdminMetricCard label="SMTP" value={smtpReady ? "Ready" : "Missing config"} tone={smtpReady ? "ok" : "warn"} />
-        <AdminMetricCard
-          label="Google Sheets"
-          value={googleSheetsReady ? "Ready" : "Missing config"}
-          tone={googleSheetsReady ? "ok" : "warn"}
+      <div className="mt-4">
+        <AdminSystemReadiness
+          readiness={readiness}
+          description="Open this to check email, Sheets, Drive, auth, and database readiness in one place."
         />
-        <AdminMetricCard label="Google Drive" value={driveReady ? "Ready" : "Missing config"} tone={driveReady ? "ok" : "warn"} />
       </div>
 
       <AdminSection
@@ -168,6 +159,12 @@ export default async function AdminOverviewPage() {
             icon={<Cog className="h-5 w-5" />}
             title="Processors"
             description={`${processorCount} processors currently loaded for final handling steps.`}
+          />
+          <AdminCard
+            href="/admin/user-roles"
+            icon={<KeyRound className="h-5 w-5" />}
+            title="User roles"
+            description="Promote or demote who can access the admin console without mixing it into approver routing."
           />
           <AdminCard
             href="/admin/notifications"

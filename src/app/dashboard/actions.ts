@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { safeAuth } from "@/lib/safe-auth";
@@ -24,7 +24,7 @@ export async function deleteDashboardRequest(formData: FormData) {
   if (!doc) return;
 
   const isOwner = doc.submittedBy?.email?.toLowerCase() === email;
-  const isAdmin = isAdminEmail(email);
+  const isAdmin = await isAdminUser(email);
   if (!isOwner && !isAdmin) {
     throw new Error("You can only delete your own requests.");
   }
