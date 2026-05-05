@@ -1,8 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { Clock3, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  ExternalLink,
+  FilterX,
+  Layers3,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import Link from "next/link";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   AdminEmptyState,
   AdminHelpPanel,
@@ -11,9 +24,23 @@ import {
   AdminSection,
   AdminStatusPill,
 } from "@/components/admin-ui";
-import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
+import { humanizeQueueRole } from "@/lib/request-queue";
+import type { ParsedAdminRequestsQuery } from "./query";
 
-type RequestRow = {
+const ADMIN_REQUEST_STATUSES = ["all", "pending", "submitted", "approved", "returned", "rejected"] as const;
+const ADMIN_REQUEST_SORTS = ["createdAt", "updatedAt", "age"] as const;
+const ADMIN_REQUEST_VIEWS = [
+  "all-open",
+  "pending-approval",
+  "returned",
+  "waiting-3-days",
+  "travel-booking",
+  "reimbursement",
+  "needs-processor",
+] as const;
+type AdminRequestSavedView = (typeof ADMIN_REQUEST_VIEWS)[number];
+
+export type RequestQueueRow = {
   _id: string;
   referenceNo: string;
   formType: string;
@@ -25,132 +52,311 @@ type RequestRow = {
   };
   status: string;
   createdAt: string;
+  updatedAt: string;
+  currentActorEmail: string;
+  currentActorName: string;
+  currentRole: string;
+  currentStep: number;
+  totalSteps: number;
+  queueBucket: string;
+  lastActionAt: string;
+  lastActionBy: string;
+  approvalChain: Array<{
+    step: number;
+    role: string;
+    approverEmail: string;
+    approverName: string;
+    status: string;
+    actedAt: string;
+    comment: string;
+  }>;
+  history: Array<{
+    at: string;
+    byEmail: string;
+    byName: string;
+    action: string;
+  }>;
 };
 
-type ViewFilter = "all" | "pending" | "approved" | "rejected" | "returned";
-
-export function RequestsClient({ requests }: { requests: RequestRow[] }) {
-  const [query, setQuery] = useState("");
-  const [view, setView] = useState<ViewFilter>("all");
-
-  const filtered = requests.filter((request) => {
-    const matchesQuery =
-      !query ||
-      [
-        request.referenceNo,
-        request.formName,
-        request.formSlug,
-        request.formType,
-        request.submittedBy?.name,
-        request.submittedBy?.email,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query.toLowerCase());
-
-    if (!matchesQuery) return false;
-    if (view === "all") return true;
-    return request.status === view;
-  });
-
-  const counts = {
-    pending: requests.filter((request) => request.status === "pending").length,
-    approved: requests.filter((request) => request.status === "approved").length,
-    rejected: requests.filter((request) => request.status === "rejected").length,
-    returned: requests.filter((request) => request.status === "returned").length,
+type RequestsClientProps = {
+  rows: RequestQueueRow[];
+  filters: ParsedAdminRequestsQuery;
+  filteredCount: number;
+  summary: {
+    totalOpen: number;
+    pendingApproval: number;
+    needsProcessor: number;
+    returned: number;
+    rejected: number;
+    submitted: number;
   };
+  formOptions: Array<{ value: string; label: string }>;
+  assigneeOptions: Array<{ value: string; label: string }>;
+  pageInfo: {
+    hasPrevious: boolean;
+    hasNext: boolean;
+    previousCursor: string;
+    nextCursor: string;
+  };
+};
+
+export function RequestsClient({
+  rows,
+  filters,
+  filteredCount,
+  summary,
+  formOptions,
+  assigneeOptions,
+  pageInfo,
+}: RequestsClientProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selectedRow = rows.find((row) => row._id === selectedId) ?? null;
+  const current = searchParams.toString();
+  const currentQueueHref = current ? `${pathname}?${current}` : pathname;
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!rows.some((row) => row._id === selectedId)) setSelectedId(null);
+  }, [rows, selectedId]);
+
+  useEffect(() => {
+    if (!selectedRow) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedId(null);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedRow]);
 
   return (
     <div className="admin-page">
       <AdminPageHeader
         eyebrow="Operations"
         title="Admin queue"
-        description="A single read-only queue for all submitted requests across native and imported forms."
+        description="Server-backed queue navigation for every request across native and imported forms, with sharable filters and quick request context."
       />
 
-      <AdminHelpPanel title="What this page does">
-        Use this page to quickly find a request, check where it came from, and open its detail page.
-        This view does not change request data by itself.
+      <AdminHelpPanel title="How to use this queue">
+        Use saved views to jump into common workloads, then narrow with search, assignee, form, and date
+        filters. The URL keeps the exact queue state, so we can leave and come back without losing our
+        place.
       </AdminHelpPanel>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Requests loaded" value={requests.length} />
-        <AdminMetricCard label="Pending" value={counts.pending} tone="warn" />
-        <AdminMetricCard label="Approved" value={counts.approved} tone="ok" />
-        <AdminMetricCard label="Returned / Rejected" value={counts.returned + counts.rejected} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricLink href={buildStatusHref(pathname, searchParams, { view: "all-open" })}>
+          <AdminMetricCard label="Total open" value={summary.totalOpen} />
+        </MetricLink>
+        <MetricLink href={buildStatusHref(pathname, searchParams, { view: "pending-approval" })}>
+          <AdminMetricCard label="Pending approval" value={summary.pendingApproval} tone="warn" />
+        </MetricLink>
+        <MetricLink href={buildStatusHref(pathname, searchParams, { status: "submitted" })}>
+          <AdminMetricCard label="Submitted only" value={summary.submitted} />
+        </MetricLink>
+        <MetricLink href={buildStatusHref(pathname, searchParams, { status: "returned" })}>
+          <AdminMetricCard label="Returned" value={summary.returned} tone="warn" />
+        </MetricLink>
+        <MetricLink href={buildStatusHref(pathname, searchParams, { status: "rejected" })}>
+          <AdminMetricCard label="Rejected" value={summary.rejected} />
+        </MetricLink>
       </div>
 
       <AdminSection
-        title="Latest requests"
-        description="Search by requester, form, or reference number."
-        meta={`${filtered.length} of ${requests.length} shown`}
+        title="Saved views"
+        description="Preset queue slices for the most common admin workflows."
+        meta={`${filteredCount} matching requests`}
       >
-        <div className="mb-5 flex flex-col gap-3">
-          <AdminSearchField value={query} onChange={setQuery} placeholder="Search by requester, form, or reference number" />
-          <AdminFilterTabs
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "all", label: "All" },
-              { value: "pending", label: "Pending" },
-              { value: "approved", label: "Approved" },
-              { value: "returned", label: "Returned" },
-              { value: "rejected", label: "Rejected" },
-            ]}
-          />
+        <div className="flex flex-wrap gap-2">
+          {ADMIN_REQUEST_VIEWS.map((view) => (
+            <Link
+              key={view}
+              href={buildViewHref(pathname, view, filters)}
+              className={[
+                "rounded-md border px-3 py-2 text-sm font-semibold transition",
+                filters.view === view
+                  ? "border-brand-700 bg-brand-50 text-brand-700"
+                  : "border-surface-border bg-white text-surface-muted hover:text-surface-text",
+              ].join(" ")}
+            >
+              {savedViewLabel(view, summary.needsProcessor)}
+            </Link>
+          ))}
+        </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Requests queue"
+        description="Search every request, sort the table, and open a quick-detail drawer without leaving the queue."
+        meta={`${rows.length} shown on this page`}
+      >
+        <div className="sticky top-[4.5rem] z-10 -mx-5 -mt-5 border-b border-surface-border bg-white/95 px-5 py-4 backdrop-blur md:-mx-6 md:px-6">
+          <form method="get" className="space-y-4">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(6,minmax(0,1fr))]">
+              <label className="flex items-center gap-2 rounded-md border border-surface-border bg-white px-3 py-2.5 text-sm text-surface-muted shadow-sm">
+                <Search className="h-4 w-4 shrink-0" />
+                <input
+                  name="q"
+                  defaultValue={filters.q}
+                  placeholder="Search by reference, requester, or form"
+                  className="w-full bg-transparent text-surface-text outline-none placeholder:text-surface-muted"
+                />
+              </label>
+
+              <select name="form" defaultValue={filters.form} className="field-input">
+                <option value="">All forms</option>
+                {formOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <select name="assignee" defaultValue={filters.assignee} className="field-input">
+                <option value="">All assignees</option>
+                {assigneeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <input name="from" type="date" defaultValue={filters.from} className="field-input" />
+              <input name="to" type="date" defaultValue={filters.to} className="field-input" />
+
+              <select name="limit" defaultValue={String(filters.limit)} className="field-input">
+                <option value="25">25 rows</option>
+                <option value="50">50 rows</option>
+                <option value="100">100 rows</option>
+              </select>
+
+              <div className="grid grid-cols-2 gap-3">
+                <select name="sort" defaultValue={filters.sort} className="field-input">
+                  {ADMIN_REQUEST_SORTS.map((sort) => (
+                    <option key={sort} value={sort}>
+                      {sortLabel(sort)}
+                    </option>
+                  ))}
+                </select>
+                <select name="direction" defaultValue={filters.direction} className="field-input">
+                  <option value="desc">Desc</option>
+                  <option value="asc">Asc</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <StatusBar pathname={pathname} searchParams={searchParams} activeStatus={filters.status} />
+                <button type="submit" className="btn-primary">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Apply
+                </button>
+                <Link href={pathname} className="btn-secondary">
+                  <FilterX className="h-4 w-4" />
+                  Clear
+                </Link>
+              </div>
+            </div>
+          </form>
         </div>
 
-        {filtered.length === 0 ? (
-          <AdminEmptyState
-            title="No requests match these filters"
-            description="Try another search or choose a different status."
-          />
+        {rows.length === 0 ? (
+          <div className="pt-5">
+            <AdminEmptyState
+              title="No requests match this queue view"
+              description="Try widening the date range, clearing the assignee filter, or switching to another saved view."
+            />
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-sm">
+          <div className="overflow-x-auto pt-5">
+            <table className="w-full min-w-[1320px] text-left text-sm">
               <thead className="border-b border-surface-border bg-slate-50 text-xs uppercase tracking-[0.08em] text-surface-muted">
                 <tr>
-                  <th className="px-5 py-3 font-semibold">Reference</th>
-                  <th className="px-5 py-3 font-semibold">Form</th>
-                  <th className="px-5 py-3 font-semibold">Requester</th>
-                  <th className="px-5 py-3 font-semibold">Status</th>
-                  <th className="px-5 py-3 font-semibold">Submitted</th>
-                  <th className="px-5 py-3 font-semibold">Action</th>
+                  <th className="px-4 py-3 font-semibold">Reference</th>
+                  <th className="px-4 py-3 font-semibold">Form</th>
+                  <th className="px-4 py-3 font-semibold">Requester</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Current step</th>
+                  <th className="px-4 py-3 font-semibold">Current assignee</th>
+                  <th className="px-4 py-3 font-semibold">
+                    <SortLink pathname={pathname} searchParams={searchParams} filters={filters} sort="createdAt">
+                      Submitted
+                    </SortLink>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <SortLink pathname={pathname} searchParams={searchParams} filters={filters} sort="updatedAt">
+                      Last updated
+                    </SortLink>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">
+                    <SortLink pathname={pathname} searchParams={searchParams} filters={filters} sort="age">
+                      Age
+                    </SortLink>
+                  </th>
+                  <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border">
-                {filtered.map((request) => (
-                  <tr key={request._id} className="bg-white transition hover:bg-slate-50">
-                    <td className="px-5 py-4">
-                      <span className="font-mono text-xs text-surface-text">{request.referenceNo}</span>
+                {rows.map((row) => (
+                  <tr key={row._id} className="bg-white align-top transition hover:bg-slate-50">
+                    <td className="px-4 py-4">
+                      <div className="space-y-1">
+                        <span className="font-mono text-xs text-surface-text">{row.referenceNo}</span>
+                        <p className="text-xs text-surface-muted">{row.queueBucket}</p>
+                      </div>
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-4 py-4">
                       <p className="font-semibold text-surface-text">
-                        {request.formName || request.formSlug || request.formType}
+                        {row.formName || row.formSlug || row.formType}
                       </p>
-                      <p className="mt-1 text-xs text-surface-muted">{request.formType}</p>
+                      <p className="mt-1 text-xs text-surface-muted">{row.formSlug || row.formType}</p>
                     </td>
-                    <td className="px-5 py-4">
-                      <p className="font-medium text-surface-text">{request.submittedBy?.name || "Requester"}</p>
-                      <p className="mt-1 text-xs text-surface-muted">{request.submittedBy?.email || "No email saved"}</p>
+                    <td className="px-4 py-4">
+                      <p className="font-medium text-surface-text">{row.submittedBy?.name || "Requester"}</p>
+                      <p className="mt-1 text-xs text-surface-muted">
+                        {row.submittedBy?.email || "No email saved"}
+                      </p>
                     </td>
-                    <td className="px-5 py-4">
-                      <AdminStatusPill tone={statusTone(request.status)}>{request.status}</AdminStatusPill>
+                    <td className="px-4 py-4">
+                      <AdminStatusPill tone={statusTone(row.status)}>{row.status}</AdminStatusPill>
                     </td>
-                    <td className="px-5 py-4 text-surface-muted">
-                      <span className="inline-flex items-center gap-1">
-                        <Clock3 className="h-3.5 w-3.5" />
-                        {new Date(request.createdAt).toLocaleString()}
-                      </span>
+                    <td className="px-4 py-4">
+                      <p className="font-medium text-surface-text">{stepLabel(row)}</p>
+                      <p className="mt-1 text-xs text-surface-muted">{humanizeQueueRole(row.currentRole)}</p>
                     </td>
-                    <td className="px-5 py-4">
-                      <Link
-                        href={`/requests/${request.referenceNo}`}
-                        className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:underline"
-                      >
-                        Open request
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
+                    <td className="px-4 py-4">
+                      <p className="font-medium text-surface-text">
+                        {row.currentActorName || "No current assignee"}
+                      </p>
+                      <p className="mt-1 text-xs text-surface-muted">
+                        {row.currentActorEmail || row.lastActionBy || "Waiting for queue action"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-4 text-surface-muted">{formatDateTime(row.createdAt)}</td>
+                    <td className="px-4 py-4 text-surface-muted">{formatDateTime(row.updatedAt)}</td>
+                    <td className="px-4 py-4 text-surface-muted">{formatAge(row.createdAt)}</td>
+                    <td className="px-4 py-4">
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(row._id)}
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-surface-text hover:text-brand-700"
+                        >
+                          <Layers3 className="h-4 w-4" />
+                          Quick view
+                        </button>
+                        <Link
+                          href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`}
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:underline"
+                        >
+                          Open request
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -158,14 +364,381 @@ export function RequestsClient({ requests }: { requests: RequestRow[] }) {
             </table>
           </div>
         )}
+
+        <div className="mt-5 flex flex-col gap-3 border-t border-surface-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-surface-muted">
+            Showing {rows.length} row{rows.length === 1 ? "" : "s"} from {filteredCount} matching request
+            {filteredCount === 1 ? "" : "s"}.
+          </p>
+          <div className="flex items-center gap-2">
+            <Link
+              href={pageInfo.hasPrevious ? buildCursorHref(pathname, searchParams, "before", pageInfo.previousCursor) : "#"}
+              aria-disabled={!pageInfo.hasPrevious}
+              className={[
+                "btn-secondary",
+                !pageInfo.hasPrevious ? "pointer-events-none opacity-50" : "",
+              ].join(" ")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Link>
+            <Link
+              href={pageInfo.hasNext ? buildCursorHref(pathname, searchParams, "after", pageInfo.nextCursor) : "#"}
+              aria-disabled={!pageInfo.hasNext}
+              className={[
+                "btn-secondary",
+                !pageInfo.hasNext ? "pointer-events-none opacity-50" : "",
+              ].join(" ")}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       </AdminSection>
+
+      {selectedRow ? (
+        <RequestDrawer row={selectedRow} queueHref={currentQueueHref} onClose={() => setSelectedId(null)} />
+      ) : null}
     </div>
   );
 }
 
+function StatusBar({
+  pathname,
+  searchParams,
+  activeStatus,
+}: {
+  pathname: string;
+  searchParams: URLSearchParams;
+  activeStatus: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {ADMIN_REQUEST_STATUSES.map((status) => {
+        const active = status === activeStatus;
+        return (
+          <Link
+            key={status}
+            href={buildStatusHref(pathname, searchParams, { status })}
+            className={[
+              "rounded-md border px-3 py-1.5 text-sm font-semibold transition",
+              active
+                ? "border-brand-700 bg-brand-50 text-brand-700"
+                : "border-surface-border bg-white text-surface-muted hover:text-surface-text",
+            ].join(" ")}
+          >
+            {statusLabel(status)}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function SortLink({
+  pathname,
+  searchParams,
+  filters,
+  sort,
+  children,
+}: {
+  pathname: string;
+  searchParams: URLSearchParams;
+  filters: ParsedAdminRequestsQuery;
+  sort: "createdAt" | "updatedAt" | "age";
+  children: React.ReactNode;
+}) {
+  const active = filters.sort === sort;
+  const direction = active && filters.direction === "desc" ? "asc" : "desc";
+
+  return (
+    <Link
+      href={buildHref(pathname, searchParams, { sort, direction })}
+      className="inline-flex items-center gap-1 text-surface-muted hover:text-surface-text"
+    >
+      <span>{children}</span>
+      {active ? (
+        filters.direction === "desc" ? (
+          <ArrowDown className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowUp className="h-3.5 w-3.5" />
+        )
+      ) : (
+        <ArrowDown className="h-3.5 w-3.5 opacity-40" />
+      )}
+    </Link>
+  );
+}
+
+function RequestDrawer({
+  row,
+  queueHref,
+  onClose,
+}: {
+  row: RequestQueueRow;
+  queueHref: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/20">
+      <button type="button" className="flex-1 cursor-default" onClick={onClose} aria-label="Close quick view" />
+      <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-surface-border bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 border-b border-surface-border bg-white px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">Quick view</p>
+              <h2 className="mt-1 text-lg font-semibold text-surface-text">{row.referenceNo}</h2>
+              <p className="mt-1 text-sm text-surface-muted">
+                {row.formName || row.formSlug || row.formType}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-9 w-9 place-items-center rounded-md border border-surface-border text-surface-muted transition hover:text-surface-text"
+              aria-label="Close quick view"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-6 px-5 py-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DrawerField label="Requester" value={row.submittedBy?.name || row.submittedBy?.email || "Unknown"} />
+            <DrawerField label="Status" value={<AdminStatusPill tone={statusTone(row.status)}>{row.status}</AdminStatusPill>} />
+            <DrawerField label="Current step" value={stepLabel(row)} />
+            <DrawerField label="Current assignee" value={row.currentActorName || row.currentActorEmail || "No current assignee"} />
+            <DrawerField label="Submitted" value={formatDateTime(row.createdAt)} />
+            <DrawerField label="Last updated" value={formatDateTime(row.updatedAt)} />
+            <DrawerField label="Last action by" value={row.lastActionBy || "Not recorded"} />
+            <DrawerField label="Age" value={formatAge(row.createdAt)} />
+          </div>
+
+          <section className="admin-panel overflow-hidden">
+            <div className="border-b border-surface-border bg-slate-50/70 px-4 py-3">
+              <h3 className="text-sm font-semibold text-surface-text">Approval chain</h3>
+            </div>
+            <div className="space-y-3 p-4">
+              {row.approvalChain.length > 0 ? (
+                row.approvalChain.map((step) => {
+                  const current = step.step === row.currentStep && row.status === "pending";
+                  return (
+                    <div
+                      key={`${row._id}-${step.step}`}
+                      className={[
+                        "rounded-md border px-3 py-3",
+                        current ? "border-brand-200 bg-brand-50/60" : "border-surface-border bg-white",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-surface-text">
+                            Step {step.step} of {row.totalSteps}
+                          </p>
+                          <p className="mt-1 text-sm text-surface-text">
+                            {step.approverName || step.approverEmail || "Unassigned"}
+                          </p>
+                          <p className="mt-1 text-xs text-surface-muted">
+                            {humanizeQueueRole(step.role)}
+                          </p>
+                        </div>
+                        <AdminStatusPill tone={statusTone(step.status)}>{step.status}</AdminStatusPill>
+                      </div>
+                      {step.actedAt ? (
+                        <p className="mt-2 text-xs text-surface-muted">{formatDateTime(step.actedAt)}</p>
+                      ) : null}
+                      {step.comment ? (
+                        <p className="mt-2 text-sm text-surface-muted">{step.comment}</p>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-surface-muted">This request has no approval chain.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-panel overflow-hidden">
+            <div className="border-b border-surface-border bg-slate-50/70 px-4 py-3">
+              <h3 className="text-sm font-semibold text-surface-text">Recent history</h3>
+            </div>
+            <div className="space-y-3 p-4">
+              {row.history.length > 0 ? (
+                row.history.map((item, index) => (
+                  <div key={`${row._id}-history-${index}`} className="rounded-md border border-surface-border px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-surface-text">{humanizeQueueRole(item.action)}</p>
+                      <span className="text-xs text-surface-muted">{formatDateTime(item.at)}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-surface-muted">{item.byName || item.byEmail || "System"}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-surface-muted">No recent history recorded.</p>
+              )}
+            </div>
+          </section>
+
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/requests/${row.referenceNo}?from=${encodeURIComponent(queueHref)}`}
+              className="btn-primary"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open full request
+            </Link>
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Close
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DrawerField({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-surface-border bg-slate-50/60 px-3 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <div className="mt-2 text-sm text-surface-text">{value}</div>
+    </div>
+  );
+}
+
+function MetricLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="block transition hover:-translate-y-0.5">
+      {children}
+    </Link>
+  );
+}
+
+function buildViewHref(
+  pathname: string,
+  view: AdminRequestSavedView,
+  filters: ParsedAdminRequestsQuery,
+) {
+  const next = new URLSearchParams();
+  next.set("limit", String(filters.limit));
+  next.set("sort", filters.sort);
+  next.set("direction", filters.direction);
+  next.set("view", view);
+
+  if (view === "travel-booking") next.set("form", "travel-booking");
+  if (view === "reimbursement") next.set("form", "reimbursement");
+  if (view === "returned") next.set("status", "returned");
+
+  const query = next.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+function buildCursorHref(
+  pathname: string,
+  current: URLSearchParams,
+  direction: "after" | "before",
+  cursor: string,
+) {
+  const next = new URLSearchParams(current.toString());
+  next.delete("after");
+  next.delete("before");
+  next.set(direction, cursor);
+  return `${pathname}?${next.toString()}`;
+}
+
+function buildStatusHref(
+  pathname: string,
+  current: URLSearchParams,
+  changes: { status?: string; view?: string },
+) {
+  const next = new URLSearchParams(current.toString());
+  next.delete("after");
+  next.delete("before");
+  next.delete("view");
+  next.delete("status");
+
+  if (changes.view) {
+    next.set("view", changes.view);
+    if (changes.view === "returned") next.set("status", "returned");
+  }
+  if (changes.status && changes.status !== "all") {
+    next.set("status", changes.status);
+  }
+
+  return `${pathname}?${next.toString()}`;
+}
+
+function buildHref(
+  pathname: string,
+  current: URLSearchParams,
+  changes: Record<string, string>,
+) {
+  const next = new URLSearchParams(current.toString());
+  next.delete("after");
+  next.delete("before");
+  next.delete("view");
+
+  for (const [key, value] of Object.entries(changes)) {
+    if (!value) next.delete(key);
+    else next.set(key, value);
+  }
+
+  return `${pathname}?${next.toString()}`;
+}
+
 function statusTone(status: string): "ok" | "warn" | "danger" | "neutral" {
   if (status === "approved") return "ok";
-  if (status === "pending" || status === "returned") return "warn";
+  if (status === "pending" || status === "returned" || status === "submitted") return "warn";
   if (status === "rejected") return "danger";
   return "neutral";
+}
+
+function stepLabel(row: RequestQueueRow) {
+  if (row.totalSteps === 0) {
+    return row.status === "submitted" ? "Submitted without approval chain" : "No approval chain";
+  }
+  if (!row.currentStep) return `0 of ${row.totalSteps}`;
+  return `Step ${row.currentStep} of ${row.totalSteps}`;
+}
+
+function formatDateTime(value: string) {
+  if (!value) return "Not recorded";
+  return new Date(value).toLocaleString();
+}
+
+function formatAge(value: string) {
+  if (!value) return "Unknown";
+
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d`;
+}
+
+function statusLabel(status: string) {
+  return status === "all" ? "All" : humanizeQueueRole(status);
+}
+
+function sortLabel(sort: string) {
+  if (sort === "createdAt") return "Submitted";
+  if (sort === "updatedAt") return "Last updated";
+  return "Age";
+}
+
+function savedViewLabel(view: AdminRequestSavedView, needsProcessorCount: number) {
+  if (view === "all-open") return "All open";
+  if (view === "pending-approval") return "Pending approval";
+  if (view === "returned") return "Returned";
+  if (view === "waiting-3-days") return "Waiting more than 3 days";
+  if (view === "travel-booking") return "Travel Booking";
+  if (view === "reimbursement") return "Reimbursement";
+  return `Needs processor${needsProcessorCount > 0 ? ` (${needsProcessorCount})` : ""}`;
 }

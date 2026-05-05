@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+import { REQUEST_QUEUE_BUCKETS } from "@/lib/request-queue";
 
 export const FORM_TYPES = [
   "travel-booking",
@@ -63,12 +64,28 @@ const requestSchema = new Schema(
     currentStep: { type: Number, default: 0 },
     status: { type: String, enum: REQUEST_STATUSES, default: "pending", index: true },
     history: { type: [historySchema], default: [] },
+    currentActorEmail: { type: String, default: "", lowercase: true, trim: true, index: true },
+    currentActorName: { type: String, default: "", trim: true },
+    currentRole: { type: String, default: "", trim: true },
+    queueBucket: {
+      type: String,
+      enum: REQUEST_QUEUE_BUCKETS,
+      default: "unknown",
+      index: true,
+    },
+    lastActionAt: { type: Date, default: null },
+    lastActionBy: { type: String, default: "", trim: true },
   },
   { timestamps: true }
 );
 
 requestSchema.index({ "submittedBy.email": 1, status: 1, createdAt: -1 });
 requestSchema.index({ formSlug: 1, createdAt: -1 });
+requestSchema.index({ status: 1, createdAt: -1, _id: -1 });
+requestSchema.index({ formSlug: 1, status: 1, createdAt: -1, _id: -1 });
+requestSchema.index({ currentActorEmail: 1, status: 1, createdAt: -1, _id: -1 });
+requestSchema.index({ queueBucket: 1, createdAt: -1, _id: -1 });
+requestSchema.index({ updatedAt: -1, _id: -1 });
 
 export type RequestDoc = InferSchemaType<typeof requestSchema> & { _id: mongoose.Types.ObjectId };
 

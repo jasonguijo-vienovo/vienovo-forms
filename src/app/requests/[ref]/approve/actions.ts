@@ -5,6 +5,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { RequestModel } from "@/models/Request";
 
@@ -27,18 +28,38 @@ export async function approveCurrentStep(referenceNo: string, formData: FormData
   if (current.approverEmail !== userEmail) throw new Error("Forbidden: not the current approver.");
 
   const comment = s(formData, "comment");
+  const now = new Date();
 
   const isFinal = doc.currentStep >= doc.approvalChain.length;
   const nextStep = isFinal ? doc.currentStep : doc.currentStep + 1;
 
   const chain = doc.approvalChain.map((a) => {
     if (a.step === doc.currentStep) {
-      return { ...a, status: "approved", actedAt: new Date(), comment };
+      return { ...a, status: "approved", actedAt: now, comment };
     }
     if (!isFinal && a.step === nextStep) {
       return { ...a, status: "pending" };
     }
     return a;
+  });
+  const nextStatus = isFinal ? "approved" : doc.status;
+  const nextCurrentStep = isFinal ? doc.currentStep : nextStep;
+  const historyEntry = {
+    at: now,
+    byEmail: userEmail,
+    byName: userName,
+    action: "approved",
+    details: { step: doc.currentStep, role: current.role, comment },
+  };
+  const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
+  const queueFields = deriveRequestQueueFields({
+    status: nextStatus,
+    approvalChain: chain,
+    currentStep: nextCurrentStep,
+    history: nextHistory as any[],
+    createdAt: (doc as any).createdAt,
+    updatedAt: now,
+    submittedBy: doc.submittedBy,
   });
 
   await RequestModel.updateOne(
@@ -46,17 +67,12 @@ export async function approveCurrentStep(referenceNo: string, formData: FormData
     {
       $set: {
         approvalChain: chain,
-        currentStep: isFinal ? doc.currentStep : nextStep,
-        status: isFinal ? "approved" : doc.status,
+        currentStep: nextCurrentStep,
+        status: nextStatus,
+        ...queueFields,
       },
       $push: {
-        history: {
-          at: new Date(),
-          byEmail: userEmail,
-          byName: userName,
-          action: "approved",
-          details: { step: doc.currentStep, role: current.role, comment },
-        },
+        history: historyEntry,
       },
     }
   );
@@ -76,20 +92,11 @@ export async function approveCurrentStep(referenceNo: string, formData: FormData
     },
     formData: (doc as any).formData ?? {},
     approvalChain: chain,
-    currentStep: isFinal ? doc.currentStep : nextStep,
-    status: isFinal ? "approved" : doc.status,
-    history: [
-      ...(((doc as any).history ?? []) as unknown[]),
-      {
-        at: new Date(),
-        byEmail: userEmail,
-        byName: userName,
-        action: "approved",
-        details: { step: doc.currentStep, role: current.role, comment },
-      },
-    ],
+    currentStep: nextCurrentStep,
+    status: nextStatus,
+    history: nextHistory,
     createdAt: (doc as any).createdAt,
-    updatedAt: new Date(),
+    updatedAt: now,
   });
   const nextApprover = chain.find((step) => step.step === nextStep) ?? null;
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
@@ -147,12 +154,30 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
   if (current.approverEmail !== userEmail) throw new Error("Forbidden: not the current approver.");
 
   const comment = s(formData, "comment");
+  const now = new Date();
 
   const chain = doc.approvalChain.map((a) => {
     if (a.step === doc.currentStep) {
-      return { ...a, status: "rejected", actedAt: new Date(), comment };
+      return { ...a, status: "rejected", actedAt: now, comment };
     }
     return a;
+  });
+  const historyEntry = {
+    at: now,
+    byEmail: userEmail,
+    byName: userName,
+    action: "rejected",
+    details: { step: doc.currentStep, role: current.role, comment },
+  };
+  const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
+  const queueFields = deriveRequestQueueFields({
+    status: "rejected",
+    approvalChain: chain,
+    currentStep: doc.currentStep,
+    history: nextHistory as any[],
+    createdAt: (doc as any).createdAt,
+    updatedAt: now,
+    submittedBy: doc.submittedBy,
   });
 
   await RequestModel.updateOne(
@@ -161,15 +186,10 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
       $set: {
         approvalChain: chain,
         status: "rejected",
+        ...queueFields,
       },
       $push: {
-        history: {
-          at: new Date(),
-          byEmail: userEmail,
-          byName: userName,
-          action: "rejected",
-          details: { step: doc.currentStep, role: current.role, comment },
-        },
+        history: historyEntry,
       },
     }
   );
@@ -191,18 +211,9 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
     approvalChain: chain,
     currentStep: doc.currentStep,
     status: "rejected",
-    history: [
-      ...(((doc as any).history ?? []) as unknown[]),
-      {
-        at: new Date(),
-        byEmail: userEmail,
-        byName: userName,
-        action: "rejected",
-        details: { step: doc.currentStep, role: current.role, comment },
-      },
-    ],
+    history: nextHistory,
     createdAt: (doc as any).createdAt,
-    updatedAt: new Date(),
+    updatedAt: now,
   });
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
