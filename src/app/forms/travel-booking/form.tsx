@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import type { FormActionResult } from "@/lib/forms/action-result";
 
 type Approver = {
   id: string;
@@ -23,7 +25,7 @@ export type TravelBookingFormProps = {
   user: { email: string; name: string };
   prefill: EmployeePrefill;
   initial?: TravelBookingInitialValues;
-  submitAction: (formData: FormData) => void | Promise<void>;
+  submitAction: (formData: FormData) => Promise<FormActionResult>;
   submitLabel?: string;
   departments: string[];
   airports: string[];
@@ -62,6 +64,7 @@ export type TravelBookingInitialValues = Partial<{
 }>;
 
 export function TravelBookingForm(props: TravelBookingFormProps) {
+  const router = useRouter();
   const {
     user,
     prefill,
@@ -199,11 +202,15 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
     setSubmitError(null);
     const fd = new FormData(e.currentTarget);
     startTransition(() => {
-      void Promise.resolve(submitAction(fd)).catch((err: unknown) => {
-        const message =
-          err instanceof Error ? err.message : "Could not submit this travel request.";
-        setSubmitError(message);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      void submitAction(fd).then((result) => {
+        if (!result.ok) {
+          setSubmitError(result.error);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+
+        router.push(result.redirectTo);
+        router.refresh();
       });
     });
   }
