@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
-import { SearchableSelect } from "@/components/searchable-select";
+import { useRouter } from "next/navigation";
+import type { FormActionResult } from "@/lib/forms/action-result";
 
 type Approver = {
   id: string;
@@ -31,11 +32,12 @@ export type CashAdvanceFormProps = {
   initial?: CashAdvanceInitialValues;
   payableToOptions: string[];
   approvers: Approver[];
-  submitAction: (formData: FormData) => void | Promise<void>;
+  submitAction: (formData: FormData) => Promise<FormActionResult>;
   submitLabel?: string;
 };
 
 export function CashAdvanceForm(props: CashAdvanceFormProps) {
+  const router = useRouter();
   const {
     user,
     prefill,
@@ -48,6 +50,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
 
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<string[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [firstName, setFirstName] = useState(prefill.firstName || "");
   const [lastName, setLastName] = useState(prefill.lastName || "");
@@ -88,12 +91,25 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
     const errs = validate();
     if (errs.length) {
       setErrors(errs);
+      setSubmitError(null);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     setErrors([]);
+    setSubmitError(null);
     const fd = new FormData(e.currentTarget);
-    startTransition(() => submitAction(fd));
+    startTransition(() => {
+      void submitAction(fd).then((result) => {
+        if (!result.ok) {
+          setSubmitError(result.error);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+
+        router.push(result.redirectTo);
+        router.refresh();
+      });
+    });
   }
 
   return (
@@ -149,6 +165,13 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
               <li key={e}>{e}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800">
+          <p className="font-semibold mb-1">Submission failed.</p>
+          <p>{submitError}</p>
         </div>
       )}
 
