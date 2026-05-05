@@ -164,6 +164,7 @@ export function ApproversClient({
                           type="submit"
                           idleLabel={editingId === approver._id ? "Save email" : "Save"}
                           pendingLabel="Saving..."
+                          disabled={editingId !== approver._id}
                           className="text-sm font-semibold text-brand-700 hover:underline"
                         />
                       </form>
