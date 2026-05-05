@@ -36,22 +36,22 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
             V
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <div className={collapsed ? "hidden" : "block"}>
-                <p className="text-sm font-black uppercase tracking-wider text-brand-700">Admin Console</p>
-                <p className="text-xs text-surface-muted">Enterprise Management</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setCollapsed((value) => !value)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
-                aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
-                title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
-              >
-                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </button>
+            <div className={collapsed ? "hidden" : "block"}>
+              <p className="text-sm font-black uppercase tracking-wider text-brand-700">Admin Console</p>
+              <p className="text-xs text-surface-muted">Enterprise Management</p>
             </div>
           </div>
+        </div>
+        <div className={collapsed ? "px-3 pb-3" : "px-3 pb-4"}>
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="grid h-9 w-9 place-items-center rounded-r-md border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
+            aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
+            title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
+          >
+            {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
         </div>
         <AdminNav collapsed={collapsed} />
       </aside>
