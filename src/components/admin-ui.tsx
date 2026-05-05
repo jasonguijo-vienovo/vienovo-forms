@@ -15,13 +15,13 @@ export function AdminPageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div className="admin-header-wrap flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
       <div>
         {eyebrow ? <p className="section-eyebrow">{eyebrow}</p> : null}
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">{title}</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-text">{title}</h1>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-surface-muted">{description}</p>
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap gap-2 lg:justify-end">{actions}</div> : null}
     </div>
   );
 }
@@ -34,7 +34,7 @@ export function AdminHelpPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="admin-panel border-l-4 border-l-brand-700 p-4">
+    <section className="admin-panel border-l-4 border-l-brand-700 bg-gradient-to-r from-brand-50/50 to-white p-4">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 text-brand-700">
           <Info className="h-4 w-4" />
@@ -61,14 +61,14 @@ export function AdminSection({
 }) {
   return (
     <section className="admin-panel overflow-hidden">
-      <div className="flex flex-col gap-2 border-b border-surface-border px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-2 border-b border-surface-border bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-surface-text">{title}</h2>
           {description ? <p className="mt-1 text-sm text-surface-muted">{description}</p> : null}
         </div>
         {meta ? <div className="text-sm text-surface-muted">{meta}</div> : null}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-5 md:p-6">{children}</div>
     </section>
   );
 }
@@ -94,7 +94,7 @@ export function AdminMetricCard({
   return (
     <div className="admin-panel p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
-      <p className={cn("mt-2 text-3xl font-semibold", valueClass)}>{value}</p>
+      <p className={cn("mt-2 text-3xl font-semibold tracking-tight", valueClass)}>{value}</p>
       {hint ? <p className="mt-2 text-xs text-surface-muted">{hint}</p> : null}
     </div>
   );

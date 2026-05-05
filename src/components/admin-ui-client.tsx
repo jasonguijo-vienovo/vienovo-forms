@@ -13,7 +13,7 @@ export function AdminSearchField({
   placeholder?: string;
 }) {
   return (
-    <label className="flex min-w-[220px] flex-1 items-center gap-2 border border-surface-border bg-white px-3 py-2 text-sm text-surface-muted">
+    <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-md border border-surface-border bg-white px-3 py-2.5 text-sm text-surface-muted shadow-sm">
       <Search className="h-4 w-4 shrink-0" />
       <input
         value={value}
@@ -44,7 +44,7 @@ export function AdminFilterTabs<T extends string>({
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              "border px-3 py-1.5 text-sm font-semibold transition",
+              "rounded-md border px-3 py-1.5 text-sm font-semibold transition",
               active
                 ? "border-brand-700 bg-brand-50 text-brand-700"
                 : "border-surface-border bg-white text-surface-muted hover:text-surface-text"

@@ -17,7 +17,7 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-surface-background">
-      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 flex-col border-r border-surface-border bg-slate-50 lg:flex">
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 flex-col border-r border-surface-border bg-gradient-to-b from-slate-50 to-white lg:flex">
         <div className="flex items-center gap-3 px-6 py-5">
           <div className="grid h-9 w-9 place-items-center rounded bg-brand-700 text-lg font-black text-white">
             V
@@ -31,7 +31,7 @@ export default async function AdminLayout({
       </aside>
 
       <div className="lg:ml-72">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-surface-border bg-white px-5">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-surface-border bg-white/95 px-5 backdrop-blur">
           <div className="flex items-center gap-3">
             <details className="relative lg:hidden">
               <summary
@@ -78,7 +78,7 @@ export default async function AdminLayout({
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-5 py-6">{children}</main>
+        <main className="mx-auto max-w-7xl px-5 py-7">{children}</main>
       </div>
     </div>
   );
