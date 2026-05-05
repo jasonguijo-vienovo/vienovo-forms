@@ -14,6 +14,11 @@ declare module "next-auth" {
 }
 
 const devBypass = process.env.AUTH_DEV_BYPASS === "1";
+const microsoftConfigured = Boolean(
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
+    process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET &&
+    process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+);
 
 function configuredAdminEmails() {
   const raw = process.env.ADMIN_EMAILS ?? "";
@@ -25,31 +30,37 @@ function configuredAdminEmails() {
   );
 }
 
-const providers = devBypass
-  ? [
-      Credentials({
-        name: "Dev bypass",
-        credentials: {
-          email: { label: "Email", type: "email", placeholder: "you@vienovo.ph" },
-        },
-        authorize: async (creds) => {
-          const email = String(creds?.email ?? "").trim().toLowerCase();
-          if (!email.endsWith("@vienovo.ph")) return null;
-          return {
-            id: email,
-            email,
-            name: email.split("@")[0].replace(/[._]/g, " "),
-          };
-        },
-      }),
-    ]
-  : [
-      MicrosoftEntraID({
-        clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
-        clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
-        issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
-      }),
-    ];
+const providers = [];
+
+if (microsoftConfigured) {
+  providers.push(
+    MicrosoftEntraID({
+      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
+      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
+      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+    }),
+  );
+}
+
+if (devBypass) {
+  providers.push(
+    Credentials({
+      name: "Dev bypass",
+      credentials: {
+        email: { label: "Email", type: "email", placeholder: "you@vienovo.ph" },
+      },
+      authorize: async (creds) => {
+        const email = String(creds?.email ?? "").trim().toLowerCase();
+        if (!email.endsWith("@vienovo.ph")) return null;
+        return {
+          id: email,
+          email,
+          name: email.split("@")[0].replace(/[._]/g, " "),
+        };
+      },
+    }),
+  );
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers,
