@@ -39,6 +39,15 @@ export default async function AdminOverviewPage() {
       form.availability === "available" &&
       form.isImplemented,
   ).length;
+  const smtpReady = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_FROM);
+  const googleSheetsReady = Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH && process.env.GOOGLE_SHEETS_MASTER_ID
+  );
+  const driveReady = Boolean(
+    process.env.GOOGLE_DRIVE_TRAVEL_BOOKING_FOLDER_ID ||
+      process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID ||
+      process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID
+  );
 
   const nextSteps = buildNextSteps({
     importedDraftCount,
@@ -94,6 +103,15 @@ export default async function AdminOverviewPage() {
           tone={approverNeedsReview > 0 ? "warn" : "ok"}
           hint="Emails that likely need fixing"
         />
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <AdminMetricCard label="SMTP" value={smtpReady ? "Ready" : "Missing config"} tone={smtpReady ? "ok" : "warn"} />
+        <AdminMetricCard
+          label="Google Sheets"
+          value={googleSheetsReady ? "Ready" : "Missing config"}
+          tone={googleSheetsReady ? "ok" : "warn"}
+        />
+        <AdminMetricCard label="Google Drive" value={driveReady ? "Ready" : "Missing config"} tone={driveReady ? "ok" : "warn"} />
       </div>
 
       <AdminSection

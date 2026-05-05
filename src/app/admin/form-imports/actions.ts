@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { writeAuditLog } from "@/lib/audit";
 import { BUILTIN_FORMS } from "@/lib/form-definitions";
 import { syncImportedLookupsForImport } from "@/lib/imported-lookups";
 import { parseSpreadsheetBindings } from "@/lib/imported-forms";
@@ -225,11 +226,23 @@ export async function updateFormImportConfig(formData: FormData) {
 }
 
 export async function publishFormImport(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
   if (!id) return;
+  const dryRun = bool(formData, "dryRun");
+
+  if (dryRun) {
+    const draft = await FormImport.findById(id).lean();
+    await setFlashToast({
+      tone: "success",
+      message: draft
+        ? `Dry run: ${draft.name} would be marked implemented and published to everyone.`
+        : "Dry run: draft not found.",
+    });
+    redirect(FORM_IMPORTS_PATH);
+  }
 
   const imported = await FormImport.findByIdAndUpdate(
     id,
@@ -256,6 +269,13 @@ export async function publishFormImport(formData: FormData) {
     }
   );
   await setFlashToast({ tone: "success", message: `${imported.name} is now published for users.` });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "publish_form_import",
+    targetType: "form-import",
+    targetId: String(imported._id),
+    details: { slug: imported.slug, name: imported.name },
+  });
 
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
@@ -330,9 +350,21 @@ export async function deleteFormImport(formData: FormData) {
 }
 
 export async function syncImportedDropdowns(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   const id = s(formData, "id");
   if (!id) return;
+  const dryRun = bool(formData, "dryRun");
+
+  if (dryRun) {
+    const draft = await FormImport.findById(id).lean();
+    await setFlashToast({
+      tone: "success",
+      message: draft
+        ? `Dry run: ${draft.name} would sync dropdowns and people from spreadsheet.`
+        : "Dry run: draft not found.",
+    });
+    redirect(FORM_IMPORTS_PATH);
+  }
 
   const result = await syncImportedLookupsForImport(id);
   await setFlashToast({
@@ -341,6 +373,18 @@ export async function syncImportedDropdowns(formData: FormData) {
       result.categoriesSynced > 0 || result.peopleSynced > 0
         ? `${result.importName}: synced ${result.valuesSynced} dropdown values and ${result.peopleSynced} people.`
         : `${result.importName}: no dropdown values or people were found to sync.`,
+  });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "sync_imported_dropdowns",
+    targetType: "form-import",
+    targetId: id,
+    details: {
+      importName: result.importName,
+      categoriesSynced: result.categoriesSynced,
+      valuesSynced: result.valuesSynced,
+      peopleSynced: result.peopleSynced,
+    },
   });
 
   revalidatePath(FORM_IMPORTS_PATH);
