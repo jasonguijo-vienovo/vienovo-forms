@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { writeAuditLog } from "@/lib/audit";
 import { BUILTIN_FORMS } from "@/lib/form-definitions";
 import {
   FormDefinition,
@@ -28,7 +29,7 @@ function bool(formData: FormData, key: string) {
 const BUILTIN_FORM_SLUGS = new Set(BUILTIN_FORMS.map((form) => form.slug));
 
 export async function updateFormDefinition(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
@@ -66,6 +67,13 @@ export async function updateFormDefinition(formData: FormData) {
     }
   );
   await setFlashToast({ tone: "success", message: "Form settings saved." });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "update_form_definition",
+    targetType: "form-definition",
+    targetId: id || slug,
+    details: { slug, status, visibility, availability },
+  });
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
@@ -75,7 +83,7 @@ export async function updateFormDefinition(formData: FormData) {
 }
 
 export async function hideFormDefinition(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
@@ -94,6 +102,13 @@ export async function hideFormDefinition(formData: FormData) {
     }
   );
   await setFlashToast({ tone: "success", message: "Form hidden from users." });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "hide_form_definition",
+    targetType: "form-definition",
+    targetId: id || slug,
+    details: { slug },
+  });
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
@@ -103,7 +118,7 @@ export async function hideFormDefinition(formData: FormData) {
 }
 
 export async function deleteFormDefinition(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
@@ -124,6 +139,13 @@ export async function deleteFormDefinition(formData: FormData) {
     await FormImport.updateOne({ _id: form.importSourceId }, { $set: { status: "draft" } });
   }
   await setFlashToast({ tone: "success", message: "Registry entry deleted." });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "delete_form_definition",
+    targetType: "form-definition",
+    targetId: form.slug,
+    details: { source: form.source, importSourceId: form.importSourceId ? String(form.importSourceId) : "" },
+  });
 
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
