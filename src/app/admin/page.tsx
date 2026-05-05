@@ -233,7 +233,18 @@ export default async function AdminOverviewPage() {
                   </p>
                   <p>
                     Spreadsheet:{" "}
-                    <code>{form.responseSpreadsheetId?.trim() || "not set"}</code>
+                    {form.responseSpreadsheetId?.trim() ? (
+                      <a
+                        href={`https://docs.google.com/spreadsheets/d/${form.responseSpreadsheetId.trim()}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-700 underline break-all"
+                      >
+                        {`https://docs.google.com/spreadsheets/d/${form.responseSpreadsheetId.trim()}`}
+                      </a>
+                    ) : (
+                      <code>not set</code>
+                    )}
                   </p>
                   <p>
                     Tab:{" "}
