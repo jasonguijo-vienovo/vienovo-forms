@@ -26,22 +26,38 @@ export function SearchableSelect({
   className = "field-input",
 }: Props) {
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const normalized = useMemo(
+    () =>
+      options.map((o) => ({
+        ...o,
+        _label: o.label.toLowerCase(),
+        _value: o.value.toLowerCase(),
+      })),
+    [options]
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q));
-  }, [options, query]);
+    return normalized
+      .filter((o) => o._label.includes(q) || o._value.includes(q))
+      .map(({ value, label }) => ({ value, label }));
+  }, [normalized, options, query]);
 
   return (
     <div className="space-y-2">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search options..."
-        className="field-input text-sm"
-        style={{ display: query || !disabled ? "block" : "none" }}
-      />
+      {searchOpen ? (
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search options..."
+          className="field-input text-sm"
+          disabled={disabled}
+        />
+      ) : null}
       <select
         name={name}
         value={value}
@@ -49,8 +65,10 @@ export function SearchableSelect({
         required={required}
         disabled={disabled}
         className={className}
-        onFocus={() => {
-          if (!query) setQuery("");
+        onFocus={() => setSearchOpen(true)}
+        onClick={() => setSearchOpen(true)}
+        onBlur={() => {
+          if (!query.trim()) setSearchOpen(false);
         }}
       >
         <option value="">{placeholder}</option>
@@ -63,4 +81,3 @@ export function SearchableSelect({
     </div>
   );
 }
-
