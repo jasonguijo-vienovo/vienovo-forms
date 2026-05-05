@@ -183,6 +183,7 @@ export function ApproversClient({
                                 type="checkbox"
                                 name={`role_${role}`}
                                 defaultChecked={approver.roles.includes(role)}
+                                disabled={editingId !== approver._id}
                                 className="accent-brand-600"
                               />
                               <span className="capitalize text-surface-text">{role}</span>
