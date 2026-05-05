@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Image from "next/image";
+import { SearchableSelect } from "@/components/searchable-select";
 import {
   REIMBURSEMENT_EXPENSE_ACCOUNTS,
   reimbursementExpenseFieldName,
@@ -384,28 +385,7 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Department" required>
-            <select
-              name="department"
-              value={department}
-              onChange={(e) => {
-                const next = e.target.value;
-                setDepartment(next);
-                setCostCenter("");
-                setLocation("");
-              }}
-              required
-              className="field-input"
-            >
-              <option value="">-- Select --</option>
-              {department && !departmentOptions.includes(department) ? (
-                <option value={department}>{department} (Current)</option>
-              ) : null}
-              {departmentOptions.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect name="department" value={department} onChange={(next) => { setDepartment(next); setCostCenter(""); setLocation(""); }} required placeholder="-- Select --" options={[...(department && !departmentOptions.includes(department) ? [{ value: department, label: `${department} (Current)` }] : []), ...departmentOptions.map((d) => ({ value: d, label: d }))]} />
           </Field>
 
           <Field label="Form Type" required>
@@ -500,50 +480,10 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Field label="Cost Center" required>
-            <select
-              name="costCenter"
-              value={costCenter}
-              onChange={(e) => {
-                const next = e.target.value;
-                setCostCenter(next);
-                setLocation("");
-              }}
-              required
-              className="field-input"
-              disabled={!department}
-            >
-              <option value="">{department ? "-- Select --" : "-- Select Department first --"}</option>
-              {costCenter && !costCenterOptions.includes(costCenter) ? (
-                <option value={costCenter}>{costCenter} (Current)</option>
-              ) : null}
-              {costCenterOptions.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect name="costCenter" value={costCenter} onChange={(next) => { setCostCenter(next); setLocation(""); }} required disabled={!department} placeholder={department ? "-- Select --" : "-- Select Department first --"} options={[...(costCenter && !costCenterOptions.includes(costCenter) ? [{ value: costCenter, label: `${costCenter} (Current)` }] : []), ...costCenterOptions.map((v) => ({ value: v, label: v }))]} />
           </Field>
           <Field label="Location" required>
-            <select
-              name="location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              required
-              className="field-input"
-              disabled={!department || !costCenter}
-            >
-              <option value="">
-                {department && costCenter ? "-- Select --" : "-- Select Cost Center first --"}
-              </option>
-              {location && !locationOptions.includes(location) ? (
-                <option value={location}>{location} (Current)</option>
-              ) : null}
-              {locationOptions.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect name="location" value={location} onChange={setLocation} required disabled={!department || !costCenter} placeholder={department && costCenter ? "-- Select --" : "-- Select Cost Center first --"} options={[...(location && !locationOptions.includes(location) ? [{ value: location, label: `${location} (Current)` }] : []), ...locationOptions.map((v) => ({ value: v, label: v }))]} />
           </Field>
         </div>
 
@@ -592,18 +532,7 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
             <label className="block text-xs font-semibold text-gray-700">
               Add expense account <span className="text-red-500">*</span>
             </label>
-            <select
-              value={addExpenseCode}
-              onChange={(e) => setAddExpenseCode(e.target.value)}
-              className="field-input mt-2"
-            >
-              <option value="">-- Select an account --</option>
-              {availableAccountsToAdd.map((a) => (
-                <option key={a.code} value={a.code}>
-                  {a.code} {a.label}
-                </option>
-              ))}
-            </select>
+            <SearchableSelect value={addExpenseCode} onChange={setAddExpenseCode} placeholder="-- Select an account --" className="field-input mt-2" options={availableAccountsToAdd.map((a) => ({ value: a.code, label: `${a.code} ${a.label}` }))} />
           </div>
           <button
             type="button"
@@ -730,23 +659,7 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
                 </p>
               </>
             ) : (
-              <select
-                name="supervisorId"
-                value={supervisorId}
-                onChange={(e) => setSupervisorId(e.target.value)}
-                required
-                className="field-input"
-                disabled={!selectedRoute}
-              >
-                <option value="">
-                  {selectedRoute ? "-- Select --" : "-- Select routing first --"}
-                </option>
-                {supervisors.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect name="supervisorId" value={supervisorId} onChange={setSupervisorId} required disabled={!selectedRoute} placeholder={selectedRoute ? "-- Select --" : "-- Select routing first --"} options={supervisors.map((a) => ({ value: a.id, label: a.name }))} />
             )}
           </Field>
           <Field label="Immediate Superior Email">
@@ -781,23 +694,7 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
                 </p>
               </>
             ) : (
-              <select
-                name="headId"
-                value={headId}
-                onChange={(e) => setHeadId(e.target.value)}
-                required
-                className="field-input"
-                disabled={!selectedRoute}
-              >
-                <option value="">
-                  {selectedRoute ? "-- Select --" : "-- Select routing first --"}
-                </option>
-                {heads.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect name="headId" value={headId} onChange={setHeadId} required disabled={!selectedRoute} placeholder={selectedRoute ? "-- Select --" : "-- Select routing first --"} options={heads.map((a) => ({ value: a.id, label: a.name }))} />
             )}
           </Field>
           <Field label="Department Head Email">
@@ -977,3 +874,4 @@ function Field({
     </div>
   );
 }
+
