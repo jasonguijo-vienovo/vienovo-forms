@@ -343,6 +343,9 @@ export default async function FormImportsPage() {
                         <DatabaseZap className="h-4 w-4" />
                         Update from spreadsheet
                       </ActionForm>
+                      <ActionForm action={syncImportedDropdowns} id={String(item._id)} tone="default" dryRun>
+                        Dry run sync
+                      </ActionForm>
                       <Link
                         href={`/forms/${item.slug}`}
                         className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition"
@@ -353,6 +356,9 @@ export default async function FormImportsPage() {
                       <ActionForm action={publishFormImport} id={String(item._id)} tone="brand">
                         <CheckCircle2 className="h-4 w-4" />
                         Make live
+                      </ActionForm>
+                      <ActionForm action={publishFormImport} id={String(item._id)} tone="default" dryRun>
+                        Dry run publish
                       </ActionForm>
                       <ActionForm action={deleteFormImport} id={String(item._id)} tone="danger">
                         <Trash2 className="h-4 w-4" />
@@ -653,11 +659,13 @@ function ActionForm({
   id,
   children,
   tone = "default",
+  dryRun = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   id: string;
   children: React.ReactNode;
   tone?: "default" | "brand" | "blue" | "danger";
+  dryRun?: boolean;
 }) {
   const className =
     tone === "brand"
@@ -671,6 +679,7 @@ function ActionForm({
   return (
     <form action={action}>
       <input type="hidden" name="id" value={id} />
+      {dryRun ? <input type="hidden" name="dryRun" value="1" /> : null}
       <PendingSubmitButton
         type="submit"
         idleLabel={children}

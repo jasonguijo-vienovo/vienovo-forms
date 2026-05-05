@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { writeAuditLog } from "@/lib/audit";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 import { NotificationFlow } from "@/models/NotificationFlow";
 
@@ -89,6 +90,13 @@ export async function sendNotificationTestEmail(formData: FormData) {
       tone: "success",
       message: `Test email sent to ${targetEmail}.`,
     });
+    await writeAuditLog({
+      actorEmail: adminEmail,
+      action: "send_smtp_test_email",
+      targetType: "notification",
+      targetId: targetEmail,
+      details: { sentAt, appEnv },
+    });
   } catch (error) {
     console.error("sendNotificationTestEmail failed:", error);
     await setFlashToast({
@@ -104,7 +112,7 @@ export async function sendNotificationTestEmail(formData: FormData) {
 }
 
 export async function saveNotificationFlow(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const formSlug = s(formData, "formSlug");
@@ -133,11 +141,18 @@ export async function saveNotificationFlow(formData: FormData) {
   );
 
   await setFlashToast({ tone: "success", message: `Notification flow saved for ${formName}.` });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "save_notification_flow",
+    targetType: "notification-flow",
+    targetId: formSlug,
+    details: { formName },
+  });
   redirect(NOTIFICATIONS_PATH);
 }
 
 export async function resetNotificationFlow(formData: FormData) {
-  await requireAdmin();
+  const { email } = await requireAdmin();
   await connectMongo();
 
   const formSlug = s(formData, "formSlug");
@@ -148,6 +163,13 @@ export async function resetNotificationFlow(formData: FormData) {
   await setFlashToast({
     tone: "success",
     message: `${formName || formSlug} notification flow reset to defaults.`,
+  });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "reset_notification_flow",
+    targetType: "notification-flow",
+    targetId: formSlug,
+    details: { formName },
   });
   redirect(NOTIFICATIONS_PATH);
 }
