@@ -118,6 +118,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   padding: 3rem 1rem;
 }
 
+.app-page--full {
+  max-width: 1440px;
+}
+
 .admin-page {
   display: flex;
   flex-direction: column;

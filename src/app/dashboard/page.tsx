@@ -62,7 +62,7 @@ export default async function DashboardPage() {
   return (
     <>
       <Navbar />
-      <main className="app-page">
+      <main className="app-page app-page--full">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="section-eyebrow">Requester workspace</p>
