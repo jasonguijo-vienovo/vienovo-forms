@@ -62,7 +62,7 @@ export default async function DashboardPage() {
   return (
     <>
       <Navbar />
-      <main className="mx-auto w-full max-w-none px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-[1920px] px-3 py-6 sm:px-5 md:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="section-eyebrow">Requester workspace</p>
@@ -86,18 +86,18 @@ export default async function DashboardPage() {
               View all
             </Link>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {forms.length > 0 ? (
               forms.slice(0, 8).map((form) => <FormCard key={form.slug} {...form} />)
             ) : (
-              <div className="app-panel p-8 text-center text-sm text-surface-muted sm:col-span-2">
+              <div className="app-panel p-8 text-center text-sm text-surface-muted sm:col-span-2 lg:col-span-3 2xl:col-span-4">
                 No available request forms right now.
               </div>
             )}
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Panel title="Recent requests" description="Latest forms you submitted.">
             {myRequests.length > 0 ? (
               <div className="divide-y divide-surface-border">
