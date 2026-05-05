@@ -320,20 +320,13 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Approver" required>
-            <select
+            <SearchableSelect
               name="approverId"
               value={approverId}
-              onChange={(e) => setApproverId(e.target.value)}
+              onChange={setApproverId}
               required
-              className="field-input"
-            >
-              <option value="">-- Select --</option>
-              {approvers.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              options={approvers.map((a) => ({ value: a.id, label: a.name }))}
+            />
           </Field>
           <Field label="Approver's Email">
             <input
