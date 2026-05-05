@@ -12,6 +12,9 @@ import { parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 import { FormDefinition } from "@/models/FormDefinition";
 
+const DEFAULT_RESPONSE_SPREADSHEET_ID =
+  process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() || process.env.GOOGLE_SHEETS_MASTER_ID?.trim() || "";
+
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
@@ -93,6 +96,9 @@ async function ensureImportedRegistryEntry(imported: {
   slug: string;
   name: string;
   notes?: string;
+  writeResponsesToSheet?: boolean;
+  responseSheetName?: string;
+  spreadsheetId?: string;
 }) {
   if (RESERVED_NATIVE_SLUGS.has(imported.slug)) {
     throw new Error(
@@ -109,6 +115,9 @@ async function ensureImportedRegistryEntry(imported: {
         routePath: `/forms/${imported.slug}`,
         source: "imported",
         importSourceId: imported._id,
+        writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
+        responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || imported.spreadsheetId || "",
+        responseSheetName: imported.responseSheetName || `${imported.name} Responses`,
         notes: imported.notes || "",
       },
       $setOnInsert: {
@@ -205,16 +214,29 @@ export async function updateFormImportConfig(formData: FormData) {
 
   const id = s(formData, "id");
   if (!id) return;
+  const writeResponsesToSheet = bool(formData, "writeResponsesToSheet");
+  const responseSheetName = s(formData, "responseSheetName");
+  const spreadsheetId = s(formData, "spreadsheetId");
 
   await FormImport.updateOne(
     { _id: id },
     {
       $set: {
-        spreadsheetId: s(formData, "spreadsheetId"),
+        spreadsheetId,
         spreadsheetBindings: bindingsFromFormData(formData),
-        writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
-        responseSheetName: s(formData, "responseSheetName"),
+        writeResponsesToSheet,
+        responseSheetName,
         notes: s(formData, "notes"),
+      },
+    }
+  );
+  await FormDefinition.updateOne(
+    { importSourceId: id },
+    {
+      $set: {
+        writeResponsesToSheet,
+        responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || spreadsheetId,
+        responseSheetName,
       },
     }
   );
@@ -265,6 +287,9 @@ export async function publishFormImport(formData: FormData) {
         visibility: "everyone",
         availability: "available",
         isImplemented: true,
+        writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
+        responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || imported.spreadsheetId || "",
+        responseSheetName: imported.responseSheetName || `${imported.name} Responses`,
       },
     }
   );
