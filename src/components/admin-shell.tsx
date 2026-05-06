@@ -45,8 +45,8 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
         </div>
         <div
           className={[
-            "flex pb-4 pt-1",
-            collapsed ? "justify-start px-6" : "justify-end px-6",
+            "flex pb-4",
+            collapsed ? "justify-center px-0 pt-2" : "justify-end px-6 pt-1",
           ].join(" ")}
         >
           <button
