@@ -27,6 +27,8 @@ type ViewFilter = "all" | "active" | "inactive" | "review";
 export function ProcessorsClient({ processors }: { processors: ProcessorRow[] }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const filtered = processors.filter((processor) => {
     const matchesQuery =
@@ -46,6 +48,11 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
         eyebrow="People setup"
         title="Processors"
         description="Manage the people who handle requests after approval. This keeps the processor roster clean without changing approval or submission logic."
+        actions={
+          <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
+            Add processor
+          </button>
+        }
       />
 
       <AdminHelpPanel title="What this page does">
@@ -60,17 +67,24 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
         <AdminMetricCard label="Visible now" value={filtered.length} hint="Current filtered result" />
       </div>
 
-      <AdminSection
-        title="Add a processor"
-        description="Use this when a new person should be selectable as a final processor."
-      >
-        <form action={addApprover} className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_auto]">
-          <input type="hidden" name="role_processor" value="on" />
-          <input type="text" name="name" placeholder="Full name" required className="field-input" />
-          <input type="email" name="email" placeholder="email@vienovo.ph" className="field-input" />
-          <PendingSubmitButton type="submit" idleLabel="Add processor" pendingLabel="Adding..." className="btn-primary" />
-        </form>
-      </AdminSection>
+      {showAddModal ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setShowAddModal(false)}>
+          <div className="w-full max-w-xl rounded-md border border-surface-border bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-surface-text">Add processor</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="text-sm font-semibold text-surface-muted hover:text-surface-text">
+                Close
+              </button>
+            </div>
+            <form action={addApprover} className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_auto]">
+              <input type="hidden" name="role_processor" value="on" />
+              <input type="text" name="name" placeholder="Full name" required className="field-input" />
+              <input type="email" name="email" placeholder="email@vienovo.ph" className="field-input" />
+              <PendingSubmitButton type="submit" idleLabel="Add processor" pendingLabel="Adding..." className="btn-primary" />
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <AdminSection
         title="Processor list"
@@ -112,24 +126,18 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
                   <tr key={processor._id} className="bg-white">
                     <td className="px-4 py-4 font-medium text-surface-text">{processor.name}</td>
                     <td className="px-4 py-4">
-                      <form action={updateApprover} className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="id" value={processor._id} />
-                        <input type="hidden" name="department" value={processor.department || ""} />
-                        <input type="hidden" name="role_processor" value="on" />
+                      {editingId === processor._id ? (
                         <input
+                          form={`processor-edit-${processor._id}`}
                           type="email"
                           name="email"
                           defaultValue={processor.email}
                           placeholder="email@vienovo.ph"
                           className={`field-input w-[260px] ${processor.emailNeedsReview ? "border-amber-300 bg-amber-50" : ""}`}
                         />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Save email"
-                          pendingLabel="Saving..."
-                          className="text-sm font-semibold text-brand-700 hover:underline"
-                        />
-                      </form>
+                      ) : (
+                        <p className="text-sm text-surface-text">{processor.email}</p>
+                      )}
                       {processor.emailNeedsReview ? (
                         <p className="mt-2 text-xs text-amber-700">This email still needs review.</p>
                       ) : null}
@@ -141,6 +149,36 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-2">
+                        {editingId === processor._id ? (
+                          <>
+                            <form id={`processor-edit-${processor._id}`} action={updateApprover}>
+                              <input type="hidden" name="id" value={processor._id} />
+                              <input type="hidden" name="department" value={processor.department || ""} />
+                              <input type="hidden" name="role_processor" value="on" />
+                              <PendingSubmitButton
+                                type="submit"
+                                idleLabel="Save"
+                                pendingLabel="Saving..."
+                                className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                              />
+                            </form>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(processor._id)}
+                            className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                          >
+                            Edit
+                          </button>
+                        )}
                         <form action={toggleApprover}>
                           <input type="hidden" name="id" value={processor._id} />
                           <PendingSubmitButton
