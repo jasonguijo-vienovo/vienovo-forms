@@ -84,22 +84,32 @@ export function NotificationsClient({
         title="SMTP test email"
         description="Send a real test email using the current deployment settings before testing live form notifications."
       >
-        <form action={sendNotificationTestEmail} className="w-full max-w-2xl">
-          <PendingFormState className="flex flex-col gap-3 sm:flex-row">
-            <input type="email" name="testEmail" placeholder="email@vienovo.ph" className="field-input flex-1" />
-            <PendingSubmitButton
-              type="submit"
-              idleLabel={
-                <span className="inline-flex items-center gap-2">
-                  <Send className="h-4 w-4" />
-                  <span>Send test email</span>
-                </span>
-              }
-              pendingLabel="Sending..."
-              className="btn-primary"
-            />
-          </PendingFormState>
-        </form>
+        <div className="rounded-md border border-surface-border bg-slate-50 p-3">
+          <p className="mb-2 text-xs text-surface-muted">
+            Quick check before go-live. Leave blank to send to your current admin email.
+          </p>
+          <form action={sendNotificationTestEmail} className="w-full">
+            <PendingFormState className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="email"
+                name="testEmail"
+                placeholder="email@vienovo.ph"
+                className="field-input flex-1"
+              />
+              <PendingSubmitButton
+                type="submit"
+                idleLabel={
+                  <span className="inline-flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    <span>Send test</span>
+                  </span>
+                }
+                pendingLabel="Sending..."
+                className="btn-primary sm:min-w-[140px]"
+              />
+            </PendingFormState>
+          </form>
+        </div>
       </AdminSection>
 
       <AdminSection
@@ -232,18 +242,19 @@ export function NotificationsClient({
                     </div>
 
                     <div className="flex justify-end">
-                      <PendingSubmitButton
-                        type="submit"
-                        disabled={editingSlug !== flow.formSlug}
-                        idleLabel={
-                          <span className="inline-flex items-center gap-2">
-                            <Save className="h-4 w-4" />
-                            <span>Save notification flow</span>
-                          </span>
-                        }
-                        pendingLabel="Saving..."
-                        className="btn-primary"
-                      />
+                      {editingSlug === flow.formSlug ? (
+                        <PendingSubmitButton
+                          type="submit"
+                          idleLabel={
+                            <span className="inline-flex items-center gap-2">
+                              <Save className="h-4 w-4" />
+                              <span>Save notification flow</span>
+                            </span>
+                          }
+                          pendingLabel="Saving..."
+                          className="btn-primary"
+                        />
+                      ) : null}
                     </div>
                   </PendingFormState>
                 </form>
