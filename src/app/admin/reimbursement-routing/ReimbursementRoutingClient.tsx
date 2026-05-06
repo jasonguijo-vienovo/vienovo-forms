@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
@@ -31,6 +31,15 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
   const [view, setView] = useState<ViewFilter>("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showAddModal]);
 
   const filtered = routes.filter((route) => {
     const matchesQuery =
@@ -80,7 +89,7 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
       </div>
 
       {showAddModal ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setShowAddModal(false)}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
           <div className="w-full max-w-4xl rounded-md border border-surface-border bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-surface-text">Add or update a routing rule</h3>
