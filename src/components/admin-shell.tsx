@@ -209,8 +209,8 @@ export function AdminShell({
                 <div className="max-h-[360px] overflow-auto p-2">
                   {systemNotifications.length > 0 ? systemNotifications.map((item, i) => (
                     <div key={`${item.target}-${i}`} className="rounded border border-surface-border px-3 py-2 mb-2">
-                      <p className="text-xs font-semibold text-surface-text">{item.action}</p>
-                      <p className="text-xs text-surface-muted truncate">{item.target || "system"}</p>
+                      <p className="text-xs font-semibold text-surface-text">{systemTitle(item.action)}</p>
+                      <p className="text-xs text-surface-muted truncate">{systemMessage(item.action, item.target)}</p>
                       <p className="text-xs text-surface-muted truncate">By: {item.actorEmail}</p>
                       <p className="text-[11px] mt-1">
                         <span className={item.outcome === "success" ? "text-green-700" : "text-red-700"}>{item.outcome}</span>
@@ -259,4 +259,19 @@ export function AdminShell({
       </div>
     </div>
   );
+}
+
+function systemTitle(action: string) {
+  const value = action.toLowerCase();
+  if (value.includes("error") || value.includes("fail")) return "System error detected";
+  if (value.includes("delete") || value.includes("remove")) return "Record deleted";
+  if (value.includes("edit") || value.includes("update")) return "Settings updated";
+  if (value.includes("create") || value.includes("add")) return "New record created";
+  return "System activity";
+}
+
+function systemMessage(action: string, target: string) {
+  const readable = action.replace(/[_-]+/g, " ").trim();
+  const niceAction = readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : "Activity";
+  return `${niceAction} on ${target || "system record"}`;
 }
