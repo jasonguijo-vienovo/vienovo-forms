@@ -26,6 +26,15 @@ type ApproverRow = {
 
 type ViewFilter = "all" | "review" | "active" | "inactive";
 
+const ROLE_TONE: Record<string, string> = {
+  supervisor: "border-blue-200 bg-blue-50 text-blue-700",
+  departmenthead: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  cashadvance: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  finalapprover: "border-amber-200 bg-amber-50 text-amber-700",
+  processor: "border-violet-200 bg-violet-50 text-violet-700",
+  approver: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
 export function ApproversClient({
   approvers,
   roles,
@@ -177,7 +186,22 @@ export function ApproversClient({
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-surface-text">{approver.roles.join(", ") || "No roles"}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {approver.roles.length > 0 ? (
+                            approver.roles.map((role) => (
+                              <span
+                                key={role}
+                                className={`inline-flex items-center rounded border px-2 py-1 text-xs font-medium capitalize ${
+                                  ROLE_TONE[role.toLowerCase()] ?? "border-slate-200 bg-slate-50 text-slate-700"
+                                }`}
+                              >
+                                {role}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-surface-muted">No roles</span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-4">
