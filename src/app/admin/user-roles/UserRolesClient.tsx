@@ -39,6 +39,7 @@ function formatDate(value?: string) {
 export function UserRolesClient({ users }: { users: UserRow[] }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const filtered = useMemo(() => {
     return users.filter((user) => {
@@ -62,47 +63,60 @@ export function UserRolesClient({ users }: { users: UserRow[] }) {
         eyebrow="Access control"
         title="User roles"
         description="Promote or demote who can open the admin console. Approval and processor responsibilities still belong on their own pages."
+        actions={
+          <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
+            Add user role
+          </button>
+        }
       />
 
-      <AdminHelpPanel title="What this page does">
-        Use this page for app access only. If someone should approve or process requests, keep using
-        the Approvers or Processors pages. Emails listed in <code>ADMIN_EMAILS</code> are still
-        forced as admin even if you demote them here.
-      </AdminHelpPanel>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Known users" value={users.length} />
-        <AdminMetricCard label="Admins" value={adminCount} tone="ok" />
-        <AdminMetricCard label="Requesters" value={users.filter((user) => user.role === "user").length} />
-        <AdminMetricCard label="Env-locked admins" value={envAdminCount} hint="Managed by ADMIN_EMAILS" />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CompactMetricCard label="Known users" value={users.length} />
+          <CompactMetricCard label="Admins" value={adminCount} tone="ok" />
+          <CompactMetricCard label="Requesters" value={users.filter((user) => user.role === "user").length} />
+          <CompactMetricCard label="Env-locked admins" value={envAdminCount} />
+        </div>
+        <AdminHelpPanel title="What this page does">
+          Use this page for app access only. If someone should approve or process requests, keep using
+          the Approvers or Processors pages. Emails listed in <code>ADMIN_EMAILS</code> are still
+          forced as admin even if you demote them here.
+        </AdminHelpPanel>
       </div>
 
-      <AdminSection
-        title="Promote or add a user"
-        description="You can pre-create a user role even before the person signs in for the first time."
-      >
-        <form action={saveUserRole} className="max-w-4xl">
-          <PendingFormState className="grid gap-4 md:grid-cols-[1fr_1fr_180px_auto]">
-            <input name="name" placeholder="Full name (optional)" className="field-input" />
-            <input name="email" type="email" required placeholder="name@vienovo.ph" className="field-input" />
-            <select name="role" defaultValue="user" className="field-input">
-              <option value="user">Requester</option>
-              <option value="admin">Admin</option>
-            </select>
-            <PendingSubmitButton
-              type="submit"
-              idleLabel={
-                <span className="inline-flex items-center gap-2">
-                  <UserCog className="h-4 w-4" />
-                  <span>Save role</span>
-                </span>
-              }
-              pendingLabel="Saving..."
-              className="btn-primary"
-            />
-          </PendingFormState>
-        </form>
-      </AdminSection>
+      {showAddModal ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setShowAddModal(false)}>
+          <div className="w-full max-w-2xl rounded-md border border-surface-border bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-surface-text">Promote or add a user</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="text-sm font-semibold text-surface-muted hover:text-surface-text">
+                Close
+              </button>
+            </div>
+            <form action={saveUserRole}>
+              <PendingFormState className="grid gap-4 md:grid-cols-[1fr_1fr_180px_auto]">
+                <input name="name" placeholder="Full name (optional)" className="field-input" />
+                <input name="email" type="email" required placeholder="name@vienovo.ph" className="field-input" />
+                <select name="role" defaultValue="user" className="field-input">
+                  <option value="user">Requester</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel={
+                    <span className="inline-flex items-center gap-2">
+                      <UserCog className="h-4 w-4" />
+                      <span>Save role</span>
+                    </span>
+                  }
+                  pendingLabel="Saving..."
+                  className="btn-primary"
+                />
+              </PendingFormState>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <AdminSection
         title="Current user access"
@@ -197,6 +211,26 @@ export function UserRolesClient({ users }: { users: UserRow[] }) {
           </div>
         )}
       </AdminSection>
+    </div>
+  );
+}
+
+function CompactMetricCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "ok" ? "text-brand-700" : tone === "warn" ? "text-amber-700" : "text-surface-text";
+
+  return (
+    <div className="admin-panel px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
     </div>
   );
 }
