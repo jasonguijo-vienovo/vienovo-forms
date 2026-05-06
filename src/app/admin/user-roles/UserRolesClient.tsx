@@ -143,71 +143,78 @@ export function UserRolesClient({ users }: { users: UserRow[] }) {
             description="Try a different search or create the user role above."
           />
         ) : (
-          <div className="grid gap-4">
-            {filtered.map((user) => (
-              <section key={user.email} className="border border-surface-border bg-white p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-10 w-10 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
-                        {user.role === "admin" ? <ShieldCheck className="h-5 w-5" /> : <UserRound className="h-5 w-5" />}
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                <tr>
+                  <th className="px-4 py-3">User</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">First seen</th>
+                  <th className="px-4 py-3">Last seen</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-border">
+                {filtered.map((user) => (
+                  <tr key={user.email} className="bg-white align-top">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-9 w-9 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+                          {user.role === "admin" ? <ShieldCheck className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-surface-text">{user.name || user.email}</p>
+                          <p className="truncate text-xs text-surface-muted">{user.email}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <h3 className="truncate text-lg font-semibold text-surface-text">
-                          {user.name || user.email}
-                        </h3>
-                        <p className="truncate text-sm text-surface-muted">{user.email}</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <AdminStatusPill tone={user.role === "admin" ? "ok" : "neutral"}>
-                        {user.role === "admin" ? "Admin" : "Requester"}
-                      </AdminStatusPill>
-                      {user.isEnvAdmin ? (
-                        <AdminStatusPill tone="brand">
-                          <span className="inline-flex items-center gap-1">
-                            <Crown className="h-3 w-3" />
-                            <span>Env admin</span>
-                          </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <AdminStatusPill tone={user.role === "admin" ? "ok" : "neutral"}>
+                          {user.role === "admin" ? "Admin" : "Requester"}
                         </AdminStatusPill>
-                      ) : null}
-                    </div>
-                    <p className="mt-3 text-xs text-surface-muted">
-                      First seen: {formatDate(user.firstSeenAt)}
-                      {" - "}
-                      Last seen: {formatDate(user.lastSeenAt)}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {user.role === "admin" ? (
-                      <form action={demoteUserToRequester}>
-                        <input type="hidden" name="email" value={user.email} />
-                        <input type="hidden" name="name" value={user.name} />
-                        <PendingSubmitButton
-                          type="submit"
-                          disabled={user.isEnvAdmin}
-                          idleLabel="Demote to requester"
-                          pendingLabel="Saving..."
-                          className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      </form>
-                    ) : (
-                      <form action={promoteUserToAdmin}>
-                        <input type="hidden" name="email" value={user.email} />
-                        <input type="hidden" name="name" value={user.name} />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Promote to admin"
-                          pendingLabel="Saving..."
-                          className="btn-primary"
-                        />
-                      </form>
-                    )}
-                  </div>
-                </div>
-              </section>
-            ))}
+                        {user.isEnvAdmin ? (
+                          <AdminStatusPill tone="brand">
+                            <span className="inline-flex items-center gap-1">
+                              <Crown className="h-3 w-3" />
+                              <span>Env admin</span>
+                            </span>
+                          </AdminStatusPill>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-surface-muted">{formatDate(user.firstSeenAt)}</td>
+                    <td className="px-4 py-3 text-xs text-surface-muted">{formatDate(user.lastSeenAt)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {user.role === "admin" ? (
+                        <form action={demoteUserToRequester} className="inline-flex">
+                          <input type="hidden" name="email" value={user.email} />
+                          <input type="hidden" name="name" value={user.name} />
+                          <PendingSubmitButton
+                            type="submit"
+                            disabled={user.isEnvAdmin}
+                            idleLabel="Demote to requester"
+                            pendingLabel="Saving..."
+                            className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                        </form>
+                      ) : (
+                        <form action={promoteUserToAdmin} className="inline-flex">
+                          <input type="hidden" name="email" value={user.email} />
+                          <input type="hidden" name="name" value={user.name} />
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Promote to admin"
+                            pendingLabel="Saving..."
+                            className="btn-primary"
+                          />
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </AdminSection>
