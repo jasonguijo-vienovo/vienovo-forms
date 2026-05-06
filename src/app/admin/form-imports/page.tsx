@@ -15,7 +15,9 @@ function normalizeLookupKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-export default async function FormImportsPage() {
+export default async function FormImportsPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+  const resolved = (await searchParams) ?? {};
+  const tab = String(resolved.tab ?? "create");
   await connectMongo();
   const [imports, definitions, syncedLookupRows] = await Promise.all([
     FormImport.find({}).sort({ createdAt: -1 }).lean(),
@@ -63,7 +65,12 @@ export default async function FormImportsPage() {
         <AdminMetricCard label="Live forms" value={published} tone="ok" />
       </div>
 
-      <AdminSection title="Step 1: Create or replace an import draft" description="Use the same form ID if you are re-importing.">
+      <div className="flex flex-wrap gap-2">
+        <a href="/admin/form-imports?tab=create" className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${tab === "create" ? "border-brand-700 bg-brand-50 text-brand-700" : "border-surface-border bg-white text-surface-muted"}`}>Step 1: Create Draft</a>
+        <a href="/admin/form-imports?tab=manage" className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${tab === "manage" ? "border-brand-700 bg-brand-50 text-brand-700" : "border-surface-border bg-white text-surface-muted"}`}>Step 2: Manage Drafts</a>
+      </div>
+
+      {tab === "create" ? <AdminSection title="Step 1: Create or replace an import draft" description="Use the same form ID if you are re-importing.">
         <form action={createFormImport} className="space-y-4">
           <PendingFormState className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -75,19 +82,19 @@ export default async function FormImportsPage() {
               <Field label="index.html file(s)"><input type="file" name="htmlFiles" multiple className="field-input" /></Field>
               <Field label="code.gs file(s)"><input type="file" name="gsFiles" multiple className="field-input" /></Field>
             </div>
-            <div className="flex justify-end"><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><FileInput className="h-4 w-4" /><span>Save draft</span></span>} pendingLabel="Saving draft..." className="btn-primary" /></div>
+            <div className="flex justify-end"><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><FileInput className="h-4 w-4" /><span>Save draft & open Step 2</span></span>} pendingLabel="Saving draft..." className="btn-primary" /></div>
           </PendingFormState>
         </form>
-      </AdminSection>
+      </AdminSection> : null}
 
-      <AdminSection title="Step 2: Review, sync, preview, publish" description="Two-column efficient workflow" meta={`${imports.length} drafts`}>
+      {tab === "manage" ? <AdminSection title="Step 2: Review, sync, preview, publish" description="Two-column efficient workflow" meta={`${imports.length} drafts`}>
         <FormImportsClient
           imports={JSON.parse(JSON.stringify(imports))}
           definitionBySlug={definitionBySlug}
           syncedStatsBySlugKey={syncedStatsBySlugKey}
           statuses={FORM_IMPORT_STATUSES}
         />
-      </AdminSection>
+      </AdminSection> : null}
     </div>
   );
 }

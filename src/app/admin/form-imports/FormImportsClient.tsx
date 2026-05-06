@@ -29,9 +29,16 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
 
   const visible = filtered.slice(0, limit);
   const current = filtered.find((x: any) => String(x._id) === selectedId) ?? filtered[0] ?? null;
+  const blockers = filtered.reduce((n: number, it: any) => n + (it.parseDiagnostics?.blockers?.length ?? 0), 0);
+  const warnings = filtered.reduce((n: number, it: any) => n + (it.parseDiagnostics?.warnings?.length ?? 0), 0);
 
   return (
     <div className="space-y-4">
+      {(blockers > 0 || warnings > 0) ? (
+        <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span className="font-semibold">Review summary:</span> {blockers} blockers, {warnings} warnings across current results.
+        </div>
+      ) : null}
       <div className="mb-3 flex flex-col gap-3">
         <AdminSearchField value={q} onChange={setQ} placeholder="Search draft by name or form ID" />
         <AdminFilterTabs value={view} onChange={setView} options={[{value:"all",label:"All"},{value:"needs_registry",label:"Needs registry"},{value:"needs_sync",label:"Needs sync"},{value:"live",label:"Live"}]} />
@@ -47,11 +54,11 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
                 setSelected(next);
               }} /> Select visible
             </div>
-            {visible.map((item: any) => {
+              {visible.map((item: any) => {
               const definition = definitionBySlug[item.slug];
               const synced = syncedStatsBySlugKey[item.slug] ?? { valueCount: 0 };
               const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
-              return <button key={String(item._id)} type="button" onClick={()=>setSelectedId(String(item._id))} className={`w-full border p-4 text-left ${String(item._id)===selectedId?"border-brand-400 ring-1 ring-brand-200":"border-surface-border"}`}>
+                return <button key={String(item._id)} type="button" onClick={()=>setSelectedId(String(item._id))} className={`w-full border p-4 text-left ${String(item._id)===selectedId?"border-brand-400 ring-1 ring-brand-200":"border-surface-border"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="font-semibold text-surface-text">{item.name}</p>
@@ -63,6 +70,13 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
                   </div>
                 </div>
                 <p className="mt-2 text-xs text-surface-muted">Synced values: {synced.valueCount ?? 0}</p>
+                <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+                  <PipelineChip done label="Draft" />
+                  <PipelineChip done={Boolean(definition)} label="Registry" />
+                  <PipelineChip done={!item.spreadsheetId || (synced.valueCount ?? 0) > 0} label="Sync" />
+                  <PipelineChip done={Boolean(item.parseDiagnostics?.parsedFieldCount)} label="Preview" />
+                  <PipelineChip done={isLive} label="Live" />
+                </div>
               </button>;
             })}
             {filtered.length > limit ? <button className="btn-secondary w-full" onClick={()=>setLimit((n)=>n+30)}>Load more</button> : null}
@@ -89,6 +103,8 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
 
 function DraftPanel({ item, definition, statuses }: any) {
   const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
+  const syncedNeeded = Boolean(item.spreadsheetId);
+  const nextAction = !definition ? "registry" : (syncedNeeded ? "sync" : (!isLive ? "publish" : "preview"));
   return <div className="space-y-3">
     <div className="flex items-center justify-between">
       <h3 className="text-sm font-semibold text-surface-text">Edit import settings</h3>
@@ -112,10 +128,18 @@ function DraftPanel({ item, definition, statuses }: any) {
       </form>
     </details>
     <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-surface-border bg-white pt-3">
+      {nextAction === "registry" ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Add registry" pendingLabel="Working..." className="btn-primary" /></form> : null}
+      {nextAction === "sync" ? <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Sync from spreadsheet" pendingLabel="Syncing..." className="btn-primary" /></form> : null}
+      {nextAction === "publish" ? <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Publish live" pendingLabel="Publishing..." className="btn-primary" /></form> : null}
+      {nextAction === "preview" ? <Link href={`/forms/${item.slug}`} className="btn-primary"><Eye className="h-4 w-4" />Next: Open preview</Link> : null}
       {!definition ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Layers3 className="h-4 w-4" />Add registry</span>} pendingLabel="Working..." className="btn-secondary" /></form> : null}
       <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><DatabaseZap className="h-4 w-4" />Sync</span>} pendingLabel="Syncing..." className="btn-secondary" /></form>
       <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Publish</span>} pendingLabel="Publishing..." className="btn-primary" /></form>
-      <form action={deleteFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete</span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700" /></form>
+      <form action={deleteFormImport} onSubmit={(e)=>{ if (!confirm("Delete this import draft?")) e.preventDefault(); }}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete</span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700" /></form>
     </div>
   </div>;
+}
+
+function PipelineChip({ done, label }: { done: boolean; label: string }) {
+  return <span className={`rounded border px-2 py-0.5 ${done ? "border-green-200 bg-green-50 text-green-800" : "border-surface-border bg-white text-surface-muted"}`}>{label}</span>;
 }
