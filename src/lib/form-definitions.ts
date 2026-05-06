@@ -142,23 +142,6 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     responseSheetName: "Leave Request Responses",
     notes: "",
   },
-  {
-    slug: "general-request",
-    name: "General Request",
-    description: "Submit a custom request with details for review and processing.",
-    routePath: "/forms/general-request",
-    source: "native",
-    status: "published",
-    visibility: "everyone",
-    availability: "available",
-    isImplemented: true,
-    showInNavbar: true,
-    sortOrder: 80,
-    writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
-    responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
-    responseSheetName: "General Request Responses",
-    notes: "",
-  },
 ];
 
 const BUILTIN_FORM_BY_SLUG = new Map(BUILTIN_FORMS.map((form) => [form.slug, form]));
