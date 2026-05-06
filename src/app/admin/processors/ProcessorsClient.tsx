@@ -55,16 +55,17 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
         }
       />
 
-      <AdminHelpPanel title="What this page does">
-        Processors are the people who do the final work after a request has been approved. Imported
-        form sync may add processor candidates here when it finds them in spreadsheet-driven options.
-      </AdminHelpPanel>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Total processors" value={processors.length} />
-        <AdminMetricCard label="Active processors" value={processors.filter((item) => item.isActive).length} tone="ok" />
-        <AdminMetricCard label="Needs review" value={processors.filter((item) => item.emailNeedsReview).length} tone={processors.some((item) => item.emailNeedsReview) ? "warn" : "ok"} />
-        <AdminMetricCard label="Visible now" value={filtered.length} hint="Current filtered result" />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CompactMetricCard label="Total processors" value={processors.length} />
+          <CompactMetricCard label="Active processors" value={processors.filter((item) => item.isActive).length} tone="ok" />
+          <CompactMetricCard label="Needs review" value={processors.filter((item) => item.emailNeedsReview).length} tone={processors.some((item) => item.emailNeedsReview) ? "warn" : "ok"} />
+          <CompactMetricCard label="Visible now" value={filtered.length} />
+        </div>
+        <AdminHelpPanel title="What this page does">
+          Processors are the people who do the final work after a request has been approved. Imported
+          form sync may add processor candidates here when it finds them in spreadsheet-driven options.
+        </AdminHelpPanel>
       </div>
 
       {showAddModal ? (
@@ -206,6 +207,26 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
           </div>
         )}
       </AdminSection>
+    </div>
+  );
+}
+
+function CompactMetricCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "ok" ? "text-brand-700" : tone === "warn" ? "text-amber-700" : "text-surface-text";
+
+  return (
+    <div className="admin-panel px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
     </div>
   );
 }
