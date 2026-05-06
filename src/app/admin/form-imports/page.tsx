@@ -79,10 +79,47 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
               <Field label="Suggested form ID"><input name="slug" className="field-input" /></Field>
             </div>
             <Field label="Spreadsheet ID"><input name="spreadsheetId" className="field-input" /></Field>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Field label="index.html file(s)"><input type="file" name="htmlFiles" multiple className="field-input" /></Field>
-              <Field label="code.gs file(s)"><input type="file" name="gsFiles" multiple className="field-input" /></Field>
-            </div>
+
+            <details className="rounded-md border border-surface-border bg-slate-50 p-4" open>
+              <summary className="cursor-pointer text-sm font-semibold text-surface-text">
+                Option A: Upload source files
+              </summary>
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Field label="index.html file(s)">
+                  <input type="file" name="htmlFiles" accept=".html,.htm,text/html" multiple className="field-input" />
+                </Field>
+                <Field label="code.gs file(s)">
+                  <input type="file" name="gsFiles" accept=".gs,.js,text/plain" multiple className="field-input" />
+                </Field>
+              </div>
+            </details>
+
+            <details className="rounded-md border border-surface-border bg-slate-50 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-surface-text">
+                Option B: Copy-paste source text
+              </summary>
+              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <Field label="index.html source">
+                  <textarea
+                    name="htmlSource"
+                    rows={12}
+                    placeholder="Paste the full index.html source here..."
+                    className="field-input font-mono text-xs"
+                  />
+                </Field>
+                <Field label="code.gs source">
+                  <textarea
+                    name="appsScriptSource"
+                    rows={12}
+                    placeholder="Paste the full code.gs source here..."
+                    className="field-input font-mono text-xs"
+                  />
+                </Field>
+              </div>
+              <p className="mt-2 text-xs text-surface-muted">
+                Use either Option A (upload) or Option B (paste). If both are provided, the latest values are used by the importer.
+              </p>
+            </details>
             <div className="flex justify-end"><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><FileInput className="h-4 w-4" /><span>Save draft & open Step 2</span></span>} pendingLabel="Saving draft..." className="btn-primary" /></div>
           </PendingFormState>
         </form>
