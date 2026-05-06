@@ -39,6 +39,7 @@ export function NotificationsClient({
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
+  const [editingSlug, setEditingSlug] = useState<string | null>(null);
 
   const filtered = flows.filter((flow) => {
     const matchesQuery =
@@ -50,6 +51,9 @@ export function NotificationsClient({
     return true;
   });
 
+  const activeCount = flows.filter((flow) => flow.isActive).length;
+  const offCount = flows.length - activeCount;
+
   return (
     <div className="admin-page">
       <AdminPageHeader
@@ -58,10 +62,18 @@ export function NotificationsClient({
         description="Control who gets emailed and when, without changing request routing, approvals, or storage."
       />
 
-      <AdminHelpPanel title="What this page does">
-        Default recipients still come from the form logic. This page only turns those emails on or off
-        and lets you add extra recipients for each form.
-      </AdminHelpPanel>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CompactMetricCard label="Total forms" value={flows.length} />
+          <CompactMetricCard label="Notifications on" value={activeCount} tone="ok" />
+          <CompactMetricCard label="Notifications off" value={offCount} tone="warn" />
+          <CompactMetricCard label="Visible now" value={filtered.length} />
+        </div>
+        <AdminHelpPanel title="What this page does">
+          Default recipients still come from the form logic. This page only turns those emails on or off
+          and lets you add extra recipients for each form.
+        </AdminHelpPanel>
+      </div>
 
       <AdminSystemReadiness
         readiness={readiness}
@@ -155,6 +167,23 @@ export function NotificationsClient({
                         className="btn-secondary"
                       />
                     </form>
+                    {editingSlug === flow.formSlug ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingSlug(null)}
+                        className="btn-secondary"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingSlug(flow.formSlug)}
+                        className="btn-secondary"
+                      >
+                        Edit
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -164,11 +193,11 @@ export function NotificationsClient({
                     <input type="hidden" name="formName" value={flow.formName} />
 
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                      <ToggleField name="isActive" defaultChecked={flow.isActive} label="Notifications active" description="Master switch for this form." />
-                      <ToggleField name="notifyOnSubmit" defaultChecked={flow.notifyOnSubmit} label="When submitted" description="Email after submit or resubmit." />
-                      <ToggleField name="notifyNextApprover" defaultChecked={flow.notifyNextApprover} label="Next approver" description="Email the next approver in line." />
-                      <ToggleField name="notifySubmitterOnApproved" defaultChecked={flow.notifySubmitterOnApproved} label="When fully approved" description="Tell the requester the process is done." />
-                      <ToggleField name="notifySubmitterOnRejected" defaultChecked={flow.notifySubmitterOnRejected} label="When rejected" description="Tell the requester the request was rejected." />
+                      <ToggleField name="isActive" defaultChecked={flow.isActive} disabled={editingSlug !== flow.formSlug} label="Notifications active" description="Master switch for this form." />
+                      <ToggleField name="notifyOnSubmit" defaultChecked={flow.notifyOnSubmit} disabled={editingSlug !== flow.formSlug} label="When submitted" description="Email after submit or resubmit." />
+                      <ToggleField name="notifyNextApprover" defaultChecked={flow.notifyNextApprover} disabled={editingSlug !== flow.formSlug} label="Next approver" description="Email the next approver in line." />
+                      <ToggleField name="notifySubmitterOnApproved" defaultChecked={flow.notifySubmitterOnApproved} disabled={editingSlug !== flow.formSlug} label="When fully approved" description="Tell the requester the process is done." />
+                      <ToggleField name="notifySubmitterOnRejected" defaultChecked={flow.notifySubmitterOnRejected} disabled={editingSlug !== flow.formSlug} label="When rejected" description="Tell the requester the request was rejected." />
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
@@ -179,6 +208,8 @@ export function NotificationsClient({
                           rows={4}
                           defaultValue={flow.extraRecipients.join(", ")}
                           placeholder="finance@vienovo.ph, audit@vienovo.ph"
+                          readOnly={editingSlug !== flow.formSlug}
+                          disabled={editingSlug !== flow.formSlug}
                           className="field-input"
                         />
                         <p className="mt-1 text-xs text-surface-muted">
@@ -193,6 +224,8 @@ export function NotificationsClient({
                           rows={4}
                           defaultValue={flow.notes}
                           placeholder="Example: Keep accounting informed after rollout."
+                          readOnly={editingSlug !== flow.formSlug}
+                          disabled={editingSlug !== flow.formSlug}
                           className="field-input"
                         />
                       </div>
@@ -201,6 +234,7 @@ export function NotificationsClient({
                     <div className="flex justify-end">
                       <PendingSubmitButton
                         type="submit"
+                        disabled={editingSlug !== flow.formSlug}
                         idleLabel={
                           <span className="inline-flex items-center gap-2">
                             <Save className="h-4 w-4" />
@@ -227,21 +261,43 @@ function ToggleField({
   label,
   description,
   defaultChecked,
+  disabled = false,
 }: {
   name: string;
   label: string;
   description: string;
   defaultChecked: boolean;
+  disabled?: boolean;
 }) {
   return (
     <label className="border border-surface-border bg-slate-50 p-4">
       <span className="flex items-start gap-3">
-        <input type="checkbox" name={name} defaultChecked={defaultChecked} className="mt-1 accent-brand-600" />
+        <input type="checkbox" name={name} defaultChecked={defaultChecked} disabled={disabled} className="mt-1 accent-brand-600" />
         <span>
           <span className="block text-sm font-semibold text-surface-text">{label}</span>
           <span className="mt-1 block text-xs text-surface-muted">{description}</span>
         </span>
       </span>
     </label>
+  );
+}
+
+function CompactMetricCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "ok" ? "text-brand-700" : tone === "warn" ? "text-amber-700" : "text-surface-text";
+
+  return (
+    <div className="admin-panel px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
+    </div>
   );
 }
