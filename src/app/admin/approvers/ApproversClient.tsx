@@ -45,6 +45,7 @@ export function ApproversClient({
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const filtered = approvers.filter((approver) => {
     const matchesQuery =
@@ -94,20 +95,40 @@ export function ApproversClient({
         title="Add a new approver"
         description="Create a person record first, then choose what they are allowed to approve."
       >
-        <form action={addApprover} className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_auto]">
-          <input type="text" name="name" placeholder="Full name" required className="field-input" />
-          <input type="email" name="email" placeholder="email@vienovo.ph" className="field-input" />
-          <PendingSubmitButton type="submit" idleLabel="Add approver" pendingLabel="Adding..." className="btn-primary" />
-          <div className="lg:col-span-3 flex flex-wrap gap-3 text-sm text-surface-text">
-            {roles.map((role) => (
-              <label key={role} className="flex items-center gap-1.5">
-                <input type="checkbox" name={`role_${role}`} className="accent-brand-600" />
-                <span className="capitalize">{role}</span>
-              </label>
-            ))}
-          </div>
-        </form>
+        <button
+          type="button"
+          onClick={() => setShowAddModal(true)}
+          className="btn-primary"
+        >
+          Add a new approver
+        </button>
       </AdminSection>
+
+      {showAddModal ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setShowAddModal(false)}>
+          <div className="w-full max-w-2xl rounded-md border border-surface-border bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-surface-text">Add a new approver</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="text-sm font-semibold text-surface-muted hover:text-surface-text">
+                Close
+              </button>
+            </div>
+            <form action={addApprover} className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_auto]">
+              <input type="text" name="name" placeholder="Full name" required className="field-input" />
+              <input type="email" name="email" placeholder="email@vienovo.ph" className="field-input" />
+              <PendingSubmitButton type="submit" idleLabel="Add approver" pendingLabel="Adding..." className="btn-primary" />
+              <div className="lg:col-span-3 flex flex-wrap gap-3 text-sm text-surface-text">
+                {roles.map((role) => (
+                  <label key={role} className="flex items-center gap-1.5">
+                    <input type="checkbox" name={`role_${role}`} className="accent-brand-600" />
+                    <span className="capitalize">{role}</span>
+                  </label>
+                ))}
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <AdminSection
         title="Approver list"
