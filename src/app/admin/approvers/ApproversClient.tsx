@@ -134,8 +134,8 @@ export function ApproversClient({
             description="Try a broader search or switch to a different filter."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-sm">
+          <div className="admin-table-wrap">
+            <table className="admin-table">
               <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
                 <tr>
                   <th className="px-4 py-3">Name</th>

@@ -24,7 +24,7 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-surface-background">
+    <div className="admin-bg min-h-screen">
       <aside
         className={[
           "fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-surface-border bg-slate-50 transition-[width] duration-200 lg:flex",
@@ -106,7 +106,7 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-5 py-6">{children}</main>
+        <main className="w-full px-3 py-5 sm:px-4 lg:px-6 xl:px-8 2xl:px-10">{children}</main>
       </div>
     </div>
   );

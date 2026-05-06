@@ -272,8 +272,8 @@ export function RequestsClient({
             />
           </div>
         ) : (
-          <div className="overflow-x-auto pt-5">
-            <table className="w-full min-w-[1320px] text-left text-sm">
+          <div className="admin-table-wrap pt-5">
+            <table className="admin-table text-left">
               <thead className="border-b border-surface-border bg-slate-50 text-xs uppercase tracking-[0.08em] text-surface-muted">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Reference</th>

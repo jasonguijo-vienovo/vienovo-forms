@@ -97,8 +97,8 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
             description="Try another search or switch back to a broader filter."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[840px] text-sm">
+          <div className="admin-table-wrap">
+            <table className="admin-table">
               <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
                 <tr>
                   <th className="px-4 py-3">Name</th>
