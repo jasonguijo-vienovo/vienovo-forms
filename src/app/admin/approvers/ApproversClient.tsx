@@ -72,37 +72,30 @@ export function ApproversClient({
         title="Approvers"
         description="Manage the people who approve requests. This page controls who can appear in approval steps, without changing the approval logic itself."
         actions={
-          <Link href="/admin/processors" className="btn-secondary">
-            Open processors list
-          </Link>
+          <>
+            <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
+              Add a new approver
+            </button>
+            <Link href="/admin/processors" className="btn-secondary">
+              Open processors list
+            </Link>
+          </>
         }
       />
 
-      <AdminHelpPanel title="What this page does">
-        Use this page when someone should be available as an approver, supervisor, department head,
-        cash advance approver, or final approver. If an email needs review, fix it here before relying
-        on notification emails.
-      </AdminHelpPanel>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Total approvers" value={approvers.length} />
-        <AdminMetricCard label="Active approvers" value={activeCount} tone="ok" />
-        <AdminMetricCard label="Needs review" value={needsReview} tone={needsReview > 0 ? "warn" : "ok"} />
-        <AdminMetricCard label="Processor-capable" value={approvers.filter((item) => item.roles.includes("processor")).length} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminMetricCard label="Total approvers" value={approvers.length} />
+          <AdminMetricCard label="Active approvers" value={activeCount} tone="ok" />
+          <AdminMetricCard label="Needs review" value={needsReview} tone={needsReview > 0 ? "warn" : "ok"} />
+          <AdminMetricCard label="Processor-capable" value={approvers.filter((item) => item.roles.includes("processor")).length} />
+        </div>
+        <AdminHelpPanel title="What this page does">
+          Use this page when someone should be available as an approver, supervisor, department head,
+          cash advance approver, or final approver. If an email needs review, fix it here before relying
+          on notification emails.
+        </AdminHelpPanel>
       </div>
-
-      <AdminSection
-        title="Add a new approver"
-        description="Create a person record first, then choose what they are allowed to approve."
-      >
-        <button
-          type="button"
-          onClick={() => setShowAddModal(true)}
-          className="btn-primary"
-        >
-          Add a new approver
-        </button>
-      </AdminSection>
 
       {showAddModal ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setShowAddModal(false)}>
