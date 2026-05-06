@@ -40,6 +40,7 @@ export function NotificationsClient({
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(12);
 
   const filtered = flows.filter((flow) => {
     const matchesQuery =
@@ -50,6 +51,7 @@ export function NotificationsClient({
     if (view === "off") return !flow.isActive;
     return true;
   });
+  const visible = filtered.slice(0, visibleCount);
 
   const activeCount = flows.filter((flow) => flow.isActive).length;
   const offCount = flows.length - activeCount;
@@ -136,23 +138,23 @@ export function NotificationsClient({
             description="Try another search or switch back to a broader filter."
           />
         ) : (
-          <div className="grid gap-4">
-            {filtered.map((flow) => (
+          <div className="grid gap-3">
+            {visible.map((flow) => (
               <section key={flow.formSlug} className="border border-surface-border bg-white p-5">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
                       <div className="rounded bg-brand-50 p-2 text-brand-700">
                         <BellRing className="h-4 w-4" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-surface-text">{flow.formName}</h3>
+                        <h3 className="text-base font-semibold text-surface-text">{flow.formName}</h3>
                         <p className="text-xs text-surface-muted">
                           Form ID: <code>{flow.formSlug}</code>
                         </p>
                       </div>
                     </div>
-                    <p className="mt-3 text-sm text-surface-muted">
+                    <p className="mt-2 text-xs text-surface-muted">
                       Extra recipients are added to the same email. They do not replace the built-in
                       recipients from the form flow.
                     </p>
@@ -260,6 +262,15 @@ export function NotificationsClient({
                 </form>
               </section>
             ))}
+            {filtered.length > visibleCount ? (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((count) => count + 12)}
+                className="btn-secondary"
+              >
+                Load more settings ({filtered.length - visibleCount} remaining)
+              </button>
+            ) : null}
           </div>
         )}
       </AdminSection>
