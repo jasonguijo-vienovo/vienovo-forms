@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Eye, FileInput, Save, Trash2, Undo2 } from "lucide-react";
+import { Eye, FileInput, Save, Trash2, Undo2, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
@@ -339,6 +339,14 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
   const liveForUsers = isLiveForRequesters(form);
   const implementedRoute = form.isImplemented && form.routePath;
   const sourceExists = form.source === "native" || importedSet.has(form.slug);
+  const [openVisibility, setOpenVisibility] = useState(true);
+  const [openRouting, setOpenRouting] = useState(true);
+  const [openResponses, setOpenResponses] = useState(true);
+  const [openAdvanced, setOpenAdvanced] = useState(false);
+
+  const liveReason = liveForUsers
+    ? "Published, visible to everyone, available, and ready."
+    : "Blocked until published + everyone visibility + available + ready.";
 
   return (
     <div className="space-y-4">
@@ -346,40 +354,87 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
         <AdminStatusPill tone={liveForUsers ? "ok" : "warn"}>{liveForUsers ? "Live" : "Not live"}</AdminStatusPill>
         {form.visibility === "admin" ? <AdminStatusPill tone="warn">Admin only</AdminStatusPill> : null}
       </div>
+      <p className="text-xs text-surface-muted">{liveReason}</p>
 
-      {implementedRoute ? <Link href={form.routePath} className="btn-secondary w-full justify-center"><Eye className="h-4 w-4" />Open form</Link> : null}
+      {implementedRoute ? (
+        <div className="flex">
+          <Link href={form.routePath} className="btn-secondary">
+            <Eye className="h-4 w-4" />
+            Open form
+          </Link>
+        </div>
+      ) : null}
 
       {!sourceExists ? <div className="border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Missing importer record for this form ID.</div> : null}
 
-      <form action={updateFormDefinition} className="space-y-3" onChange={() => isEditMode && onDirtyChange(true)}>
+      <form key={form.slug} action={updateFormDefinition} className="space-y-3" onChange={() => isEditMode && onDirtyChange(true)}>
         <input type="hidden" name="id" value={form._id ?? ""} />
         <input type="hidden" name="slug" value={form.slug} />
-        <Field label="Form name"><input name="name" defaultValue={form.name} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
-        <Field label="Form ID"><input name="newSlug" defaultValue={form.slug} readOnly={!isEditMode || form.source === "native"} className={`field-input ${!isEditMode || form.source === "native" ? "field-locked" : ""}`} /></Field>
-        <Field label="Route path"><input name="routePath" defaultValue={form.routePath} readOnly={!isEditMode || form.source === "imported"} className={`field-input ${!isEditMode || form.source === "imported" ? "field-locked" : ""}`} /></Field>
-        <Field label="Short description"><textarea name="description" rows={3} defaultValue={form.description} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+        <SectionToggle title="Visibility" open={openVisibility} onToggle={() => setOpenVisibility((v) => !v)} />
+        {openVisibility ? (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Publishing state"><select name="status" defaultValue={form.status} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{statusOptions.map((s) => <option key={s} value={s}>{humanizeStatus(s)}</option>)}</select></Field>
+              <Field label="Who can see this?"><select name="visibility" defaultValue={form.visibility} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{visibilityOptions.map((v) => <option key={v} value={v}>{humanizeVisibility(v)}</option>)}</select></Field>
+            </div>
+            <Field label="Can users open it?"><select name="availability" defaultValue={form.availability} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{availabilityOptions.map((a) => <option key={a} value={a}>{a === "available" ? "Yes, users can open it" : "No, not yet"}</option>)}</select></Field>
+            <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="isImplemented" defaultChecked={form.isImplemented} disabled={!isEditMode} className="accent-brand-600" /><span>The form page is ready to open</span></label>
+            <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="showInNavbar" defaultChecked={form.showInNavbar} disabled={!isEditMode} className="accent-brand-600" /><span>Show this in quick request menu</span></label>
+          </>
+        ) : null}
 
-        <Field label="Publishing state"><select name="status" defaultValue={form.status} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{statusOptions.map((s) => <option key={s} value={s}>{humanizeStatus(s)}</option>)}</select></Field>
-        <Field label="Who can see this?"><select name="visibility" defaultValue={form.visibility} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{visibilityOptions.map((v) => <option key={v} value={v}>{humanizeVisibility(v)}</option>)}</select></Field>
-        <Field label="Can users open it?"><select name="availability" defaultValue={form.availability} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{availabilityOptions.map((a) => <option key={a} value={a}>{a === "available" ? "Yes, users can open it" : "No, not yet"}</option>)}</select></Field>
+        <SectionToggle title="Routing" open={openRouting} onToggle={() => setOpenRouting((v) => !v)} />
+        {openRouting ? (
+          <>
+            <Field label="Form name"><input name="name" defaultValue={form.name} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+            <Field label="Form ID"><input name="newSlug" defaultValue={form.slug} readOnly={!isEditMode || form.source === "native"} className={`field-input ${!isEditMode || form.source === "native" ? "field-locked" : ""}`} /></Field>
+            <Field label="Route path"><input name="routePath" defaultValue={form.routePath} readOnly={!isEditMode || form.source === "imported"} className={`field-input ${!isEditMode || form.source === "imported" ? "field-locked" : ""}`} /></Field>
+            <Field label="Short description"><textarea name="description" rows={3} defaultValue={form.description} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+          </>
+        ) : null}
 
-        <Field label="Internal notes"><textarea name="notes" rows={3} defaultValue={form.notes} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
-        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="isImplemented" defaultChecked={form.isImplemented} disabled={!isEditMode} className="accent-brand-600" /><span>The form page is ready to open</span></label>
-        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="showInNavbar" defaultChecked={form.showInNavbar} disabled={!isEditMode} className="accent-brand-600" /><span>Show this in quick request menu</span></label>
-        <Field label="Response spreadsheet ID"><input name="responseSpreadsheetId" defaultValue={form.responseSpreadsheetId} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
-        <Field label="Response sheet tab"><input name="responseSheetName" defaultValue={form.responseSheetName} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
-        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="writeResponsesToSheet" defaultChecked={form.writeResponsesToSheet} disabled={!isEditMode} className="accent-brand-600" /><span>Copy new submissions to response tab</span></label>
+        <SectionToggle title="Responses" open={openResponses} onToggle={() => setOpenResponses((v) => !v)} />
+        {openResponses ? (
+          <>
+            <Field label="Response spreadsheet ID"><input name="responseSpreadsheetId" defaultValue={form.responseSpreadsheetId} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+            <Field label="Response sheet tab"><input name="responseSheetName" defaultValue={form.responseSheetName} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+            <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="writeResponsesToSheet" defaultChecked={form.writeResponsesToSheet} disabled={!isEditMode} className="accent-brand-600" /><span>Copy new submissions to response tab</span></label>
+          </>
+        ) : null}
+
+        <SectionToggle title="Advanced" open={openAdvanced} onToggle={() => setOpenAdvanced((v) => !v)} />
+        {openAdvanced ? (
+          <Field label="Internal notes"><textarea name="notes" rows={3} defaultValue={form.notes} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+        ) : null}
 
         <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-surface-border bg-white pt-3">
+          <button type="reset" className="btn-secondary" onClick={() => onDirtyChange(false)}>Reset changes</button>
+          <button type="button" className="btn-secondary">Save + Next form</button>
           <PendingSubmitButton type="submit" disabled={!isEditMode} idleLabel={<span className="inline-flex items-center gap-2"><Save className="h-4 w-4" /><span>Save changes</span></span>} pendingLabel="Saving..." className="btn-primary" />
         </div>
       </form>
 
       <div className="flex flex-wrap justify-end gap-2">
-        <form action={hideFormDefinition}><input type="hidden" name="id" value={form._id ?? ""} /><input type="hidden" name="slug" value={form.slug} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Undo2 className="h-4 w-4" /><span>Hide from users</span></span>} pendingLabel="Hiding..." className="border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50" /></form>
+        <form action={hideFormDefinition}>
+          <input type="hidden" name="id" value={form._id ?? ""} />
+          <input type="hidden" name="slug" value={form.slug} />
+          <input type="hidden" name="status" value="draft" />
+          <input type="hidden" name="visibility" value="admin" />
+          <input type="hidden" name="availability" value="coming-soon" />
+          <PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Undo2 className="h-4 w-4" /><span>Hide from users</span></span>} pendingLabel="Hiding..." className="border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50" />
+        </form>
         <form action={deleteFormDefinition}><input type="hidden" name="id" value={form._id ?? ""} /><input type="hidden" name="slug" value={form.slug} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" /><span>{form.source === "native" ? "Delete native form" : "Delete registry entry"}</span></span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50" /></form>
       </div>
     </div>
+  );
+}
+
+function SectionToggle({ title, open, onToggle }: { title: string; open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" onClick={onToggle} className="flex w-full items-center justify-between border border-surface-border bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-surface-text">
+      <span>{title}</span>
+      <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+    </button>
   );
 }
 
