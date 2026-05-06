@@ -4,6 +4,9 @@
 
 :root {
   --bg: #f6f8fa;
+  --admin-bg-1: #f3f7f4;
+  --admin-bg-2: #eef3f8;
+  --admin-grid: rgba(15, 23, 42, 0.04);
   --fg: #1f2328;
   --surface-panel: #ffffff;
   --surface-border: #d0d7de;
@@ -125,7 +128,39 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 .admin-page {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .admin-page {
+    gap: 1.25rem;
+  }
+}
+
+.admin-bg {
+  background:
+    radial-gradient(1200px 500px at 0% -10%, var(--admin-bg-1) 0%, transparent 65%),
+    radial-gradient(1200px 500px at 100% -15%, var(--admin-bg-2) 0%, transparent 62%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 23px,
+      var(--admin-grid) 24px
+    );
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 960px;
+  font-size: 0.875rem;
 }
 
 .admin-panel,
