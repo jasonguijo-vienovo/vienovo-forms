@@ -141,46 +141,32 @@ export function ApproversClient({
                   <tr key={approver._id} className="bg-white align-top">
                     <td className="px-4 py-4 font-medium text-surface-text">{approver.name}</td>
                     <td className="px-4 py-4">
-                      <form action={updateApprover} className="flex flex-wrap items-center gap-2">
-                        <input type="hidden" name="id" value={approver._id} />
-                        <input type="hidden" name="department" value={approver.department || ""} />
-                        {roles.map((role) => (
-                          <input
-                            key={role}
-                            type="hidden"
-                            name={`role_${role}`}
-                            value={approver.roles.includes(role) ? "on" : ""}
-                          />
-                        ))}
+                      {editingId === approver._id ? (
                         <input
+                          form={`approver-edit-${approver._id}`}
                           type="email"
                           name="email"
                           defaultValue={approver.email}
                           placeholder="email@vienovo.ph"
-                          readOnly={editingId !== approver._id}
-                          className={`field-input w-[260px] ${approver.emailNeedsReview ? "border-amber-300 bg-amber-50" : ""}`}
+                          className={`w-[260px] field-input ${approver.emailNeedsReview ? "border-amber-300 bg-amber-50" : ""}`}
                         />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel={editingId === approver._id ? "Save email" : "Save"}
-                          pendingLabel="Saving..."
-                          disabled={editingId !== approver._id}
-                          className="text-sm font-semibold text-brand-700 hover:underline"
-                        />
-                      </form>
+                      ) : (
+                        <p className="text-sm text-surface-text">{approver.email}</p>
+                      )}
                       {approver.emailNeedsReview ? (
                         <p className="mt-2 text-xs text-amber-700">This email looks incomplete or needs checking.</p>
                       ) : null}
                     </td>
                     <td className="px-4 py-4">
-                      <form action={updateApprover} className="space-y-2">
-                        <input type="hidden" name="id" value={approver._id} />
-                        <input type="hidden" name="email" value={approver.email} />
-                        <input type="hidden" name="department" value={approver.department || ""} />
+                      {editingId === approver._id ? (
                         <div className="flex flex-wrap gap-2">
                           {roles.map((role) => (
-                            <label key={role} className="inline-flex items-center gap-1 rounded border border-surface-border bg-white px-2 py-1 text-xs">
+                            <label
+                              key={role}
+                              className="inline-flex items-center gap-1 rounded border border-surface-border bg-white px-2 py-1 text-xs"
+                            >
                               <input
+                                form={`approver-edit-${approver._id}`}
                                 type="checkbox"
                                 name={`role_${role}`}
                                 defaultChecked={approver.roles.includes(role)}
@@ -190,13 +176,9 @@ export function ApproversClient({
                             </label>
                           ))}
                         </div>
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Edit roles"
-                          pendingLabel="Saving..."
-                          className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
-                        />
-                      </form>
+                      ) : (
+                        <p className="text-sm text-surface-text">{approver.roles.join(", ") || "No roles"}</p>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <AdminStatusPill tone={approver.isActive ? "ok" : "neutral"}>
@@ -205,13 +187,35 @@ export function ApproversClient({
                     </td>
                     <td className="px-4 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditingId((current) => (current === approver._id ? null : approver._id))}
-                          className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
-                        >
-                          {editingId === approver._id ? "Cancel edit" : "Edit"}
-                        </button>
+                        {editingId === approver._id ? (
+                          <>
+                            <form id={`approver-edit-${approver._id}`} action={updateApprover}>
+                              <input type="hidden" name="id" value={approver._id} />
+                              <input type="hidden" name="department" value={approver.department || ""} />
+                              <PendingSubmitButton
+                                type="submit"
+                                idleLabel="Save"
+                                pendingLabel="Saving..."
+                                className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                              />
+                            </form>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(approver._id)}
+                            className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                          >
+                            Edit
+                          </button>
+                        )}
                         <form action={toggleApprover}>
                           <input type="hidden" name="id" value={approver._id} />
                           <PendingSubmitButton
