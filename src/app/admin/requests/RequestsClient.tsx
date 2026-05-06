@@ -342,6 +342,13 @@ export function RequestsClient({
                     <td className="px-4 py-4 text-surface-muted">{formatAge(row.createdAt)}</td>
                     <td className="px-4 py-4">
                       <div className="flex flex-col gap-1.5">
+                        <Link
+                          href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-surface-text hover:text-brand-700"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Open request
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setSelectedId(row._id)}
@@ -350,13 +357,6 @@ export function RequestsClient({
                           <Layers3 className="h-4 w-4" />
                           Quick view
                         </button>
-                        <Link
-                          href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:underline"
-                        >
-                          Open request
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Link>
                       </div>
                     </td>
                   </tr>
