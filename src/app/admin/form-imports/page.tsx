@@ -1,6 +1,7 @@
 import {
   FileInput,
 } from "lucide-react";
+import Link from "next/link";
 import { AdminHelpPanel, AdminMetricCard, AdminPageHeader, AdminSection } from "@/components/admin-ui";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
@@ -66,8 +67,8 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <a href="/admin/form-imports?tab=create" className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${tab === "create" ? "border-brand-700 bg-brand-50 text-brand-700" : "border-surface-border bg-white text-surface-muted"}`}>Step 1: Create Draft</a>
-        <a href="/admin/form-imports?tab=manage" className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${tab === "manage" ? "border-brand-700 bg-brand-50 text-brand-700" : "border-surface-border bg-white text-surface-muted"}`}>Step 2: Manage Drafts</a>
+        <Link href="/admin/form-imports?tab=create" className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${tab === "create" ? "border-brand-700 bg-brand-50 text-brand-700" : "border-surface-border bg-white text-surface-muted"}`}>Step 1: Create Draft</Link>
+        <Link href="/admin/form-imports?tab=manage" className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${tab === "manage" ? "border-brand-700 bg-brand-50 text-brand-700" : "border-surface-border bg-white text-surface-muted"}`}>Step 2: Manage Drafts</Link>
       </div>
 
       {tab === "create" ? <AdminSection title="Step 1: Create or replace an import draft" description="Use the same form ID if you are re-importing.">
