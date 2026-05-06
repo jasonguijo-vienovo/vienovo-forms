@@ -273,7 +273,40 @@ export function RequestsClient({
             />
           </div>
         ) : (
-          <div className="admin-table-wrap pt-5">
+          <>
+          <div className="space-y-3 pt-5 lg:hidden">
+            {rows.map((row) => (
+              <article key={row._id} className="admin-panel p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-surface-text">{row.referenceNo}</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-surface-text">{row.formName || row.formSlug || row.formType}</p>
+                    <p className="mt-1 text-xs text-surface-muted">{row.submittedBy?.name || row.submittedBy?.email || "Requester"}</p>
+                  </div>
+                  <AdminStatusPill tone={statusTone(row.status)}>{row.status}</AdminStatusPill>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded border border-surface-border bg-slate-50 px-2 py-1.5 text-surface-muted">Step: {stepLabel(row)}</div>
+                  <div className="rounded border border-surface-border bg-slate-50 px-2 py-1.5 text-surface-muted">Age: {formatAge(row.createdAt)}</div>
+                  <div className="rounded border border-surface-border bg-slate-50 px-2 py-1.5 text-surface-muted col-span-2 truncate">
+                    Assignee: {row.currentActorName || row.currentActorEmail || "Waiting"}
+                  </div>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Link href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`} className="btn-secondary flex-1 justify-center">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open request
+                  </Link>
+                  <button type="button" onClick={() => setSelectedId(row._id)} className="btn-primary flex-1 justify-center">
+                    <Layers3 className="h-4 w-4" />
+                    Quick view
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="admin-table-wrap pt-5 hidden lg:block">
             <table className="admin-table text-left">
               <thead className="border-b border-surface-border bg-slate-50 text-xs uppercase tracking-[0.08em] text-surface-muted">
                 <tr>
@@ -364,6 +397,7 @@ export function RequestsClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="mt-5 flex flex-col gap-3 border-t border-surface-border pt-4 sm:flex-row sm:items-center sm:justify-between">
