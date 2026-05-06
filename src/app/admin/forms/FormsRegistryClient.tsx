@@ -74,6 +74,7 @@ export function FormsRegistryClient({
   const [selectedSlug, setSelectedSlug] = useState(selectedSlugFromUrl);
   const [isSettingsOpen, setIsSettingsOpen] = useState(settingsFromUrl === "open");
   const [draftDirty, setDraftDirty] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 180);
@@ -141,6 +142,7 @@ export function FormsRegistryClient({
     setSelectedSlug(slug);
     setIsSettingsOpen(true);
     setDraftDirty(false);
+    setIsEditMode(false);
     if (typeof window !== "undefined") window.localStorage.setItem("admin_forms_settings_open", "1");
     if (typeof window !== "undefined") {
       const key = "admin_forms_metrics_open_count";
@@ -153,6 +155,7 @@ export function FormsRegistryClient({
   function closeSettings() {
     setIsSettingsOpen(false);
     setDraftDirty(false);
+    setIsEditMode(false);
     if (typeof window !== "undefined") window.localStorage.setItem("admin_forms_settings_open", "0");
     syncUrl(selectedForm?.slug ?? null, false);
   }
@@ -254,7 +257,16 @@ export function FormsRegistryClient({
                     <h3 className="text-sm font-semibold text-surface-text">Edit form settings</h3>
                     {draftDirty ? <span className="status-pill border-amber-200 bg-amber-50 text-amber-800">Unsaved</span> : null}
                   </div>
-                  <button type="button" onClick={closeSettings} className="text-xs font-semibold text-surface-muted hover:text-surface-text">Hide settings</button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditMode((v) => !v)}
+                      className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                    >
+                      {isEditMode ? "Disable edit" : "Edit"}
+                    </button>
+                    <button type="button" onClick={closeSettings} className="text-xs font-semibold text-surface-muted hover:text-surface-text">Hide settings</button>
+                  </div>
                 </div>
                 <div className="p-5">
                   {selectedForm ? (
@@ -265,6 +277,7 @@ export function FormsRegistryClient({
                       visibilityOptions={visibilityOptions}
                       availabilityOptions={availabilityOptions}
                       onDirtyChange={setDraftDirty}
+                      isEditMode={isEditMode}
                     />
                   ) : (
                     <p className="text-sm text-surface-muted">Select a form to edit.</p>
@@ -284,9 +297,18 @@ export function FormsRegistryClient({
                       <h3 className="text-sm font-semibold text-surface-text">Edit form settings</h3>
                       {draftDirty ? <span className="status-pill border-amber-200 bg-amber-50 text-amber-800">Unsaved</span> : null}
                     </div>
-                    <button type="button" onClick={closeSettings} className="text-xs font-semibold text-surface-muted hover:text-surface-text">
-                      Close
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditMode((v) => !v)}
+                        className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                      >
+                        {isEditMode ? "Disable edit" : "Edit"}
+                      </button>
+                      <button type="button" onClick={closeSettings} className="text-xs font-semibold text-surface-muted hover:text-surface-text">
+                        Close
+                      </button>
+                    </div>
                   </div>
                   <div className="p-4">
                     {selectedForm ? (
@@ -297,6 +319,7 @@ export function FormsRegistryClient({
                         visibilityOptions={visibilityOptions}
                         availabilityOptions={availabilityOptions}
                         onDirtyChange={setDraftDirty}
+                        isEditMode={isEditMode}
                       />
                     ) : (
                       <p className="text-sm text-surface-muted">Select a form to edit.</p>
@@ -312,7 +335,7 @@ export function FormsRegistryClient({
   );
 }
 
-function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, onDirtyChange }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; onDirtyChange: (dirty: boolean) => void }) {
+function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, onDirtyChange, isEditMode }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; onDirtyChange: (dirty: boolean) => void; isEditMode: boolean }) {
   const liveForUsers = isLiveForRequesters(form);
   const implementedRoute = form.isImplemented && form.routePath;
   const sourceExists = form.source === "native" || importedSet.has(form.slug);
@@ -328,27 +351,27 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
 
       {!sourceExists ? <div className="border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Missing importer record for this form ID.</div> : null}
 
-      <form action={updateFormDefinition} className="space-y-4" onChange={() => onDirtyChange(true)}>
+      <form action={updateFormDefinition} className="space-y-3" onChange={() => isEditMode && onDirtyChange(true)}>
         <input type="hidden" name="id" value={form._id ?? ""} />
         <input type="hidden" name="slug" value={form.slug} />
-        <Field label="Form name"><input name="name" defaultValue={form.name} className="field-input" /></Field>
-        <Field label="Form ID"><input name="newSlug" defaultValue={form.slug} readOnly={form.source === "native"} className="field-input" /></Field>
-        <Field label="Route path"><input name="routePath" defaultValue={form.routePath} readOnly={form.source === "imported"} className="field-input" /></Field>
-        <Field label="Short description"><textarea name="description" rows={3} defaultValue={form.description} className="field-input" /></Field>
+        <Field label="Form name"><input name="name" defaultValue={form.name} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+        <Field label="Form ID"><input name="newSlug" defaultValue={form.slug} readOnly={!isEditMode || form.source === "native"} className={`field-input ${!isEditMode || form.source === "native" ? "field-locked" : ""}`} /></Field>
+        <Field label="Route path"><input name="routePath" defaultValue={form.routePath} readOnly={!isEditMode || form.source === "imported"} className={`field-input ${!isEditMode || form.source === "imported" ? "field-locked" : ""}`} /></Field>
+        <Field label="Short description"><textarea name="description" rows={3} defaultValue={form.description} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
 
-        <Field label="Publishing state"><select name="status" defaultValue={form.status} className="field-input">{statusOptions.map((s) => <option key={s} value={s}>{humanizeStatus(s)}</option>)}</select></Field>
-        <Field label="Who can see this?"><select name="visibility" defaultValue={form.visibility} className="field-input">{visibilityOptions.map((v) => <option key={v} value={v}>{humanizeVisibility(v)}</option>)}</select></Field>
-        <Field label="Can users open it?"><select name="availability" defaultValue={form.availability} className="field-input">{availabilityOptions.map((a) => <option key={a} value={a}>{a === "available" ? "Yes, users can open it" : "No, not yet"}</option>)}</select></Field>
+        <Field label="Publishing state"><select name="status" defaultValue={form.status} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{statusOptions.map((s) => <option key={s} value={s}>{humanizeStatus(s)}</option>)}</select></Field>
+        <Field label="Who can see this?"><select name="visibility" defaultValue={form.visibility} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{visibilityOptions.map((v) => <option key={v} value={v}>{humanizeVisibility(v)}</option>)}</select></Field>
+        <Field label="Can users open it?"><select name="availability" defaultValue={form.availability} disabled={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`}>{availabilityOptions.map((a) => <option key={a} value={a}>{a === "available" ? "Yes, users can open it" : "No, not yet"}</option>)}</select></Field>
 
-        <Field label="Internal notes"><textarea name="notes" rows={3} defaultValue={form.notes} className="field-input" /></Field>
-        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="isImplemented" defaultChecked={form.isImplemented} className="accent-brand-600" /><span>The form page is ready to open</span></label>
-        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="showInNavbar" defaultChecked={form.showInNavbar} className="accent-brand-600" /><span>Show this in quick request menu</span></label>
-        <Field label="Response spreadsheet ID"><input name="responseSpreadsheetId" defaultValue={form.responseSpreadsheetId} className="field-input" /></Field>
-        <Field label="Response sheet tab"><input name="responseSheetName" defaultValue={form.responseSheetName} className="field-input" /></Field>
-        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="writeResponsesToSheet" defaultChecked={form.writeResponsesToSheet} className="accent-brand-600" /><span>Copy new submissions to response tab</span></label>
+        <Field label="Internal notes"><textarea name="notes" rows={3} defaultValue={form.notes} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="isImplemented" defaultChecked={form.isImplemented} disabled={!isEditMode} className="accent-brand-600" /><span>The form page is ready to open</span></label>
+        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="showInNavbar" defaultChecked={form.showInNavbar} disabled={!isEditMode} className="accent-brand-600" /><span>Show this in quick request menu</span></label>
+        <Field label="Response spreadsheet ID"><input name="responseSpreadsheetId" defaultValue={form.responseSpreadsheetId} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+        <Field label="Response sheet tab"><input name="responseSheetName" defaultValue={form.responseSheetName} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+        <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="writeResponsesToSheet" defaultChecked={form.writeResponsesToSheet} disabled={!isEditMode} className="accent-brand-600" /><span>Copy new submissions to response tab</span></label>
 
         <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-surface-border bg-white pt-3">
-          <PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Save className="h-4 w-4" /><span>Save changes</span></span>} pendingLabel="Saving..." className="btn-primary" />
+          <PendingSubmitButton type="submit" disabled={!isEditMode} idleLabel={<span className="inline-flex items-center gap-2"><Save className="h-4 w-4" /><span>Save changes</span></span>} pendingLabel="Saving..." className="btn-primary" />
         </div>
       </form>
 
