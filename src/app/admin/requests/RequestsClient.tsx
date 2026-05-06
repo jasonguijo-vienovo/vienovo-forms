@@ -141,28 +141,29 @@ export function RequestsClient({
         description="Server-backed queue navigation for every request across native and imported forms, with sharable filters and quick request context."
       />
 
-      <AdminHelpPanel title="How to use this queue">
-        Use saved views to jump into common workloads, then narrow with search, assignee, form, and date
-        filters. The URL keeps the exact queue state, so we can leave and come back without losing our
-        place.
-      </AdminHelpPanel>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricLink href={buildStatusHref(pathname, searchParams, { view: "all-open" })}>
-          <AdminMetricCard label="Total open" value={summary.totalOpen} />
-        </MetricLink>
-        <MetricLink href={buildStatusHref(pathname, searchParams, { view: "pending-approval" })}>
-          <AdminMetricCard label="Pending approval" value={summary.pendingApproval} tone="warn" />
-        </MetricLink>
-        <MetricLink href={buildStatusHref(pathname, searchParams, { status: "submitted" })}>
-          <AdminMetricCard label="Submitted only" value={summary.submitted} />
-        </MetricLink>
-        <MetricLink href={buildStatusHref(pathname, searchParams, { status: "returned" })}>
-          <AdminMetricCard label="Returned" value={summary.returned} tone="warn" />
-        </MetricLink>
-        <MetricLink href={buildStatusHref(pathname, searchParams, { status: "rejected" })}>
-          <AdminMetricCard label="Rejected" value={summary.rejected} />
-        </MetricLink>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <MetricLink href={buildStatusHref(pathname, searchParams, { view: "all-open" })}>
+            <CompactMetricCard label="Total open" value={summary.totalOpen} />
+          </MetricLink>
+          <MetricLink href={buildStatusHref(pathname, searchParams, { view: "pending-approval" })}>
+            <CompactMetricCard label="Pending approval" value={summary.pendingApproval} tone="warn" />
+          </MetricLink>
+          <MetricLink href={buildStatusHref(pathname, searchParams, { status: "submitted" })}>
+            <CompactMetricCard label="Submitted only" value={summary.submitted} />
+          </MetricLink>
+          <MetricLink href={buildStatusHref(pathname, searchParams, { status: "returned" })}>
+            <CompactMetricCard label="Returned" value={summary.returned} tone="warn" />
+          </MetricLink>
+          <MetricLink href={buildStatusHref(pathname, searchParams, { status: "rejected" })}>
+            <CompactMetricCard label="Rejected" value={summary.rejected} />
+          </MetricLink>
+        </div>
+        <AdminHelpPanel title="How to use this queue">
+          Use saved views to jump into common workloads, then narrow with search, assignee, form, and date
+          filters. The URL keeps the exact queue state, so we can leave and come back without losing our
+          place.
+        </AdminHelpPanel>
       </div>
 
       <AdminSection
@@ -176,7 +177,7 @@ export function RequestsClient({
               key={view}
               href={buildViewHref(pathname, view, filters)}
               className={[
-                "rounded-md border px-3 py-2 text-sm font-semibold transition",
+              "rounded-md border px-2.5 py-1.5 text-xs font-semibold transition",
                 filters.view === view
                   ? "border-brand-700 bg-brand-50 text-brand-700"
                   : "border-surface-border bg-white text-surface-muted hover:text-surface-text",
@@ -340,22 +341,22 @@ export function RequestsClient({
                     <td className="px-4 py-4 text-surface-muted">{formatDateTime(row.updatedAt)}</td>
                     <td className="px-4 py-4 text-surface-muted">{formatAge(row.createdAt)}</td>
                     <td className="px-4 py-4">
-                      <div className="flex flex-col gap-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Link
+                          href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-surface-text hover:text-brand-700"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          Open request
+                        </Link>
                         <button
                           type="button"
                           onClick={() => setSelectedId(row._id)}
-                          className="inline-flex items-center gap-2 text-sm font-semibold text-surface-text hover:text-brand-700"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-surface-text hover:text-brand-700"
                         >
                           <Layers3 className="h-4 w-4" />
                           Quick view
                         </button>
-                        <Link
-                          href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`}
-                          className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:underline"
-                        >
-                          Open request
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </Link>
                       </div>
                     </td>
                   </tr>
@@ -614,6 +615,25 @@ function MetricLink({ href, children }: { href: string; children: React.ReactNod
     <Link href={href} className="block transition hover:-translate-y-0.5">
       {children}
     </Link>
+  );
+}
+
+function CompactMetricCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "ok" ? "text-brand-700" : tone === "warn" ? "text-amber-700" : "text-surface-text";
+  return (
+    <div className="admin-panel px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
+    </div>
   );
 }
 
