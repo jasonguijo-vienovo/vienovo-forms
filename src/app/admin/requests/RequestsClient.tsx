@@ -171,7 +171,7 @@ export function RequestsClient({
         description="Preset queue slices for the most common admin workflows."
         meta={`${filteredCount} matching requests`}
       >
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {ADMIN_REQUEST_VIEWS.map((view) => (
             <Link
               key={view}
@@ -194,9 +194,9 @@ export function RequestsClient({
         description="Search every request, sort the table, and open a quick-detail drawer without leaving the queue."
         meta={`${rows.length} shown on this page`}
       >
-        <div className="sticky top-[4.5rem] z-10 -mx-5 -mt-5 border-b border-surface-border bg-white/95 px-5 py-4 backdrop-blur md:-mx-6 md:px-6">
+        <div className="sticky top-[4.5rem] z-10 -mx-5 -mt-5 border-b border-surface-border bg-white/95 px-5 py-3 backdrop-blur md:-mx-6 md:px-6">
           <form method="get" className="space-y-4">
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(6,minmax(0,1fr))]">
+            <div className="grid gap-2.5 xl:grid-cols-[minmax(0,2fr)_repeat(6,minmax(0,1fr))]">
               <label className="flex items-center gap-2 rounded-md border border-surface-border bg-white px-3 py-2.5 text-sm text-surface-muted shadow-sm">
                 <Search className="h-4 w-4 shrink-0" />
                 <input
@@ -249,7 +249,7 @@ export function RequestsClient({
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap gap-2">
                 <StatusBar pathname={pathname} searchParams={searchParams} activeStatus={filters.status} />
                 <button type="submit" className="btn-primary">
@@ -274,9 +274,9 @@ export function RequestsClient({
           </div>
         ) : (
           <>
-          <div className="space-y-3 pt-5 lg:hidden">
+          <div className="space-y-2.5 pt-4 lg:hidden">
             {rows.map((row) => (
-              <article key={row._id} className="admin-panel p-4">
+              <article key={row._id} className="admin-panel p-3.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-mono text-xs text-surface-text">{row.referenceNo}</p>
@@ -285,14 +285,14 @@ export function RequestsClient({
                   </div>
                   <AdminStatusPill tone={statusTone(row.status)}>{row.status}</AdminStatusPill>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-xs">
                   <div className="rounded border border-surface-border bg-slate-50 px-2 py-1.5 text-surface-muted">Step: {stepLabel(row)}</div>
                   <div className="rounded border border-surface-border bg-slate-50 px-2 py-1.5 text-surface-muted">Age: {formatAge(row.createdAt)}</div>
                   <div className="rounded border border-surface-border bg-slate-50 px-2 py-1.5 text-surface-muted col-span-2 truncate">
                     Assignee: {row.currentActorName || row.currentActorEmail || "Waiting"}
                   </div>
                 </div>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-2.5 flex gap-2">
                   <Link href={`/requests/${row.referenceNo}?from=${encodeURIComponent(currentQueueHref)}`} className="btn-secondary flex-1 justify-center">
                     <ExternalLink className="h-3.5 w-3.5" />
                     Open request
@@ -306,7 +306,7 @@ export function RequestsClient({
             ))}
           </div>
 
-          <div className="admin-table-wrap pt-5 hidden lg:block">
+          <div className="admin-table-wrap pt-4 hidden lg:block">
             <table className="admin-table text-left">
               <thead className="border-b border-surface-border bg-slate-50 text-xs uppercase tracking-[0.08em] text-surface-muted">
                 <tr>
@@ -400,7 +400,7 @@ export function RequestsClient({
           </>
         )}
 
-        <div className="mt-5 flex flex-col gap-3 border-t border-surface-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 flex flex-col gap-2.5 border-t border-surface-border pt-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-surface-muted">
             Showing {rows.length} row{rows.length === 1 ? "" : "s"} from {filteredCount} matching request
             {filteredCount === 1 ? "" : "s"}.
