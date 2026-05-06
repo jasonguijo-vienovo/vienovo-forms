@@ -45,14 +45,14 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
         </div>
         <div
           className={[
-            "flex pb-4",
+            "flex pb-4 pt-1",
             collapsed ? "justify-start px-6" : "justify-end px-6",
           ].join(" ")}
         >
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
-            className="grid h-9 w-9 place-items-center rounded-r-md border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
+            className="grid h-9 w-9 place-items-center rounded-md border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
             aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
             title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
           >
