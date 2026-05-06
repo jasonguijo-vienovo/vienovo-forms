@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import {
   Bell,
   CircleHelp,
+  ChevronLeft,
+  ChevronRight,
   LogOut,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
   UserCircle,
 } from "lucide-react";
 import { AdminNav } from "@/components/admin-nav";
@@ -108,7 +108,7 @@ export function AdminShell({
               aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
               title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
             >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
           </div>
         </div>
