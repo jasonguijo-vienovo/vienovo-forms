@@ -43,7 +43,12 @@ export function AdminShell({ children, email, onSignOut }: AdminShellProps) {
             </div>
           </div>
         </div>
-        <div className={collapsed ? "px-3 pb-3" : "px-3 pb-4"}>
+        <div
+          className={[
+            "flex pb-4",
+            collapsed ? "justify-start px-6" : "justify-end px-6",
+          ].join(" ")}
+        >
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
