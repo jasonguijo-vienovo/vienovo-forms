@@ -80,6 +80,7 @@ const requestSchema = new Schema(
 );
 
 requestSchema.index({ "submittedBy.email": 1, status: 1, createdAt: -1 });
+requestSchema.index({ "submittedBy.email": 1, createdAt: -1, _id: -1 });
 requestSchema.index({ formSlug: 1, createdAt: -1 });
 requestSchema.index({ status: 1, createdAt: -1, _id: -1 });
 requestSchema.index({ formSlug: 1, status: 1, createdAt: -1, _id: -1 });
