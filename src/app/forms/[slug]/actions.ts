@@ -23,7 +23,7 @@ import { FormImport } from "@/models/FormImport";
 const EMPLOYEE_INFORMATION_SLUG = "employee-information";
 const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
 const EMPLOYEE_INFORMATION_SHEET_NAME = "Employee Information";
-const EMPLOYEE_INFORMATION_SHEET_URL = `https://docs.google.com/spreadsheets/d/${EMPLOYEE_INFORMATION_SPREADSHEET_ID}/edit`;
+const EMPLOYEE_INFORMATION_SHEET_URL = `https://docs.google.com/spreadsheets/d/${EMPLOYEE_INFORMATION_SPREADSHEET_ID}/edit?gid=1776826170#gid=1776826170`;
 const EMPLOYEE_INFORMATION_HEADERS = [
   "Timestamp",
   "Ref #",
@@ -419,19 +419,38 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           ).map((item) => String(item.email ?? "").trim().toLowerCase()).filter(Boolean)
         : [];
       const emailSubject = isEmployeeInformation
-        ? `Employee Information Submission Confirmed (${referenceNo})`
+        ? "Employee Information Submission Confirmed"
         : `${imported.name} submitted (${referenceNo})`;
+      const employeeRow = isEmployeeInformation ? buildEmployeeInformationRow({ referenceNo, values, labels }) : null;
       const submitterText = isEmployeeInformation
         ? `Your Employee Information form has been submitted successfully.\n\n` +
           `Submission details:\n` +
+          `- Name: ${employeeRow?.["Last Name"] ?? ""}, ${employeeRow?.["First Name"] ?? ""}\n` +
+          `- Email: ${employeeRow?.Email ?? ""}\n` +
+          `- Contact No.: ${employeeRow?.["Contact No"] ?? ""}\n` +
+          `- Job Title: ${employeeRow?.["Job Title"] ?? ""}\n` +
           `- Reference No: ${referenceNo}\n` +
-          `- Status: Submitted\n` +
-          (requestUrl ? `- Request Link: ${requestUrl}\n` : "") +
-          `\nPlease keep this email as your submission confirmation.`
+          `- Spreadsheet Link: ${EMPLOYEE_INFORMATION_SHEET_URL}\n` +
+          (requestUrl ? `- Request Link: ${requestUrl}\n` : "")
         : `Your ${imported.name} form has been submitted successfully.\n\n` +
           `Submission details:\n` +
           `- Reference No: ${referenceNo}\n` +
           (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
+      const submitterHtml = isEmployeeInformation
+        ? `
+          <p>Your Employee Information form has been submitted successfully.</p>
+          <p><strong>Submission details:</strong><br />
+          Name: ${employeeRow?.["Last Name"] ?? ""}, ${employeeRow?.["First Name"] ?? ""}<br />
+          Email: ${employeeRow?.Email ?? ""}<br />
+          Contact No.: ${employeeRow?.["Contact No"] ?? ""}<br />
+          Job Title: ${employeeRow?.["Job Title"] ?? ""}<br />
+          Reference No: ${referenceNo}</p>
+          <p style="margin-top:14px;">
+            <a href="${EMPLOYEE_INFORMATION_SHEET_URL}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#0f5f35;color:#fff;text-decoration:none;font-weight:600;">Open Spreadsheet</a>
+            ${requestUrl ? ` <a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
+          </p>
+        `
+        : undefined;
       const sentSubmitterViaFlow = await sendFlowNotification({
         formSlug: slug,
         formName: imported.name,
@@ -439,6 +458,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         to: [email],
         subject: emailSubject,
         text: submitterText,
+        html: submitterHtml,
       });
       if (!sentSubmitterViaFlow && isEmployeeInformation) {
         await sendNotificationEmail({
@@ -448,18 +468,35 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         });
       }
       if (isEmployeeInformation && hrRecipients.length > 0) {
-        const hrSubject = `HR Notification: Employee Information Submitted (${referenceNo})`;
+        const hrSubject = "HR Notification: Employee Information Submitted";
         const hrText =
           `A new Employee Information form has been submitted and recorded.\n\n` +
           `Submission details:\n` +
+          `- Name: ${employeeRow?.["Last Name"] ?? ""}, ${employeeRow?.["First Name"] ?? ""}\n` +
+          `- Email: ${employeeRow?.Email ?? ""}\n` +
+          `- Contact No.: ${employeeRow?.["Contact No"] ?? ""}\n` +
+          `- Job Title: ${employeeRow?.["Job Title"] ?? ""}\n` +
           `- Reference No: ${referenceNo}\n` +
-          `- Sheet Name: ${EMPLOYEE_INFORMATION_SHEET_NAME}\n` +
           `- Spreadsheet Link: ${EMPLOYEE_INFORMATION_SHEET_URL}\n` +
           (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
+        const hrHtml = `
+          <p>A new Employee Information form has been submitted and recorded.</p>
+          <p><strong>Submission details:</strong><br />
+          Name: ${employeeRow?.["Last Name"] ?? ""}, ${employeeRow?.["First Name"] ?? ""}<br />
+          Email: ${employeeRow?.Email ?? ""}<br />
+          Contact No.: ${employeeRow?.["Contact No"] ?? ""}<br />
+          Job Title: ${employeeRow?.["Job Title"] ?? ""}<br />
+          Reference No: ${referenceNo}</p>
+          <p style="margin-top:14px;">
+            <a href="${EMPLOYEE_INFORMATION_SHEET_URL}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#0f5f35;color:#fff;text-decoration:none;font-weight:600;">Open Spreadsheet</a>
+            ${requestUrl ? ` <a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
+          </p>
+        `;
         await sendNotificationEmail({
           to: hrRecipients,
           subject: hrSubject,
           text: hrText,
+          html: hrHtml,
         });
       }
       await setFlashToast({
