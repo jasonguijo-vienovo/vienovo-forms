@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
@@ -81,8 +82,21 @@ export default async function ImportedFormPage({
 
           <div className="p-6 space-y-5">
             {resolvedSearchParams?.submitError === "duplicate" ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-                Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).
+              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+                <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-900 shadow-2xl">
+                  <p className="text-sm font-semibold">Action failed</p>
+                  <p className="mt-1 text-sm leading-relaxed">
+                    Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).
+                  </p>
+                  <div className="mt-4 flex justify-end">
+                    <Link
+                      href={`/forms/${slug}`}
+                      className="rounded-xl border border-current/20 px-4 py-2 text-sm font-semibold transition hover:bg-black/5"
+                    >
+                      Close
+                    </Link>
+                  </div>
+                </div>
               </div>
             ) : null}
             {showAdminDiagnostics &&
