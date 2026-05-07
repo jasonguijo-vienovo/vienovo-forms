@@ -76,7 +76,8 @@ function buildEmployeeInformationRow(opts: {
     hour12: false,
     timeZone: "Asia/Manila",
   });
-  const reiRef = `REI-${Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)}`;
+  const randomSix = Array.from({ length: 6 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]).join("");
+  const reiRef = `REI-${randomSix}`;
   return {
     Timestamp: timestamp,
     "Ref #": reiRef,
@@ -110,6 +111,7 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
   const firstNameIndex = idx("First Name");
 
   for (const cells of matrix.slice(1)) {
+    if (!cells || cells.every((cell) => !String(cell ?? "").trim())) continue;
     const existingEmployeeId = employeeIdIndex >= 0 ? normalizeCompare(String(cells[employeeIdIndex] ?? "")) : "";
     const existingEmail = emailIndex >= 0 ? normalizeCompare(String(cells[emailIndex] ?? "")) : "";
     const existingFirstName = firstNameIndex >= 0 ? normalizeCompare(String(cells[firstNameIndex] ?? "")) : "";
@@ -122,6 +124,12 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
       (incomingEmail && existingEmail && incomingEmail === existingEmail) ||
       (incomingFirstName && existingFirstName && incomingFirstName === existingFirstName)
     ) {
+      console.warn("employee-info-duplicate-detected", {
+        at: new Date().toISOString(),
+        employeeId: row["Employee ID"] || "",
+        email: row.Email || row["Email Address"] || "",
+        firstName: row["First Name"] || "",
+      });
       throw new Error(
         "Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).",
       );
@@ -367,6 +375,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     });
 
     const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
+    let employeeRow: Record<string, string> | null = null;
     const responseSpreadsheetId = isEmployeeInformation
       ? EMPLOYEE_INFORMATION_SPREADSHEET_ID
       : definition.responseSpreadsheetId?.trim() ||
@@ -390,7 +399,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     if (shouldWriteResponses) {
       if (isEmployeeInformation) {
         await enforceEmployeeInformationHeaders();
-        const employeeRow = buildEmployeeInformationRow({ referenceNo, values, labels });
+        employeeRow = buildEmployeeInformationRow({ referenceNo, values, labels });
         await ensureNoEmployeeInfoDuplicate(employeeRow);
         await writeImportedSubmissionToSheet({
           spreadsheetId: responseSpreadsheetId,
@@ -441,7 +450,6 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       const emailSubject = isEmployeeInformation
         ? "Employee Information Submission Confirmed"
         : `${imported.name} submitted (${referenceNo})`;
-      const employeeRow = isEmployeeInformation ? buildEmployeeInformationRow({ referenceNo, values, labels }) : null;
       const submitterText = isEmployeeInformation
         ? `Your Employee Information form has been submitted successfully.\n\n` +
           `Submission details:\n` +
