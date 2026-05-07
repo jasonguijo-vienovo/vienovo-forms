@@ -9,6 +9,7 @@ import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
+import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
@@ -398,6 +399,33 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       tone: "success",
       message: `${imported.name} submitted and recorded to ${responseSheetName}: ${referenceNo}`,
     });
+
+    try {
+      const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
+      const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+      const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
+      const emailSubject = isEmployeeInformation
+        ? `Employee Information Submission Confirmed (${referenceNo})`
+        : `${imported.name} submitted (${referenceNo})`;
+      const emailText = isEmployeeInformation
+        ? `Your Employee Information form was submitted successfully.\n\nReference: ${referenceNo}\n` +
+          (requestUrl ? `View request: ${requestUrl}\n` : "") +
+          `\nThis is your confirmation receipt.`
+        : `Your ${imported.name} form was submitted successfully.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : "");
+      await sendFlowNotification({
+        formSlug: slug,
+        formName: imported.name,
+        event: "submitted",
+        to: [email],
+        subject: emailSubject,
+        text: emailText,
+      });
+    } catch (notificationError) {
+      console.error("Imported form submit notification failed:", notificationError);
+    }
+
     redirect(`/requests/${referenceNo}`);
   } catch (error) {
     if (isRedirectError(error)) throw error;
