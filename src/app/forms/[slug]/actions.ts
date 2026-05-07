@@ -16,6 +16,7 @@ import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { readSpreadsheetMatrix, writeSpreadsheetRow } from "@/lib/google/sheets";
 import { RequestModel } from "@/models/Request";
+import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
 
 const EMPLOYEE_INFORMATION_SLUG = "employee-information";
@@ -404,6 +405,18 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
       const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
       const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
+      const hrRecipients = isEmployeeInformation
+        ? (
+            await Approver.find({
+              isActive: true,
+              roles: "hr",
+              email: { $exists: true, $ne: "" },
+            })
+              .select({ email: 1 })
+              .lean()
+          ).map((item) => String(item.email ?? "").trim().toLowerCase()).filter(Boolean)
+        : [];
+      const recipients = Array.from(new Set([email, ...hrRecipients]));
       const emailSubject = isEmployeeInformation
         ? `Employee Information Submission Confirmed (${referenceNo})`
         : `${imported.name} submitted (${referenceNo})`;
@@ -418,7 +431,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         formSlug: slug,
         formName: imported.name,
         event: "submitted",
-        to: [email],
+        to: recipients,
         subject: emailSubject,
         text: emailText,
       });
