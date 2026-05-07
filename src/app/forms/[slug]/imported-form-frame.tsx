@@ -38,7 +38,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 <style>
   html, body {
     max-width: 100%;
-    overflow-x: hidden;
+    overflow: hidden;
   }
   *, *::before, *::after {
     box-sizing: border-box;
@@ -415,7 +415,8 @@ export function ImportedFormFrame({ htmlSource, fields, submitAction }: Imported
         title="Imported legacy form"
         sandbox="allow-scripts allow-forms"
         srcDoc={srcDoc}
-        className="w-full rounded-xl border border-brand-100 bg-white"
+        className="w-full overflow-hidden rounded-xl border border-brand-100 bg-white"
+        scrolling="no"
         style={{ height }}
       />
       <form ref={formRef} action={submitAction} className="hidden">
