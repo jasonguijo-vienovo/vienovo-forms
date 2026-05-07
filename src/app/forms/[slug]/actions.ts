@@ -12,12 +12,95 @@ import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { readSpreadsheetMatrix } from "@/lib/google/sheets";
 import { RequestModel } from "@/models/Request";
 import { FormImport } from "@/models/FormImport";
 
 const EMPLOYEE_INFORMATION_SLUG = "employee-information";
 const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
 const EMPLOYEE_INFORMATION_SHEET_NAME = "Employee Information";
+
+function normalizeKey(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function findValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
+  const wanted = aliases.map(normalizeKey);
+  for (const [key, value] of Object.entries(values)) {
+    const byKey = normalizeKey(key);
+    const byLabel = normalizeKey(labels[key] || "");
+    if (wanted.some((alias) => alias === byKey || alias === byLabel)) return String(value ?? "").trim();
+  }
+  return "";
+}
+
+function buildEmployeeInformationRow(opts: {
+  referenceNo: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const timestamp = new Date().toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+  return {
+    Timestamp: timestamp,
+    "Ref #": `REI-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+    "Employee ID": findValue(opts.values, opts.labels, "employeeid", "employee id"),
+    "Last Name": findValue(opts.values, opts.labels, "lastname", "last name"),
+    "First Name": findValue(opts.values, opts.labels, "firstname", "first name"),
+    "Middle Name": findValue(opts.values, opts.labels, "middlename", "middle name"),
+    Email: findValue(opts.values, opts.labels, "email"),
+    Gender: findValue(opts.values, opts.labels, "gender", "sex"),
+    "Date of Birth": findValue(opts.values, opts.labels, "dateofbirth", "birthdate", "dob"),
+    "Civil Status": findValue(opts.values, opts.labels, "civilstatus", "civil status"),
+    "Home Address": findValue(opts.values, opts.labels, "homeaddress", "home address", "address"),
+    "Zip Code": findValue(opts.values, opts.labels, "zipcode", "zip code"),
+    "Contact No": findValue(opts.values, opts.labels, "contactno", "contact number", "mobilenumber", "phone"),
+    "Email Address": findValue(opts.values, opts.labels, "emailaddress", "email"),
+    "Job Title": findValue(opts.values, opts.labels, "jobtitle", "position"),
+  } as Record<string, string>;
+}
+
+async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
+  const matrix = await readSpreadsheetMatrix(
+    EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+    `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1:ZZ5000`,
+  );
+  if (!matrix.length) return;
+  const headers = (matrix[0] ?? []).map((value) => String(value ?? "").trim());
+  const idx = (name: string) => headers.findIndex((header) => normalizeKey(header) === normalizeKey(name));
+  const employeeIdIndex = idx("Employee ID");
+  const emailIndex = idx("Email");
+  const contactIndex = idx("Contact No");
+  const firstNameIndex = idx("First Name");
+  const lastNameIndex = idx("Last Name");
+
+  for (const cells of matrix.slice(1)) {
+    const existingEmployeeId = employeeIdIndex >= 0 ? String(cells[employeeIdIndex] ?? "").trim() : "";
+    const existingEmail = emailIndex >= 0 ? String(cells[emailIndex] ?? "").trim().toLowerCase() : "";
+    const existingContact = contactIndex >= 0 ? String(cells[contactIndex] ?? "").trim() : "";
+    const existingFullName = `${String(cells[firstNameIndex] ?? "").trim()} ${String(cells[lastNameIndex] ?? "").trim()}`
+      .trim()
+      .toLowerCase();
+    const incomingFullName = `${row["First Name"] ?? ""} ${row["Last Name"] ?? ""}`.trim().toLowerCase();
+
+    if (
+      (row["Employee ID"] && existingEmployeeId && row["Employee ID"] === existingEmployeeId) ||
+      (row.Email && existingEmail && row.Email.toLowerCase() === existingEmail) ||
+      (row["Contact No"] && existingContact && row["Contact No"] === existingContact) ||
+      (incomingFullName && existingFullName && incomingFullName === existingFullName)
+    ) {
+      throw new Error("Employee record already exists. Submission was not saved.");
+    }
+  }
+}
 
 function collectFieldValue(field: ImportedFieldDefinition, formData: FormData) {
   if (field.type === "checkbox") {
@@ -253,6 +336,21 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     }
 
     if (shouldWriteResponses) {
+      if (isEmployeeInformation) {
+        const employeeRow = buildEmployeeInformationRow({ referenceNo, values, labels });
+        await ensureNoEmployeeInfoDuplicate(employeeRow);
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: employeeRow,
+        });
+      } else {
       await writeImportedSubmissionToSheet({
         spreadsheetId: responseSpreadsheetId,
         sheetTitle: responseSheetName,
@@ -264,6 +362,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         labels,
         values,
       });
+      }
     }
 
     await setFlashToast({
