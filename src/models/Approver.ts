@@ -5,6 +5,7 @@ export const APPROVER_ROLES = [
   "head",
   "processor",
   "cashAdvanceApprover",
+  "hr",
 ] as const;
 export type ApproverRole = (typeof APPROVER_ROLES)[number];
 
