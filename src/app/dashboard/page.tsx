@@ -9,19 +9,16 @@
   Plane,
   Plus,
   ReceiptText,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Types } from "mongoose";
 import { Navbar } from "@/components/navbar";
-import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
 import { getCatalogForms } from "@/lib/form-definitions";
 import type { FormRuntimeState } from "@/lib/forms/runtime-state";
 import { safeAuth } from "@/lib/safe-auth";
 import { RequestModel } from "@/models/Request";
-import { deleteDashboardRequest } from "./actions";
 
 const FORM_LABELS: Record<string, string> = {
   "travel-booking": "Travel Booking",
@@ -46,7 +43,7 @@ export default async function DashboardPage({
   searchParams?: Promise<{
     q?: string;
     status?: string;
-    cursor?: string;
+    page?: string;
     pq?: string;
     pcursor?: string;
   }>;
@@ -58,10 +55,10 @@ export default async function DashboardPage({
   const resolvedSearchParams = await searchParams;
   const q = String(resolvedSearchParams?.q ?? "").trim();
   const statusFilter = String(resolvedSearchParams?.status ?? "all").trim().toLowerCase();
-  const cursor = String(resolvedSearchParams?.cursor ?? "").trim();
+  const page = Math.max(1, Number.parseInt(String(resolvedSearchParams?.page ?? "1"), 10) || 1);
   const pendingQuery = String(resolvedSearchParams?.pq ?? "").trim();
   const pendingCursor = String(resolvedSearchParams?.pcursor ?? "").trim();
-  const pageSize = 10;
+  const pageSize = 5;
   const forms = await getCatalogForms({
     allowFallback: true,
     includeUnavailable: true,
@@ -78,17 +75,6 @@ export default async function DashboardPage({
       { formName: { $regex: q, $options: "i" } },
       { formSlug: { $regex: q, $options: "i" } },
     ];
-  }
-  if (cursor) {
-    const [cursorDateRaw, cursorIdRaw] = cursor.split("|");
-    const cursorDate = new Date(cursorDateRaw || "");
-    if (!Number.isNaN(cursorDate.getTime()) && Types.ObjectId.isValid(cursorIdRaw || "")) {
-      requestFilter.$or = [
-        ...(Array.isArray(requestFilter.$or) ? requestFilter.$or : []),
-        { createdAt: { $lt: cursorDate } },
-        { createdAt: cursorDate, _id: { $lt: new Types.ObjectId(cursorIdRaw) } },
-      ];
-    }
   }
   const pendingFilter: Record<string, unknown> = {
     approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
@@ -115,7 +101,8 @@ export default async function DashboardPage({
   const [myRequests, pendingApprovals, myRequestCount, pendingApprovalsCount] = await Promise.all([
     RequestModel.find(requestFilter)
       .sort({ createdAt: -1, _id: -1 })
-      .limit(pageSize + 1)
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
       .select({
         _id: 1,
         referenceNo: 1,
@@ -150,13 +137,10 @@ export default async function DashboardPage({
       approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
     }),
   ]);
-  const hasMore = myRequests.length > pageSize;
-  const visibleRequests = hasMore ? myRequests.slice(0, pageSize) : myRequests;
-  const lastVisible = visibleRequests[visibleRequests.length - 1];
-  const nextCursor =
-    hasMore && lastVisible?.createdAt && lastVisible?._id
-      ? `${new Date(lastVisible.createdAt).toISOString()}|${String(lastVisible._id)}`
-      : "";
+  const visibleRequests = myRequests;
+  const totalPages = Math.max(1, Math.ceil(myRequestCount / pageSize));
+  const hasPrevPage = page > 1;
+  const hasNextPage = page < totalPages;
   const pendingHasMore = pendingApprovals.length > pageSize;
   const visiblePendingApprovals = pendingHasMore ? pendingApprovals.slice(0, pageSize) : pendingApprovals;
   const pendingLastVisible = visiblePendingApprovals[visiblePendingApprovals.length - 1];
@@ -236,22 +220,31 @@ export default async function DashboardPage({
             {visibleRequests.length > 0 ? (
               <div className="divide-y divide-surface-border">
                 {visibleRequests.map((request) => (
-                  <RequestRow key={String(request._id)} request={request} showDelete />
+                  <RequestRow key={String(request._id)} request={request} />
                 ))}
               </div>
             ) : (
               <EmptyState message="You haven't submitted any requests yet." />
             )}
-            {hasMore && nextCursor ? (
-              <div className="mt-4">
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-xs text-surface-muted">
+                Page {page} of {totalPages}
+              </span>
+              <div className="flex gap-2">
                 <Link
-                  href={`/dashboard?cursor=${encodeURIComponent(nextCursor)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className="btn-secondary"
+                  href={`/dashboard?page=${Math.max(1, page - 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                  className={`btn-secondary ${hasPrevPage ? "" : "pointer-events-none opacity-50"}`}
                 >
-                  Load more
+                  Previous
+                </Link>
+                <Link
+                  href={`/dashboard?page=${Math.min(totalPages, page + 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                  className={`btn-secondary ${hasNextPage ? "" : "pointer-events-none opacity-50"}`}
+                >
+                  Next
                 </Link>
               </div>
-            ) : null}
+            </div>
           </Panel>
           <Panel title="Pending approvals" description="Requests waiting for your action.">
             <div className="mb-4 flex flex-col gap-2">
@@ -400,48 +393,27 @@ function formatDate(value: unknown) {
   return `${relative} • ${date.toLocaleString()}`;
 }
 
-function RequestRow({ request, showDelete = false }: { request: any; showDelete?: boolean }) {
+function RequestRow({ request }: { request: any }) {
   return (
-    <div className="py-3 first:pt-0 last:pb-0">
-      <div className="flex items-start justify-between gap-3">
-        <Link href={`/requests/${request.referenceNo}`} className="min-w-0 flex-1">
+    <div className="py-2 first:pt-0 last:pb-0">
+      <Link href={`/requests/${request.referenceNo}`} className="min-w-0 block">
+        <div className="flex items-center justify-between gap-2">
           <p className="truncate text-sm font-semibold text-surface-text">{requestFormLabel(request)}</p>
-          <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
-            <Clock3 className="h-3.5 w-3.5" />
-            <span className="font-mono">{request.referenceNo}</span>
-            {" - "}
-            {formatDate(request.createdAt)}
-          </p>
-          {request.status === "pending" && (request.currentRole || request.currentActorName) ? (
-            <p className="mt-1 text-xs text-surface-muted">
-              Current step: {request.currentRole || "pending"} {request.currentActorName ? `• ${request.currentActorName}` : ""}
-            </p>
-          ) : null}
-        </Link>
-        <span
-          className={`status-pill shrink-0 uppercase ${
-            STATUS_TONES[request.status] ?? "border-surface-border bg-slate-50 text-slate-700"
-          }`}
-        >
-          {request.status}
-        </span>
-      </div>
-      {showDelete ? (
-        <form action={deleteDashboardRequest} className="mt-3 flex justify-end">
-          <input type="hidden" name="referenceNo" value={request.referenceNo} />
-          <PendingSubmitButton
-            type="submit"
-            idleLabel={
-              <span className="inline-flex items-center gap-1.5">
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Delete request</span>
-              </span>
-            }
-            pendingLabel="Deleting..."
-            className="inline-flex items-center gap-1.5 border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
-          />
-        </form>
-      ) : null}
+          <span
+            className={`status-pill shrink-0 uppercase ${
+              STATUS_TONES[request.status] ?? "border-surface-border bg-slate-50 text-slate-700"
+            }`}
+          >
+            {request.status}
+          </span>
+        </div>
+        <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
+          <Clock3 className="h-3.5 w-3.5" />
+          <span className="font-mono">{request.referenceNo}</span>
+          {" - "}
+          {formatDate(request.createdAt)}
+        </p>
+      </Link>
     </div>
   );
 }
