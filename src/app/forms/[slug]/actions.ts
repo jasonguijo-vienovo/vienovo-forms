@@ -72,9 +72,10 @@ function buildEmployeeInformationRow(opts: {
     hour12: false,
     timeZone: "Asia/Manila",
   });
+  const reiRef = `REI-${Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)}`;
   return {
     Timestamp: timestamp,
-    "Ref #": `REI-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+    "Ref #": reiRef,
     "Employee ID": findValue(opts.values, opts.labels, "employeeid", "employee id"),
     "Last Name": findValue(opts.values, opts.labels, "lastname", "last name"),
     "First Name": findValue(opts.values, opts.labels, "firstname", "first name"),
@@ -102,35 +103,46 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
   const idx = (name: string) => headers.findIndex((header) => normalizeKey(header) === normalizeKey(name));
   const employeeIdIndex = idx("Employee ID");
   const emailIndex = idx("Email");
-  const contactIndex = idx("Contact No");
   const firstNameIndex = idx("First Name");
-  const lastNameIndex = idx("Last Name");
 
   for (const cells of matrix.slice(1)) {
     const existingEmployeeId = employeeIdIndex >= 0 ? String(cells[employeeIdIndex] ?? "").trim() : "";
     const existingEmail = emailIndex >= 0 ? String(cells[emailIndex] ?? "").trim().toLowerCase() : "";
-    const existingContact = contactIndex >= 0 ? String(cells[contactIndex] ?? "").trim() : "";
-    const existingFullName = `${String(cells[firstNameIndex] ?? "").trim()} ${String(cells[lastNameIndex] ?? "").trim()}`
-      .trim()
-      .toLowerCase();
-    const incomingFullName = `${row["First Name"] ?? ""} ${row["Last Name"] ?? ""}`.trim().toLowerCase();
+    const existingFirstName = firstNameIndex >= 0 ? String(cells[firstNameIndex] ?? "").trim().toLowerCase() : "";
+    const incomingFirstName = String(row["First Name"] ?? "").trim().toLowerCase();
 
     if (
       (row["Employee ID"] && existingEmployeeId && row["Employee ID"] === existingEmployeeId) ||
       (row.Email && existingEmail && row.Email.toLowerCase() === existingEmail) ||
-      (row["Contact No"] && existingContact && row["Contact No"] === existingContact) ||
-      (incomingFullName && existingFullName && incomingFullName === existingFullName)
+      (incomingFirstName && existingFirstName && incomingFirstName === existingFirstName)
     ) {
-      throw new Error("Employee record already exists. Submission was not saved.");
+      throw new Error("Duplicate employee information detected (First Name, Employee ID, or Email). Submission was not saved.");
     }
   }
 }
 
 async function enforceEmployeeInformationHeaders() {
+  const matrix = await readSpreadsheetMatrix(
+    EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+    `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1:ZZ1`,
+  );
+  const currentHeaders = (matrix[0] ?? []).map((value) => String(value ?? "").trim());
+  const missing = EMPLOYEE_INFORMATION_HEADERS.filter(
+    (header) => !currentHeaders.some((existing) => normalizeKey(existing) === normalizeKey(header)),
+  );
+  if (currentHeaders.length === 0) {
+    await writeSpreadsheetRow({
+      spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+      range: `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1`,
+      values: [...EMPLOYEE_INFORMATION_HEADERS],
+    });
+    return;
+  }
+  if (missing.length === 0) return;
   await writeSpreadsheetRow({
     spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
     range: `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1`,
-    values: [...EMPLOYEE_INFORMATION_HEADERS],
+    values: [...currentHeaders, ...missing],
   });
 }
 
