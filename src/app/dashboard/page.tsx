@@ -2,7 +2,6 @@
   ArrowRight,
   Banknote,
   Building2,
-  ChevronDown,
   Clock3,
   FileText,
   Laptop,
@@ -47,7 +46,7 @@ export default async function DashboardPage({
   searchParams?: Promise<{
     q?: string;
     status?: string;
-    page?: string;
+    cursor?: string;
     pq?: string;
     pcursor?: string;
   }>;
@@ -59,10 +58,10 @@ export default async function DashboardPage({
   const resolvedSearchParams = await searchParams;
   const q = String(resolvedSearchParams?.q ?? "").trim();
   const statusFilter = String(resolvedSearchParams?.status ?? "all").trim().toLowerCase();
-  const page = Math.max(1, Number.parseInt(String(resolvedSearchParams?.page ?? "1"), 10) || 1);
+  const cursor = String(resolvedSearchParams?.cursor ?? "").trim();
   const pendingQuery = String(resolvedSearchParams?.pq ?? "").trim();
   const pendingCursor = String(resolvedSearchParams?.pcursor ?? "").trim();
-  const pageSize = 5;
+  const pageSize = 10;
   const forms = await getCatalogForms({
     allowFallback: true,
     includeUnavailable: true,
@@ -79,6 +78,17 @@ export default async function DashboardPage({
       { formName: { $regex: q, $options: "i" } },
       { formSlug: { $regex: q, $options: "i" } },
     ];
+  }
+  if (cursor) {
+    const [cursorDateRaw, cursorIdRaw] = cursor.split("|");
+    const cursorDate = new Date(cursorDateRaw || "");
+    if (!Number.isNaN(cursorDate.getTime()) && Types.ObjectId.isValid(cursorIdRaw || "")) {
+      requestFilter.$or = [
+        ...(Array.isArray(requestFilter.$or) ? requestFilter.$or : []),
+        { createdAt: { $lt: cursorDate } },
+        { createdAt: cursorDate, _id: { $lt: new Types.ObjectId(cursorIdRaw) } },
+      ];
+    }
   }
   const pendingFilter: Record<string, unknown> = {
     approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
@@ -105,8 +115,7 @@ export default async function DashboardPage({
   const [myRequests, pendingApprovals, myRequestCount, pendingApprovalsCount] = await Promise.all([
     RequestModel.find(requestFilter)
       .sort({ createdAt: -1, _id: -1 })
-      .skip((page - 1) * pageSize)
-      .limit(pageSize)
+      .limit(pageSize + 1)
       .select({
         _id: 1,
         referenceNo: 1,
@@ -141,10 +150,13 @@ export default async function DashboardPage({
       approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
     }),
   ]);
-  const visibleRequests = myRequests;
-  const totalPages = Math.max(1, Math.ceil(myRequestCount / pageSize));
-  const hasPrevPage = page > 1;
-  const hasNextPage = page < totalPages;
+  const hasMore = myRequests.length > pageSize;
+  const visibleRequests = hasMore ? myRequests.slice(0, pageSize) : myRequests;
+  const lastVisible = visibleRequests[visibleRequests.length - 1];
+  const nextCursor =
+    hasMore && lastVisible?.createdAt && lastVisible?._id
+      ? `${new Date(lastVisible.createdAt).toISOString()}|${String(lastVisible._id)}`
+      : "";
   const pendingHasMore = pendingApprovals.length > pageSize;
   const visiblePendingApprovals = pendingHasMore ? pendingApprovals.slice(0, pageSize) : pendingApprovals;
   const pendingLastVisible = visiblePendingApprovals[visiblePendingApprovals.length - 1];
@@ -157,59 +169,42 @@ export default async function DashboardPage({
     <>
       <Navbar />
       <main className="mx-auto w-full max-w-[1920px] px-3 py-6 sm:px-5 md:px-6 lg:px-8">
-        <div className="mb-8 grid gap-4 lg:grid-cols-[1.3fr_0.7fr] lg:items-stretch">
-          <div className="app-panel bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-6 py-6 text-white">
+        <div className="mb-8 flex w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between lg:mx-auto lg:w-4/5">
+          <div>
             <p className="section-eyebrow">Requester workspace</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">
               Welcome, {String(name).split(" ")[0]}
             </h1>
-            <p className="mt-1 text-sm text-brand-50">
+            <p className="mt-1 text-sm text-surface-muted">
               Start a request, track your submissions, and see approvals waiting for you.
             </p>
           </div>
-          <div className="app-panel flex flex-col justify-center gap-3 p-5">
-            <Link href="/forms" className="btn-primary w-full">
-              <Plus className="h-4 w-4" />
-              New Request
-            </Link>
-            <Link href="/dashboard?status=pending" className="btn-secondary w-full justify-center">
-              View Pending Requests
-            </Link>
-          </div>
+          <Link href="/forms" className="btn-primary w-full sm:w-auto">
+            <Plus className="h-4 w-4" />
+            New Request
+          </Link>
         </div>
 
         <section className="mb-8">
-          <Panel
-            title="Quick request forms"
-            description="Open the most used request forms quickly."
-            collapsible
-            defaultOpen
-          >
-            <div className="mb-4 flex items-center justify-end">
-              <Link href="/forms" className="text-sm font-semibold text-brand-700 hover:underline">
-                View all
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-              {forms.length > 0 ? (
-                forms.slice(0, 8).map((form) => <FormCard key={form.slug} {...form} />)
-              ) : (
-                <div className="app-panel p-8 text-center text-sm text-surface-muted sm:col-span-2 lg:col-span-3 2xl:col-span-4">
-                  No available request forms right now.
-                </div>
-              )}
-            </div>
-          </Panel>
-        </section>
-
-        <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <QuickStat label="My Requests" value={myRequestCount} helper="Total submitted by you" />
-          <QuickStat label="Pending With Me" value={pendingApprovalsCount} helper="Needs your action" />
-          <QuickLink href="/forms" label="Open Form Catalog" />
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-surface-text">Quick request forms</h2>
+            <Link href="/forms" className="text-sm font-semibold text-brand-700 hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {forms.length > 0 ? (
+              forms.slice(0, 8).map((form) => <FormCard key={form.slug} {...form} />)
+            ) : (
+              <div className="app-panel p-8 text-center text-sm text-surface-muted sm:col-span-2 lg:col-span-3 2xl:col-span-4">
+                No available request forms right now.
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Panel title="Recent requests" description="Latest forms you submitted." collapsible defaultOpen>
+          <Panel title="Recent requests" description="Latest forms you submitted.">
             <div className="mb-4 flex flex-col gap-2">
               <form className="flex flex-col gap-2 sm:flex-row" method="get">
                 <input
@@ -247,27 +242,18 @@ export default async function DashboardPage({
             ) : (
               <EmptyState message="You haven't submitted any requests yet." />
             )}
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <span className="text-xs text-surface-muted">
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-2">
+            {hasMore && nextCursor ? (
+              <div className="mt-4">
                 <Link
-                  href={`/dashboard?page=${Math.max(1, page - 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className={`btn-secondary ${hasPrevPage ? "" : "pointer-events-none opacity-50"}`}
+                  href={`/dashboard?cursor=${encodeURIComponent(nextCursor)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                  className="btn-secondary"
                 >
-                  Previous
-                </Link>
-                <Link
-                  href={`/dashboard?page=${Math.min(totalPages, page + 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className={`btn-secondary ${hasNextPage ? "" : "pointer-events-none opacity-50"}`}
-                >
-                  Next
+                  Load more
                 </Link>
               </div>
-            </div>
+            ) : null}
           </Panel>
-          <Panel title="Pending approvals" description="Requests waiting for your action." collapsible defaultOpen>
+          <Panel title="Pending approvals" description="Requests waiting for your action.">
             <div className="mb-4 flex flex-col gap-2">
               <form className="flex flex-col gap-2 sm:flex-row" method="get">
                 <input
@@ -372,31 +358,11 @@ function Panel({
   title,
   description,
   children,
-  collapsible = false,
-  defaultOpen = true,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
-  collapsible?: boolean;
-  defaultOpen?: boolean;
 }) {
-  if (collapsible) {
-    return (
-      <div className="app-panel overflow-hidden">
-        <details open={defaultOpen} className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between border-b border-surface-border px-5 py-4">
-            <div>
-              <h2 className="text-base font-semibold text-surface-text">{title}</h2>
-              <p className="mt-1 text-sm text-surface-muted">{description}</p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-surface-muted transition group-open:rotate-180" />
-          </summary>
-          <div className="p-5">{children}</div>
-        </details>
-      </div>
-    );
-  }
   return (
     <div className="app-panel overflow-hidden">
       <div className="border-b border-surface-border px-5 py-4">
@@ -477,33 +443,6 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
         </form>
       ) : null}
     </div>
-  );
-}
-
-function QuickStat({
-  label,
-  value,
-  helper,
-}: {
-  label: string;
-  value: number;
-  helper: string;
-}) {
-  return (
-    <div className="app-panel p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-surface-text">{value}</p>
-      <p className="mt-1 text-xs text-surface-muted">{helper}</p>
-    </div>
-  );
-}
-
-function QuickLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link href={href} className="app-panel p-4 transition hover:border-brand-300 hover:bg-brand-50/30">
-      <p className="text-sm font-semibold text-surface-text">{label}</p>
-      <p className="mt-1 text-xs text-surface-muted">Open</p>
-    </Link>
   );
 }
 
