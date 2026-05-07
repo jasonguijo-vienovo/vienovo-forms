@@ -69,7 +69,13 @@ function parseFramePayload(formData: FormData) {
   return { values, labels };
 }
 
-function isFieldMissing(field: ImportedFieldDefinition, value: unknown) {
+function isMiddleNameField(field: ImportedFieldDefinition) {
+  const key = `${field.name} ${field.label}`.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return key.includes("middlename");
+}
+
+function isFieldMissing(slug: string, field: ImportedFieldDefinition, value: unknown) {
+  if (slug === "employee-information" && isMiddleNameField(field)) return false;
   if (!field.required) return false;
   if (Array.isArray(value)) return value.length === 0;
   if (field.type === "checkbox") return value !== "Yes";
@@ -146,7 +152,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         : collectFieldValue(field, formData);
       values[field.name] = value;
       labels[field.name] = framePayload?.labels[field.name] || field.label;
-      if (isFieldMissing(field, value)) missing.push(field.label);
+      if (isFieldMissing(slug, field, value)) missing.push(field.label);
     }
 
     if (framePayload) {
