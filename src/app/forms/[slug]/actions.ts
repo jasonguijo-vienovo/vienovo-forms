@@ -9,6 +9,7 @@ import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
+import { sendNotificationEmail } from "@/lib/notifications/email";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
@@ -427,7 +428,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         : `Your ${imported.name} form was submitted successfully.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : "");
-      await sendFlowNotification({
+      const sentViaFlow = await sendFlowNotification({
         formSlug: slug,
         formName: imported.name,
         event: "submitted",
@@ -435,6 +436,13 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         subject: emailSubject,
         text: emailText,
       });
+      if (!sentViaFlow && isEmployeeInformation) {
+        await sendNotificationEmail({
+          to: recipients,
+          subject: emailSubject,
+          text: emailText,
+        });
+      }
       await setFlashToast({
         tone: "success",
         message: `${imported.name} submitted and notifications sent to ${recipients.length} recipient(s): ${referenceNo}`,
