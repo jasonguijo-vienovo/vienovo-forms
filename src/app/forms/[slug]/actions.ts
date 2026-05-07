@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
@@ -28,13 +29,14 @@ const EMPLOYEE_INFORMATION_HEADERS = [
   "Middle Name",
   "Email",
   "Gender",
-  "Date of Birth",
+  "Date Of Birth",
   "Civil Status",
   "Home Address",
   "Zip Code",
   "Contact No",
   "Email Address",
   "Job Title",
+  "Status",
 ] as const;
 
 function normalizeKey(input: string) {
@@ -75,13 +77,14 @@ function buildEmployeeInformationRow(opts: {
     "Middle Name": findValue(opts.values, opts.labels, "middlename", "middle name"),
     Email: findValue(opts.values, opts.labels, "email"),
     Gender: findValue(opts.values, opts.labels, "gender", "sex"),
-    "Date of Birth": findValue(opts.values, opts.labels, "dateofbirth", "birthdate", "dob"),
+    "Date Of Birth": findValue(opts.values, opts.labels, "dateofbirth", "birthdate", "dob"),
     "Civil Status": findValue(opts.values, opts.labels, "civilstatus", "civil status"),
     "Home Address": findValue(opts.values, opts.labels, "homeaddress", "home address", "address"),
     "Zip Code": findValue(opts.values, opts.labels, "zipcode", "zip code"),
     "Contact No": findValue(opts.values, opts.labels, "contactno", "contact number", "mobilenumber", "phone"),
     "Email Address": findValue(opts.values, opts.labels, "emailaddress", "email"),
     "Job Title": findValue(opts.values, opts.labels, "jobtitle", "position"),
+    Status: "Submitted",
   } as Record<string, string>;
 }
 
@@ -120,19 +123,10 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
 }
 
 async function enforceEmployeeInformationHeaders() {
-  const matrix = await readSpreadsheetMatrix(
-    EMPLOYEE_INFORMATION_SPREADSHEET_ID,
-    `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1:ZZ1`,
-  );
-  const currentHeaders = (matrix[0] ?? []).map((value) => String(value ?? "").trim());
-  const headersToWrite = [...EMPLOYEE_INFORMATION_HEADERS];
-  if (currentHeaders.length > headersToWrite.length) {
-    headersToWrite.push(...new Array(currentHeaders.length - headersToWrite.length).fill(""));
-  }
   await writeSpreadsheetRow({
     spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
     range: `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1`,
-    values: headersToWrite,
+    values: [...EMPLOYEE_INFORMATION_HEADERS],
   });
 }
 
@@ -406,6 +400,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     });
     redirect(`/requests/${referenceNo}`);
   } catch (error) {
+    if (isRedirectError(error)) throw error;
     console.error(`submitImportedForm failed for ${slug}:`, error);
     await setFlashToast({
       tone: "error",
