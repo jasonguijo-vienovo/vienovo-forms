@@ -35,6 +35,18 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   const bridgeData = safeScriptJson({ optionsByName, labelsByName });
 
   const bridgeScript = `
+<style>
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+  img, svg, canvas, video, iframe, table, input, select, textarea {
+    max-width: 100%;
+  }
+</style>
 <script>
 (function () {
   var bridge = ${bridgeData};
