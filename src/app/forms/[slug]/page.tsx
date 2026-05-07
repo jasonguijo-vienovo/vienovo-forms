@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
@@ -10,6 +9,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { FormImport } from "@/models/FormImport";
 import { submitImportedForm } from "./actions";
 import { ImportedFormFrame } from "./imported-form-frame";
+import { DuplicateModal } from "./duplicate-modal";
 
 export default async function ImportedFormPage({
   params,
@@ -82,22 +82,7 @@ export default async function ImportedFormPage({
 
           <div className="p-6 space-y-5">
             {resolvedSearchParams?.submitError === "duplicate" ? (
-              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
-                <div className="w-full max-w-md rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-900 shadow-2xl">
-                  <p className="text-sm font-semibold">Action failed</p>
-                  <p className="mt-1 text-sm leading-relaxed">
-                    Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).
-                  </p>
-                  <div className="mt-4 flex justify-end">
-                    <Link
-                      href={`/forms/${slug}`}
-                      className="rounded-xl border border-current/20 px-4 py-2 text-sm font-semibold transition hover:bg-black/5"
-                    >
-                      Close
-                    </Link>
-                  </div>
-                </div>
-              </div>
+              <DuplicateModal slug={slug} />
             ) : null}
             {showAdminDiagnostics &&
             ((imported.parseDiagnostics?.warnings?.length ?? 0) > 0 || runtime.warnings.length > 0) && (
@@ -122,7 +107,7 @@ export default async function ImportedFormPage({
               </div>
             )}
 
-            {showAdminDiagnostics && (
+            {showAdminDiagnostics && slug !== "employee-information" && (
               <div className="rounded-xl border border-brand-100 bg-white p-4 text-sm text-gray-600 space-y-2">
                 <p className="font-semibold text-gray-800">Spreadsheet wiring</p>
                 <p>
