@@ -15,7 +15,7 @@ export default async function ImportedFormPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ preview?: string }>;
+  searchParams?: Promise<{ preview?: string; submitError?: string }>;
 }) {
   const { slug } = await params;
   const resolvedSearchParams = await searchParams;
@@ -80,6 +80,11 @@ export default async function ImportedFormPage({
           </div>
 
           <div className="p-6 space-y-5">
+            {resolvedSearchParams?.submitError === "duplicate" ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).
+              </div>
+            ) : null}
             {showAdminDiagnostics &&
             ((imported.parseDiagnostics?.warnings?.length ?? 0) > 0 || runtime.warnings.length > 0) && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">

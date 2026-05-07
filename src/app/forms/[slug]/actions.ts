@@ -116,7 +116,9 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
       (row.Email && existingEmail && row.Email.toLowerCase() === existingEmail) ||
       (incomingFirstName && existingFirstName && incomingFirstName === existingFirstName)
     ) {
-      throw new Error("Duplicate employee information detected (First Name, Employee ID, or Email). Submission was not saved.");
+      throw new Error(
+        "Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).",
+      );
     }
   }
 }
@@ -528,6 +530,13 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           ? error.message.trim()
           : "The imported form could not be submitted.",
     });
+    if (
+      slug === EMPLOYEE_INFORMATION_SLUG &&
+      error instanceof Error &&
+      error.message.toLowerCase().includes("duplicate/already exists")
+    ) {
+      redirect(`/forms/${slug}?submitError=duplicate`);
+    }
     redirect(`/forms/${slug}`);
   }
 }
