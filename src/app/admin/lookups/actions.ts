@@ -18,6 +18,14 @@ function normalizeKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+async function resequenceCategoryAlphabetically(category: string) {
+  const docs = await Lookup.find({ category }).sort({ value: 1, _id: 1 });
+  for (let idx = 0; idx < docs.length; idx += 1) {
+    docs[idx].sortOrder = idx;
+    await docs[idx].save();
+  }
+}
+
 async function resolveImportedCategoryAlias(category: LookupCategory) {
   const parsed = parseImportedLookupCategory(String(category));
   if (!parsed) return category;
@@ -49,6 +57,7 @@ export async function addLookup(formData: FormData) {
     sortOrder: (last?.sortOrder ?? -1) + 1,
     isActive: true,
   });
+  await resequenceCategoryAlphabetically(String(category));
   await setFlashToast({ tone: "success", message: `Added dropdown value: ${value}` });
   revalidatePath("/admin/lookups");
 }
@@ -91,6 +100,7 @@ export async function updateLookup(formData: FormData) {
   if (!doc) return;
   doc.value = value;
   await doc.save();
+  await resequenceCategoryAlphabetically(String(doc.category));
   await setFlashToast({ tone: "success", message: "Dropdown value updated." });
   revalidatePath("/admin/lookups");
 }
