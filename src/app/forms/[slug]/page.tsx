@@ -63,7 +63,7 @@ export default async function ImportedFormPage({
             : null
         }
       />
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 overflow-x-hidden">
         <div className="bg-white rounded-2xl shadow-sm border border-brand-100 overflow-hidden">
           <div className="bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-6 py-6 text-white">
             {showAdminDiagnostics ? (
