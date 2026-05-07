@@ -15,6 +15,10 @@ import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-s
 import { RequestModel } from "@/models/Request";
 import { FormImport } from "@/models/FormImport";
 
+const EMPLOYEE_INFORMATION_SLUG = "employee-information";
+const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
+const EMPLOYEE_INFORMATION_SHEET_NAME = "Employee Information";
+
 function collectFieldValue(field: ImportedFieldDefinition, formData: FormData) {
   if (field.type === "checkbox") {
     return formData.get(field.name) ? "Yes" : "No";
@@ -227,40 +231,44 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       updatedAt: createdRequest.updatedAt,
     });
 
-    const responseSpreadsheetId =
-      definition.responseSpreadsheetId?.trim() ||
-      imported.spreadsheetId?.trim() ||
-      process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
-      process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
-      "";
-    const responseSheetName =
-      definition.responseSheetName?.trim() ||
-      (imported as any).responseSheetName?.trim() ||
-      `${imported.name} Responses`;
-    const shouldWriteResponses =
-      definition.writeResponsesToSheet || Boolean((imported as any).writeResponsesToSheet);
+    const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
+    const responseSpreadsheetId = isEmployeeInformation
+      ? EMPLOYEE_INFORMATION_SPREADSHEET_ID
+      : definition.responseSpreadsheetId?.trim() ||
+        imported.spreadsheetId?.trim() ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+    const responseSheetName = isEmployeeInformation
+      ? EMPLOYEE_INFORMATION_SHEET_NAME
+      : definition.responseSheetName?.trim() ||
+        (imported as any).responseSheetName?.trim() ||
+        `${imported.name} Responses`;
+    const shouldWriteResponses = isEmployeeInformation
+      ? true
+      : definition.writeResponsesToSheet || Boolean((imported as any).writeResponsesToSheet);
 
-    if (shouldWriteResponses && responseSpreadsheetId) {
-      try {
-        await writeImportedSubmissionToSheet({
-          spreadsheetId: responseSpreadsheetId,
-          sheetTitle: responseSheetName,
-          referenceNo,
-          slug,
-          importedName: imported.name,
-          submittedByEmail: email,
-          submittedByName: name,
-          labels,
-          values,
-        });
-      } catch (error) {
-        console.error("Imported form response export failed:", error);
-      }
+    if (!responseSpreadsheetId && shouldWriteResponses) {
+      throw new Error("Response spreadsheet is not configured for this form.");
+    }
+
+    if (shouldWriteResponses) {
+      await writeImportedSubmissionToSheet({
+        spreadsheetId: responseSpreadsheetId,
+        sheetTitle: responseSheetName,
+        referenceNo,
+        slug,
+        importedName: imported.name,
+        submittedByEmail: email,
+        submittedByName: name,
+        labels,
+        values,
+      });
     }
 
     await setFlashToast({
       tone: "success",
-      message: `${imported.name} submitted: ${referenceNo}`,
+      message: `${imported.name} submitted and recorded to ${responseSheetName}: ${referenceNo}`,
     });
     redirect(`/requests/${referenceNo}`);
   } catch (error) {
