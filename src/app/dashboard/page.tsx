@@ -1,4 +1,4 @@
-import {
+﻿import {
   ArrowRight,
   Banknote,
   Building2,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Types } from "mongoose";
 import { Navbar } from "@/components/navbar";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
@@ -39,26 +40,130 @@ const STATUS_TONES: Record<string, string> = {
   submitted: "border-sky-200 bg-sky-50 text-sky-800",
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    q?: string;
+    status?: string;
+    cursor?: string;
+    pq?: string;
+    pcursor?: string;
+  }>;
+}) {
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
   const name = session?.user?.name ?? session?.user?.email ?? "there";
   const userEmail = session.user.email.toLowerCase();
+  const resolvedSearchParams = await searchParams;
+  const q = String(resolvedSearchParams?.q ?? "").trim();
+  const statusFilter = String(resolvedSearchParams?.status ?? "all").trim().toLowerCase();
+  const cursor = String(resolvedSearchParams?.cursor ?? "").trim();
+  const pendingQuery = String(resolvedSearchParams?.pq ?? "").trim();
+  const pendingCursor = String(resolvedSearchParams?.pcursor ?? "").trim();
+  const pageSize = 10;
   const forms = await getCatalogForms({
     allowFallback: true,
     includeUnavailable: true,
     includeDrafts: true,
   });
   await connectMongo();
-  const [myRequests, pendingApprovals] = await Promise.all([
-    RequestModel.find({ "submittedBy.email": userEmail }).sort({ createdAt: -1 }).limit(6).lean(),
-    RequestModel.find({
-      approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
-    })
-      .sort({ createdAt: -1 })
-      .limit(6)
+  const requestFilter: Record<string, unknown> = { "submittedBy.email": userEmail };
+  if (["pending", "approved", "rejected", "returned", "submitted"].includes(statusFilter)) {
+    requestFilter.status = statusFilter;
+  }
+  if (q) {
+    requestFilter.$or = [
+      { referenceNo: { $regex: q, $options: "i" } },
+      { formName: { $regex: q, $options: "i" } },
+      { formSlug: { $regex: q, $options: "i" } },
+    ];
+  }
+  if (cursor) {
+    const [cursorDateRaw, cursorIdRaw] = cursor.split("|");
+    const cursorDate = new Date(cursorDateRaw || "");
+    if (!Number.isNaN(cursorDate.getTime()) && Types.ObjectId.isValid(cursorIdRaw || "")) {
+      requestFilter.$or = [
+        ...(Array.isArray(requestFilter.$or) ? requestFilter.$or : []),
+        { createdAt: { $lt: cursorDate } },
+        { createdAt: cursorDate, _id: { $lt: new Types.ObjectId(cursorIdRaw) } },
+      ];
+    }
+  }
+  const pendingFilter: Record<string, unknown> = {
+    approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
+  };
+  if (pendingQuery) {
+    pendingFilter.$or = [
+      { referenceNo: { $regex: pendingQuery, $options: "i" } },
+      { formName: { $regex: pendingQuery, $options: "i" } },
+      { formSlug: { $regex: pendingQuery, $options: "i" } },
+    ];
+  }
+  if (pendingCursor) {
+    const [pendingCursorDateRaw, pendingCursorIdRaw] = pendingCursor.split("|");
+    const pendingCursorDate = new Date(pendingCursorDateRaw || "");
+    if (!Number.isNaN(pendingCursorDate.getTime()) && Types.ObjectId.isValid(pendingCursorIdRaw || "")) {
+      pendingFilter.$or = [
+        ...(Array.isArray(pendingFilter.$or) ? pendingFilter.$or : []),
+        { createdAt: { $lt: pendingCursorDate } },
+        { createdAt: pendingCursorDate, _id: { $lt: new Types.ObjectId(pendingCursorIdRaw) } },
+      ];
+    }
+  }
+
+  const [myRequests, pendingApprovals, myRequestCount, pendingApprovalsCount] = await Promise.all([
+    RequestModel.find(requestFilter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(pageSize + 1)
+      .select({
+        _id: 1,
+        referenceNo: 1,
+        status: 1,
+        createdAt: 1,
+        formType: 1,
+        formName: 1,
+        formSlug: 1,
+        currentRole: 1,
+        currentActorName: 1,
+        currentActorEmail: 1,
+      })
       .lean(),
+    RequestModel.find(pendingFilter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(pageSize + 1)
+      .select({
+        _id: 1,
+        referenceNo: 1,
+        status: 1,
+        createdAt: 1,
+        formType: 1,
+        formName: 1,
+        formSlug: 1,
+        currentRole: 1,
+        currentActorName: 1,
+        currentActorEmail: 1,
+      })
+      .lean(),
+    RequestModel.countDocuments({ "submittedBy.email": userEmail }),
+    RequestModel.countDocuments({
+      approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
+    }),
   ]);
+  const hasMore = myRequests.length > pageSize;
+  const visibleRequests = hasMore ? myRequests.slice(0, pageSize) : myRequests;
+  const lastVisible = visibleRequests[visibleRequests.length - 1];
+  const nextCursor =
+    hasMore && lastVisible?.createdAt && lastVisible?._id
+      ? `${new Date(lastVisible.createdAt).toISOString()}|${String(lastVisible._id)}`
+      : "";
+  const pendingHasMore = pendingApprovals.length > pageSize;
+  const visiblePendingApprovals = pendingHasMore ? pendingApprovals.slice(0, pageSize) : pendingApprovals;
+  const pendingLastVisible = visiblePendingApprovals[visiblePendingApprovals.length - 1];
+  const pendingNextCursor =
+    pendingHasMore && pendingLastVisible?.createdAt && pendingLastVisible?._id
+      ? `${new Date(pendingLastVisible.createdAt).toISOString()}|${String(pendingLastVisible._id)}`
+      : "";
 
   return (
     <>
@@ -100,26 +205,87 @@ export default async function DashboardPage() {
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Panel title="Recent requests" description="Latest forms you submitted.">
-            {myRequests.length > 0 ? (
+            <div className="mb-4 flex flex-col gap-2">
+              <form className="flex flex-col gap-2 sm:flex-row" method="get">
+                <input
+                  type="text"
+                  name="q"
+                  defaultValue={q}
+                  placeholder="Search reference or form"
+                  className="field-input sm:max-w-xs"
+                />
+                <button type="submit" className="btn-secondary">Search</button>
+              </form>
+              <div className="flex flex-wrap gap-2">
+                {["all", "pending", "approved", "rejected", "returned", "submitted"].map((status) => (
+                  <Link
+                    key={status}
+                    href={`/dashboard?status=${status}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                    className={`rounded border px-2 py-1 text-xs font-semibold ${
+                      statusFilter === status
+                        ? "border-brand-300 bg-brand-50 text-brand-700"
+                        : "border-surface-border bg-white text-surface-muted"
+                    }`}
+                  >
+                    {status === "all" ? "All" : status}
+                  </Link>
+                ))}
+                <span className="text-xs text-surface-muted self-center">Total: {myRequestCount}</span>
+              </div>
+            </div>
+            {visibleRequests.length > 0 ? (
               <div className="divide-y divide-surface-border">
-                {myRequests.map((request) => (
+                {visibleRequests.map((request) => (
                   <RequestRow key={String(request._id)} request={request} showDelete />
                 ))}
               </div>
             ) : (
               <EmptyState message="You haven't submitted any requests yet." />
             )}
+            {hasMore && nextCursor ? (
+              <div className="mt-4">
+                <Link
+                  href={`/dashboard?cursor=${encodeURIComponent(nextCursor)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+                  className="btn-secondary"
+                >
+                  Load more
+                </Link>
+              </div>
+            ) : null}
           </Panel>
           <Panel title="Pending approvals" description="Requests waiting for your action.">
-            {pendingApprovals.length > 0 ? (
+            <div className="mb-4 flex flex-col gap-2">
+              <form className="flex flex-col gap-2 sm:flex-row" method="get">
+                <input
+                  type="text"
+                  name="pq"
+                  defaultValue={pendingQuery}
+                  placeholder="Search pending approvals"
+                  className="field-input sm:max-w-xs"
+                />
+                <button type="submit" className="btn-secondary">Search</button>
+              </form>
+              <span className="text-xs text-surface-muted">Total pending: {pendingApprovalsCount}</span>
+            </div>
+            {visiblePendingApprovals.length > 0 ? (
               <div className="divide-y divide-surface-border">
-                {pendingApprovals.map((request) => (
+                {visiblePendingApprovals.map((request) => (
                   <RequestRow key={String(request._id)} request={request} />
                 ))}
               </div>
             ) : (
               <EmptyState message="No pending approvals." />
             )}
+            {pendingHasMore && pendingNextCursor ? (
+              <div className="mt-4">
+                <Link
+                  href={`/dashboard?pcursor=${encodeURIComponent(pendingNextCursor)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
+                  className="btn-secondary"
+                >
+                  Load more
+                </Link>
+              </div>
+            ) : null}
           </Panel>
         </section>
       </main>
@@ -222,7 +388,16 @@ function requestFormLabel(request: any) {
 
 function formatDate(value: unknown) {
   if (!value) return "";
-  return new Date(String(value)).toLocaleString();
+  const date = new Date(String(value));
+  const relativeMs = Date.now() - date.getTime();
+  const relativeHours = Math.floor(relativeMs / (1000 * 60 * 60));
+  const relative =
+    relativeHours < 1
+      ? "just now"
+      : relativeHours < 24
+        ? `${relativeHours}h ago`
+        : `${Math.floor(relativeHours / 24)}d ago`;
+  return `${relative} • ${date.toLocaleString()}`;
 }
 
 function RequestRow({ request, showDelete = false }: { request: any; showDelete?: boolean }) {
@@ -237,6 +412,11 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
             {" - "}
             {formatDate(request.createdAt)}
           </p>
+          {request.status === "pending" && (request.currentRole || request.currentActorName) ? (
+            <p className="mt-1 text-xs text-surface-muted">
+              Current step: {request.currentRole || "pending"} {request.currentActorName ? `• ${request.currentActorName}` : ""}
+            </p>
+          ) : null}
         </Link>
         <span
           className={`status-pill shrink-0 uppercase ${
@@ -265,3 +445,5 @@ function RequestRow({ request, showDelete = false }: { request: any; showDelete?
     </div>
   );
 }
+
+

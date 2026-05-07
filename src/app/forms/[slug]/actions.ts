@@ -83,8 +83,12 @@ function buildEmployeeInformationRow(opts: {
     hour12: false,
     timeZone: "Asia/Manila",
   });
-  const randomSix = Array.from({ length: 6 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"[Math.floor(Math.random() * 36)]).join("");
-  const reiRef = `REI-${randomSix}`;
+  const letters = Array.from({ length: 3 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)]);
+  const numbers = Array.from({ length: 3 }, () => "0123456789"[Math.floor(Math.random() * 10)]);
+  const mixed = [...letters, ...numbers]
+    .sort(() => Math.random() - 0.5)
+    .join("");
+  const reiRef = `REI-${mixed}`;
   return {
     Timestamp: timestamp,
     "Ref #": reiRef,
