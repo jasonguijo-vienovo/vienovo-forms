@@ -430,7 +430,6 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           `- Contact No.: ${employeeRow?.["Contact No"] ?? ""}\n` +
           `- Job Title: ${employeeRow?.["Job Title"] ?? ""}\n` +
           `- Reference No: ${referenceNo}\n` +
-          `- Spreadsheet Link: ${EMPLOYEE_INFORMATION_SHEET_URL}\n` +
           (requestUrl ? `- Request Link: ${requestUrl}\n` : "")
         : `Your ${imported.name} form has been submitted successfully.\n\n` +
           `Submission details:\n` +
@@ -446,8 +445,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           Job Title: ${employeeRow?.["Job Title"] ?? ""}<br />
           Reference No: ${referenceNo}</p>
           <p style="margin-top:14px;">
-            <a href="${EMPLOYEE_INFORMATION_SHEET_URL}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#0f5f35;color:#fff;text-decoration:none;font-weight:600;">Open Spreadsheet</a>
-            ${requestUrl ? ` <a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
+            ${requestUrl ? `<a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
           </p>
         `
         : undefined;
