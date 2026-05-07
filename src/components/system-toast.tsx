@@ -13,6 +13,7 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
 
   useEffect(() => {
     if (!toast) return;
+    if (toast.persistent) return;
     const timer = window.setTimeout(() => setToast(null), 5000);
     return () => window.clearTimeout(timer);
   }, [toast]);
@@ -39,9 +40,11 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
               {toast.tone === "error" ? "Action failed" : "Success"}
             </p>
             <p className="mt-1 text-sm leading-relaxed">{toast.message}</p>
-            <p className="mt-3 text-xs opacity-70">
-              This closes automatically in 5 seconds.
-            </p>
+            {!toast.persistent ? (
+              <p className="mt-3 text-xs opacity-70">
+                This closes automatically in 5 seconds.
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="mt-4 flex justify-end">

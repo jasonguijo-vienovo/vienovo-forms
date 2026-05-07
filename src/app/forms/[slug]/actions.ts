@@ -523,18 +523,19 @@ export async function submitImportedForm(slug: string, formData: FormData) {
   } catch (error) {
     if (isRedirectError(error)) throw error;
     console.error(`submitImportedForm failed for ${slug}:`, error);
+    const duplicateEmployeeInfoError =
+      slug === EMPLOYEE_INFORMATION_SLUG &&
+      error instanceof Error &&
+      error.message.toLowerCase().includes("duplicate/already exists");
     await setFlashToast({
       tone: "error",
       message:
         error instanceof Error && error.message.trim()
           ? error.message.trim()
           : "The imported form could not be submitted.",
+      persistent: duplicateEmployeeInfoError,
     });
-    if (
-      slug === EMPLOYEE_INFORMATION_SLUG &&
-      error instanceof Error &&
-      error.message.toLowerCase().includes("duplicate/already exists")
-    ) {
+    if (duplicateEmployeeInfoError) {
       redirect(`/forms/${slug}?submitError=duplicate`);
     }
     redirect(`/forms/${slug}`);
