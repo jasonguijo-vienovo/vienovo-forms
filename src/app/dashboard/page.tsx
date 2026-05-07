@@ -202,11 +202,10 @@ export default async function DashboardPage({
           </Panel>
         </section>
 
-        <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <QuickStat label="My Requests" value={myRequestCount} helper="Total submitted by you" />
           <QuickStat label="Pending With Me" value={pendingApprovalsCount} helper="Needs your action" />
           <QuickLink href="/forms" label="Open Form Catalog" />
-          <QuickLink href="/admin/requests" label="Open Request Queue" />
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
