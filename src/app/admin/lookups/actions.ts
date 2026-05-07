@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
-import { Lookup, type LookupCategory } from "@/models/Lookup";
+import { Lookup, parseImportedLookupCategory, type LookupCategory } from "@/models/Lookup";
 import { requireAdmin } from "@/lib/admin";
 
 function parseCategory(value: FormDataEntryValue | null): LookupCategory {
@@ -14,10 +14,32 @@ function parseCategory(value: FormDataEntryValue | null): LookupCategory {
   return v.trim();
 }
 
+function normalizeKey(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+async function resolveImportedCategoryAlias(category: LookupCategory) {
+  const parsed = parseImportedLookupCategory(String(category));
+  if (!parsed) return category;
+
+  const importedCategories = await Lookup.distinct("category", {
+    category: new RegExp(`^imported:${parsed.slugKey}:`, "i"),
+  });
+  const targetKey = normalizeKey(parsed.fieldKey);
+
+  const exact = importedCategories.find((candidate) => {
+    const parsedCandidate = parseImportedLookupCategory(String(candidate));
+    return parsedCandidate && normalizeKey(parsedCandidate.fieldKey) === targetKey;
+  });
+
+  return exact || category;
+}
+
 export async function addLookup(formData: FormData) {
   await requireAdmin();
   await connectMongo();
-  const category = parseCategory(formData.get("category"));
+  const rawCategory = parseCategory(formData.get("category"));
+  const category = await resolveImportedCategoryAlias(rawCategory);
   const value = String(formData.get("value") ?? "").trim();
   if (!value) return;
   const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 });
