@@ -435,6 +435,10 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         subject: emailSubject,
         text: emailText,
       });
+      await setFlashToast({
+        tone: "success",
+        message: `${imported.name} submitted and notifications sent to ${recipients.length} recipient(s): ${referenceNo}`,
+      });
     } catch (notificationError) {
       console.error("Imported form submit notification failed:", notificationError);
     }
