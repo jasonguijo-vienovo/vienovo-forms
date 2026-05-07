@@ -477,22 +477,27 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           </p>
         `
         : undefined;
-      const sentSubmitterViaFlow = await sendFlowNotification({
-        formSlug: slug,
-        formName: imported.name,
-        event: "submitted",
-        to: [email],
-        subject: emailSubject,
-        text: submitterText,
-        html: submitterHtml,
-      });
-      if (!sentSubmitterViaFlow && isEmployeeInformation) {
-        await sendNotificationEmail({
-          to: [email],
-          subject: emailSubject,
-          text: submitterText,
-        });
-      }
+      const notificationJobs: Array<Promise<unknown>> = [];
+      notificationJobs.push(
+        (async () => {
+          const sentSubmitterViaFlow = await sendFlowNotification({
+            formSlug: slug,
+            formName: imported.name,
+            event: "submitted",
+            to: [email],
+            subject: emailSubject,
+            text: submitterText,
+            html: submitterHtml,
+          });
+          if (!sentSubmitterViaFlow && isEmployeeInformation) {
+            await sendNotificationEmail({
+              to: [email],
+              subject: emailSubject,
+              text: submitterText,
+            });
+          }
+        })()
+      );
       if (isEmployeeInformation && hrRecipients.length > 0) {
         const hrSubject = "HR Notification: Employee Information Submitted";
         const hrText =
@@ -518,13 +523,16 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             ${requestUrl ? ` <a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
           </p>
         `;
-        await sendNotificationEmail({
-          to: hrRecipients,
-          subject: hrSubject,
-          text: hrText,
-          html: hrHtml,
-        });
+        notificationJobs.push(
+          sendNotificationEmail({
+            to: hrRecipients,
+            subject: hrSubject,
+            text: hrText,
+            html: hrHtml,
+          })
+        );
       }
+      await Promise.allSettled(notificationJobs);
       await setFlashToast({
         tone: "success",
         message: `${imported.name} submitted and notifications sent to submitter + HR: ${referenceNo}`,
