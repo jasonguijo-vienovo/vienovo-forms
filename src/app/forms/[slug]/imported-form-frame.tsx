@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import type { ImportedFieldDefinition } from "@/lib/imported-forms";
 
 type ImportedFormFrameProps = {
@@ -381,8 +382,10 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
 export function ImportedFormFrame({ htmlSource, fields, submitAction }: ImportedFormFrameProps) {
   const [height, setHeight] = useState(900);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const submitLockRef = useRef(false);
   const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields), [fields, htmlSource]);
 
   useEffect(() => {
@@ -397,6 +400,9 @@ export function ImportedFormFrame({ htmlSource, fields, submitAction }: Imported
 
       if (message.type === "vienovo-imported-submit") {
         if (!payloadRef.current || !formRef.current) return;
+        if (submitLockRef.current) return;
+        submitLockRef.current = true;
+        setIsSubmitting(true);
         payloadRef.current.value = JSON.stringify({
           values: message.values ?? {},
           labels: message.labels ?? {},
@@ -411,6 +417,13 @@ export function ImportedFormFrame({ htmlSource, fields, submitAction }: Imported
 
   return (
     <>
+      {isSubmitting ? (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/40 backdrop-blur-sm">
+          <div className="rounded-xl border border-surface-border bg-white px-5 py-4 text-sm font-semibold text-surface-text shadow-xl">
+            Submitting request...
+          </div>
+        </div>
+      ) : null}
       <iframe
         title="Imported legacy form"
         sandbox="allow-scripts allow-forms"
@@ -421,7 +434,18 @@ export function ImportedFormFrame({ htmlSource, fields, submitAction }: Imported
       />
       <form ref={formRef} action={submitAction} className="hidden">
         <input ref={payloadRef} type="hidden" name="__payload" />
+        <SubmitStateSync onPendingChange={(pending) => setIsSubmitting(pending)} />
       </form>
     </>
   );
+}
+
+function SubmitStateSync({ onPendingChange }: { onPendingChange: (pending: boolean) => void }) {
+  const { pending } = useFormStatus();
+
+  useEffect(() => {
+    onPendingChange(pending);
+  }, [onPendingChange, pending]);
+
+  return null;
 }
