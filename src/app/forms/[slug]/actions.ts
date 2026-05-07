@@ -9,6 +9,7 @@ import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
+import { sendNotificationEmail } from "@/lib/notifications/email";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
@@ -22,6 +23,7 @@ import { FormImport } from "@/models/FormImport";
 const EMPLOYEE_INFORMATION_SLUG = "employee-information";
 const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
 const EMPLOYEE_INFORMATION_SHEET_NAME = "Employee Information";
+const EMPLOYEE_INFORMATION_SHEET_URL = `https://docs.google.com/spreadsheets/d/${EMPLOYEE_INFORMATION_SPREADSHEET_ID}/edit`;
 const EMPLOYEE_INFORMATION_HEADERS = [
   "Timestamp",
   "Ref #",
@@ -416,28 +418,53 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               .lean()
           ).map((item) => String(item.email ?? "").trim().toLowerCase()).filter(Boolean)
         : [];
-      const recipients = Array.from(new Set([email, ...hrRecipients]));
       const emailSubject = isEmployeeInformation
         ? `Employee Information Submission Confirmed (${referenceNo})`
         : `${imported.name} submitted (${referenceNo})`;
-      const emailText = isEmployeeInformation
-        ? `Your Employee Information form was submitted successfully.\n\nReference: ${referenceNo}\n` +
-          (requestUrl ? `View request: ${requestUrl}\n` : "") +
-          `\nThis is your confirmation receipt.`
-        : `Your ${imported.name} form was submitted successfully.\n\n` +
-          `Reference: ${referenceNo}\n` +
-          (requestUrl ? `Link: ${requestUrl}\n` : "");
-      await sendFlowNotification({
+      const submitterText = isEmployeeInformation
+        ? `Your Employee Information form has been submitted successfully.\n\n` +
+          `Submission details:\n` +
+          `- Reference No: ${referenceNo}\n` +
+          `- Status: Submitted\n` +
+          (requestUrl ? `- Request Link: ${requestUrl}\n` : "") +
+          `\nPlease keep this email as your submission confirmation.`
+        : `Your ${imported.name} form has been submitted successfully.\n\n` +
+          `Submission details:\n` +
+          `- Reference No: ${referenceNo}\n` +
+          (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
+      const sentSubmitterViaFlow = await sendFlowNotification({
         formSlug: slug,
         formName: imported.name,
         event: "submitted",
-        to: recipients,
+        to: [email],
         subject: emailSubject,
-        text: emailText,
+        text: submitterText,
       });
+      if (!sentSubmitterViaFlow && isEmployeeInformation) {
+        await sendNotificationEmail({
+          to: [email],
+          subject: emailSubject,
+          text: submitterText,
+        });
+      }
+      if (isEmployeeInformation && hrRecipients.length > 0) {
+        const hrSubject = `HR Notification: Employee Information Submitted (${referenceNo})`;
+        const hrText =
+          `A new Employee Information form has been submitted and recorded.\n\n` +
+          `Submission details:\n` +
+          `- Reference No: ${referenceNo}\n` +
+          `- Sheet Name: ${EMPLOYEE_INFORMATION_SHEET_NAME}\n` +
+          `- Spreadsheet Link: ${EMPLOYEE_INFORMATION_SHEET_URL}\n` +
+          (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
+        await sendNotificationEmail({
+          to: hrRecipients,
+          subject: hrSubject,
+          text: hrText,
+        });
+      }
       await setFlashToast({
         tone: "success",
-        message: `${imported.name} submitted and notifications sent to ${recipients.length} recipient(s): ${referenceNo}`,
+        message: `${imported.name} submitted and notifications sent to submitter + HR: ${referenceNo}`,
       });
     } catch (notificationError) {
       console.error("Imported form submit notification failed:", notificationError);
