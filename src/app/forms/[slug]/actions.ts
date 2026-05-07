@@ -12,13 +12,30 @@ import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
-import { readSpreadsheetMatrix } from "@/lib/google/sheets";
+import { readSpreadsheetMatrix, writeSpreadsheetRow } from "@/lib/google/sheets";
 import { RequestModel } from "@/models/Request";
 import { FormImport } from "@/models/FormImport";
 
 const EMPLOYEE_INFORMATION_SLUG = "employee-information";
 const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
 const EMPLOYEE_INFORMATION_SHEET_NAME = "Employee Information";
+const EMPLOYEE_INFORMATION_HEADERS = [
+  "Timestamp",
+  "Ref #",
+  "Employee ID",
+  "Last Name",
+  "First Name",
+  "Middle Name",
+  "Email",
+  "Gender",
+  "Date of Birth",
+  "Civil Status",
+  "Home Address",
+  "Zip Code",
+  "Contact No",
+  "Email Address",
+  "Job Title",
+] as const;
 
 function normalizeKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -100,6 +117,23 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
       throw new Error("Employee record already exists. Submission was not saved.");
     }
   }
+}
+
+async function enforceEmployeeInformationHeaders() {
+  const matrix = await readSpreadsheetMatrix(
+    EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+    `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1:ZZ1`,
+  );
+  const currentHeaders = (matrix[0] ?? []).map((value) => String(value ?? "").trim());
+  const headersToWrite = [...EMPLOYEE_INFORMATION_HEADERS];
+  if (currentHeaders.length > headersToWrite.length) {
+    headersToWrite.push(...new Array(currentHeaders.length - headersToWrite.length).fill(""));
+  }
+  await writeSpreadsheetRow({
+    spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+    range: `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1`,
+    values: headersToWrite,
+  });
 }
 
 function collectFieldValue(field: ImportedFieldDefinition, formData: FormData) {
@@ -337,6 +371,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
 
     if (shouldWriteResponses) {
       if (isEmployeeInformation) {
+        await enforceEmployeeInformationHeaders();
         const employeeRow = buildEmployeeInformationRow({ referenceNo, values, labels });
         await ensureNoEmployeeInfoDuplicate(employeeRow);
         await writeImportedSubmissionToSheet({
