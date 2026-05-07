@@ -51,6 +51,13 @@ function normalizeCompare(input: string) {
   return String(input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function buildEmployeeFingerprint(row: Record<string, string>) {
+  const employeeId = normalizeCompare(String(row["Employee ID"] ?? ""));
+  const email = normalizeCompare(String(row.Email ?? row["Email Address"] ?? ""));
+  const firstName = normalizeCompare(String(row["First Name"] ?? ""));
+  return `${employeeId}|${email}|${firstName}`;
+}
+
 function findValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
   const wanted = aliases.map(normalizeKey);
   for (const [key, value] of Object.entries(values)) {
@@ -261,6 +268,7 @@ async function writeImportedSubmissionToSheet(opts: {
 }
 
 export async function submitImportedForm(slug: string, formData: FormData) {
+  const startedAt = Date.now();
   try {
     const session = await auth();
     const email = session?.user?.email?.toLowerCase();
@@ -314,6 +322,25 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       throw new Error(`Missing required fields: ${missing.join(", ")}`);
     }
 
+    const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
+    let employeeRow: Record<string, string> | null = null;
+    if (isEmployeeInformation) {
+      // Fast-fail duplicate check before heavy writes/sync operations.
+      employeeRow = buildEmployeeInformationRow({ referenceNo: "", values, labels });
+      const fingerprint = buildEmployeeFingerprint(employeeRow);
+      const duplicateInRequests = await RequestModel.exists({
+        formType: "imported",
+        formSlug: EMPLOYEE_INFORMATION_SLUG,
+        "formData.employeeFingerprint": fingerprint,
+      });
+      if (duplicateInRequests) {
+        throw new Error(
+          "Duplicate/Already exists: this employee information is already on file (First Name, Employee ID, or Email).",
+        );
+      }
+      await ensureNoEmployeeInfoDuplicate(employeeRow);
+    }
+
     const referenceNo = await generateReferenceNo("imported");
 
     const history = [
@@ -343,6 +370,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         importedSlug: slug,
         importedFormName: imported.name,
         spreadsheetId: imported.spreadsheetId ?? "",
+        employeeFingerprint:
+          isEmployeeInformation && employeeRow ? buildEmployeeFingerprint(employeeRow) : undefined,
         fieldLabels: labels,
         values,
       },
@@ -363,6 +392,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         importedSlug: slug,
         importedFormName: imported.name,
         spreadsheetId: imported.spreadsheetId ?? "",
+        employeeFingerprint:
+          isEmployeeInformation && employeeRow ? buildEmployeeFingerprint(employeeRow) : undefined,
         fieldLabels: labels,
         values,
       },
@@ -374,8 +405,6 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       updatedAt: createdRequest.updatedAt,
     });
 
-    const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
-    let employeeRow: Record<string, string> | null = null;
     const responseSpreadsheetId = isEmployeeInformation
       ? EMPLOYEE_INFORMATION_SPREADSHEET_ID
       : definition.responseSpreadsheetId?.trim() ||
@@ -399,8 +428,10 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     if (shouldWriteResponses) {
       if (isEmployeeInformation) {
         await enforceEmployeeInformationHeaders();
-        employeeRow = buildEmployeeInformationRow({ referenceNo, values, labels });
-        await ensureNoEmployeeInfoDuplicate(employeeRow);
+        if (!employeeRow) {
+          employeeRow = buildEmployeeInformationRow({ referenceNo, values, labels });
+          await ensureNoEmployeeInfoDuplicate(employeeRow);
+        }
         await writeImportedSubmissionToSheet({
           spreadsheetId: responseSpreadsheetId,
           sheetTitle: responseSheetName,
@@ -532,7 +563,16 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           })
         );
       }
-      await Promise.allSettled(notificationJobs);
+      void Promise.allSettled(notificationJobs).then((results) => {
+        const rejectedCount = results.filter((result) => result.status === "rejected").length;
+        if (rejectedCount > 0) {
+          console.error("Imported form async notification failures", {
+            slug,
+            referenceNo,
+            rejectedCount,
+          });
+        }
+      });
       await setFlashToast({
         tone: "success",
         message: `${imported.name} submitted and notifications sent to submitter + HR: ${referenceNo}`,
@@ -561,5 +601,10 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       redirect(`/forms/${slug}?submitError=duplicate`);
     }
     redirect(`/forms/${slug}`);
+  } finally {
+    console.log("submitImportedForm timing", {
+      slug,
+      elapsedMs: Date.now() - startedAt,
+    });
   }
 }
