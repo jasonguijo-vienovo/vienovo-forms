@@ -62,14 +62,8 @@ export function buildResponseSheetRows(opts: {
   const timestampText = submittedAt.toISOString();
 
   return {
-    "Request ID": opts.referenceNo,
     Timestamp: timestampText,
-    "Requestor Name": opts.submittedByName,
-    "Requestor Email": opts.submittedByEmail,
     Status: opts.status || "submitted",
-    "Last Updated": timestampText,
-    "Form Slug": opts.formSlug,
-    "Form Name": opts.formName,
     ...flattenObject(opts.values, "", opts.labels ?? {}),
   };
 }
