@@ -7,6 +7,7 @@ import { setFlashToast } from "@/lib/flash";
 import { writeAuditLog } from "@/lib/audit";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 import { NotificationFlow } from "@/models/NotificationFlow";
+import { Approver } from "@/models/Approver";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -186,5 +187,40 @@ export async function resetNotificationFlow(formData: FormData) {
     targetId: formSlug,
     details: { formName },
   });
+  redirect(NOTIFICATIONS_PATH);
+}
+
+export async function enableEmployeeInformationDefaults() {
+  const { email } = await requireAdmin();
+  await connectMongo();
+  const hrRecipients = await Approver.find({ isActive: true, roles: "hr", email: { $ne: "" } })
+    .select({ email: 1 })
+    .lean();
+  const recipients = Array.from(new Set(hrRecipients.map((item) => String(item.email || "").toLowerCase()).filter(Boolean)));
+  await NotificationFlow.updateOne(
+    { formSlug: "employee-information" },
+    {
+      $set: {
+        formSlug: "employee-information",
+        formName: "Employee Information",
+        isActive: true,
+        notifyOnSubmit: true,
+        notifyNextApprover: false,
+        notifySubmitterOnApproved: false,
+        notifySubmitterOnRejected: false,
+        extraRecipients: recipients,
+        notes: "Auto-configured defaults: submitter + HR recipients on submit.",
+      },
+    },
+    { upsert: true }
+  );
+  await writeAuditLog({
+    actorEmail: email,
+    action: "enable_employee_information_notification_defaults",
+    targetType: "notification-flow",
+    targetId: "employee-information",
+    details: { hrRecipientCount: recipients.length },
+  });
+  await setFlashToast({ tone: "success", message: `Employee Information defaults enabled (${recipients.length} HR recipients).` });
   redirect(NOTIFICATIONS_PATH);
 }

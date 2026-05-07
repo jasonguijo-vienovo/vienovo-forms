@@ -24,7 +24,7 @@ type ApproverRow = {
   department?: string;
 };
 
-type ViewFilter = "all" | "review" | "active" | "inactive";
+type ViewFilter = "all" | "review" | "active" | "inactive" | "hr_missing_email";
 
 const ROLE_TONE: Record<string, string> = {
   supervisor: "border-blue-200 bg-blue-50 text-blue-700",
@@ -59,6 +59,7 @@ export function ApproversClient({
     if (view === "review") return approver.emailNeedsReview;
     if (view === "active") return approver.isActive;
     if (view === "inactive") return !approver.isActive;
+    if (view === "hr_missing_email") return approver.roles.includes("hr") && (!approver.email || approver.emailNeedsReview);
     return true;
   });
 
@@ -84,11 +85,11 @@ export function ApproversClient({
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <AdminMetricCard label="Total approvers" value={approvers.length} />
-          <AdminMetricCard label="Active approvers" value={activeCount} tone="ok" />
-          <AdminMetricCard label="Needs review" value={needsReview} tone={needsReview > 0 ? "warn" : "ok"} />
-          <AdminMetricCard label="Processor-capable" value={approvers.filter((item) => item.roles.includes("processor")).length} />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CompactMetricCard label="Total approvers" value={approvers.length} />
+          <CompactMetricCard label="Active approvers" value={activeCount} tone="ok" />
+          <CompactMetricCard label="Needs review" value={needsReview} tone={needsReview > 0 ? "warn" : "ok"} />
+          <CompactMetricCard label="Processor-capable" value={approvers.filter((item) => item.roles.includes("processor")).length} />
         </div>
         <AdminHelpPanel title="What this page does">
           Use this page when someone should be available as an approver, supervisor, department head,
@@ -138,6 +139,7 @@ export function ApproversClient({
               { value: "review", label: "Needs review" },
               { value: "active", label: "Active" },
               { value: "inactive", label: "Inactive" },
+              { value: "hr_missing_email", label: "HR missing email" },
             ]}
           />
         </div>
@@ -281,6 +283,26 @@ export function ApproversClient({
           </div>
         )}
       </AdminSection>
+    </div>
+  );
+}
+
+function CompactMetricCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "ok" ? "text-brand-700" : tone === "warn" ? "text-amber-700" : "text-surface-text";
+
+  return (
+    <div className="admin-panel px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
     </div>
   );
 }

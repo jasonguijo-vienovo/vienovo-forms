@@ -14,7 +14,7 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import type { SystemReadinessSnapshot } from "@/lib/system-readiness";
-import { resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
+import { enableEmployeeInformationDefaults, resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
 
 type Flow = {
   formSlug: string;
@@ -55,6 +55,7 @@ export function NotificationsClient({
 
   const activeCount = flows.filter((flow) => flow.isActive).length;
   const offCount = flows.length - activeCount;
+  const healthy = readiness.readyCount === readiness.totalCount;
 
   return (
     <div className="admin-page">
@@ -62,6 +63,11 @@ export function NotificationsClient({
         eyebrow="Email control"
         title="Notification flow"
         description="Control who gets emailed and when, without changing request routing, approvals, or storage."
+        actions={
+          <form action={enableEmployeeInformationDefaults}>
+            <PendingSubmitButton type="submit" idleLabel="Enable Employee Info Defaults" pendingLabel="Applying..." className="btn-primary" />
+          </form>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
@@ -70,6 +76,7 @@ export function NotificationsClient({
           <CompactMetricCard label="Notifications on" value={activeCount} tone="ok" />
           <CompactMetricCard label="Notifications off" value={offCount} tone="warn" />
           <CompactMetricCard label="Visible now" value={filtered.length} />
+          <CompactMetricCard label="Flow health" value={healthy ? "Healthy" : "Needs attention"} tone={healthy ? "ok" : "warn"} />
         </div>
         <AdminHelpPanel title="What this page does">
           Default recipients still come from the form logic. This page only turns those emails on or off
