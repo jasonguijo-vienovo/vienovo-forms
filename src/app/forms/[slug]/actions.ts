@@ -47,6 +47,10 @@ function normalizeKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function normalizeCompare(input: string) {
+  return String(input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function findValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
   const wanted = aliases.map(normalizeKey);
   for (const [key, value] of Object.entries(values)) {
@@ -102,18 +106,20 @@ async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
   const headers = (matrix[0] ?? []).map((value) => String(value ?? "").trim());
   const idx = (name: string) => headers.findIndex((header) => normalizeKey(header) === normalizeKey(name));
   const employeeIdIndex = idx("Employee ID");
-  const emailIndex = idx("Email");
+  const emailIndex = Math.max(idx("Email"), idx("Email Address"));
   const firstNameIndex = idx("First Name");
 
   for (const cells of matrix.slice(1)) {
-    const existingEmployeeId = employeeIdIndex >= 0 ? String(cells[employeeIdIndex] ?? "").trim() : "";
-    const existingEmail = emailIndex >= 0 ? String(cells[emailIndex] ?? "").trim().toLowerCase() : "";
-    const existingFirstName = firstNameIndex >= 0 ? String(cells[firstNameIndex] ?? "").trim().toLowerCase() : "";
-    const incomingFirstName = String(row["First Name"] ?? "").trim().toLowerCase();
+    const existingEmployeeId = employeeIdIndex >= 0 ? normalizeCompare(String(cells[employeeIdIndex] ?? "")) : "";
+    const existingEmail = emailIndex >= 0 ? normalizeCompare(String(cells[emailIndex] ?? "")) : "";
+    const existingFirstName = firstNameIndex >= 0 ? normalizeCompare(String(cells[firstNameIndex] ?? "")) : "";
+    const incomingFirstName = normalizeCompare(String(row["First Name"] ?? ""));
+    const incomingEmployeeId = normalizeCompare(String(row["Employee ID"] ?? ""));
+    const incomingEmail = normalizeCompare(String(row.Email ?? row["Email Address"] ?? ""));
 
     if (
-      (row["Employee ID"] && existingEmployeeId && row["Employee ID"] === existingEmployeeId) ||
-      (row.Email && existingEmail && row.Email.toLowerCase() === existingEmail) ||
+      (incomingEmployeeId && existingEmployeeId && incomingEmployeeId === existingEmployeeId) ||
+      (incomingEmail && existingEmail && incomingEmail === existingEmail) ||
       (incomingFirstName && existingFirstName && incomingFirstName === existingFirstName)
     ) {
       throw new Error(
