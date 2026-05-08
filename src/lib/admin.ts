@@ -2,11 +2,6 @@ import { connectMongo } from "@/lib/db/mongo";
 import { safeAuth } from "@/lib/safe-auth";
 import { User, type AppUserRole } from "@/models/User";
 
-function isDevBypassAdmin(email: string | null | undefined): boolean {
-  if (process.env.AUTH_DEV_BYPASS !== "1") return false;
-  return Boolean(email?.toLowerCase().endsWith("@vienovo.ph"));
-}
-
 export function configuredAdminEmails(): Set<string> {
   const raw = process.env.ADMIN_EMAILS ?? "";
   return new Set(
@@ -19,7 +14,6 @@ export function configuredAdminEmails(): Set<string> {
 
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  if (isDevBypassAdmin(email)) return true;
   return configuredAdminEmails().has(email.toLowerCase());
 }
 

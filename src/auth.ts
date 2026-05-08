@@ -2,6 +2,7 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
 import { connectMongo } from "@/lib/db/mongo";
+import { isFirebaseAdminConfigured, verifyFirebaseIdToken } from "@/lib/firebase/admin";
 import { User } from "@/models/User";
 
 declare module "next-auth" {
@@ -13,12 +14,12 @@ declare module "next-auth" {
   }
 }
 
-const devBypass = process.env.AUTH_DEV_BYPASS === "1";
 const microsoftConfigured = Boolean(
   process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
     process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET &&
     process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
 );
+const firebaseConfigured = isFirebaseAdminConfigured();
 
 function configuredAdminEmails() {
   const raw = process.env.ADMIN_EMAILS ?? "";
@@ -42,21 +43,34 @@ if (microsoftConfigured) {
   );
 }
 
-if (devBypass) {
+if (firebaseConfigured) {
   providers.push(
     Credentials({
-      name: "Dev bypass",
+      id: "firebase",
+      name: "Firebase",
       credentials: {
-        email: { label: "Email", type: "email", placeholder: "you@vienovo.ph" },
+        idToken: { label: "ID token", type: "text" },
       },
-      authorize: async (creds) => {
-        const email = String(creds?.email ?? "").trim().toLowerCase();
-        if (!email.endsWith("@vienovo.ph")) return null;
-        return {
-          id: email,
-          email,
-          name: email.split("@")[0].replace(/[._]/g, " "),
-        };
+      authorize: async (credentials) => {
+        const idToken = String(credentials?.idToken ?? "").trim();
+        if (!idToken) return null;
+
+        try {
+          const decodedToken = await verifyFirebaseIdToken(idToken);
+          const email = String(decodedToken.email ?? "").trim().toLowerCase();
+          if (!email.endsWith("@vienovo.ph")) return null;
+          if (!decodedToken.email_verified) return null;
+
+          return {
+            id: decodedToken.uid,
+            email,
+            name: String(decodedToken.name ?? email.split("@")[0].replace(/[._]/g, " ")),
+            image: String(decodedToken.picture ?? ""),
+          };
+        } catch (error) {
+          console.error("Firebase token verification failed:", error);
+          return null;
+        }
       },
     }),
   );
