@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
@@ -7,6 +7,8 @@ import { Lookup } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { ReimbursementRoute } from "@/models/ReimbursementRoute";
 import { getEmployeeByEmail } from "@/lib/employee";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { ReimbursementForm } from "./form";
 import { submitReimbursement } from "./actions";
 import { RequestModel } from "@/models/Request";
@@ -30,8 +32,12 @@ export default async function ReimbursementPage({
   const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
-  const isAdmin = isAdminEmail(session.user.email);
+  const definition = await getFormDefinitionBySlug("reimbursement");
+  if (!definition) redirect("/forms");
+  const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
+  const access = getFormUserAccess(definition, { isAdmin, requesterPreview });
+  if (!access.canOpen) redirect("/dashboard");
 
   await connectMongo();
 

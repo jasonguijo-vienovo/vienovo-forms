@@ -1,10 +1,23 @@
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { signIn, auth } from "@/auth";
+import { FirebaseSignInForm } from "@/components/firebase-sign-in-form";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 
-const devBypass = process.env.AUTH_DEV_BYPASS === "1";
+const microsoftConfigured = Boolean(
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
+    process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET &&
+    process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+);
+const firebaseConfigured = Boolean(
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+    process.env.NEXT_PUBLIC_FIREBASE_APP_ID &&
+    process.env.FIREBASE_ADMIN_CLIENT_EMAIL &&
+    process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+);
 const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
 
 export default async function SignInPage({
@@ -37,43 +50,7 @@ export default async function SignInPage({
         </div>
 
         <div className="p-8">
-          {devBypass ? (
-            <form
-              action={async (formData) => {
-                "use server";
-                await signIn("credentials", {
-                  email: formData.get("email"),
-                  redirectTo,
-                });
-              }}
-              className="space-y-4"
-            >
-              <PendingFormState className="space-y-4">
-                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-                  <strong>Dev bypass mode.</strong> Microsoft sign-in not yet configured - enter
-                  any <code>@vienovo.ph</code> email.
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    Work email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    placeholder="yourname@vienovo.ph"
-                    className="w-full px-3.5 py-2.5 border-[1.5px] border-gray-300 rounded-lg text-sm focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 outline-none transition"
-                  />
-                </div>
-                <PendingSubmitButton
-                  type="submit"
-                  idleLabel="Continue"
-                  pendingLabel="Signing in..."
-                  className="w-full bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition"
-                />
-              </PendingFormState>
-            </form>
-          ) : (
+          {microsoftConfigured ? (
             <form
               action={async () => {
                 "use server";
@@ -97,7 +74,20 @@ export default async function SignInPage({
                 </p>
               </PendingFormState>
             </form>
-          )}
+          ) : null}
+
+          {firebaseConfigured ? (
+            <FirebaseSignInForm
+              redirectTo={redirectTo}
+              className={microsoftConfigured ? "mt-6 border-t border-gray-200 pt-6" : undefined}
+            />
+          ) : null}
+
+          {!microsoftConfigured && !firebaseConfigured ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">
+              Sign-in is not configured yet. Add Microsoft Entra ID or Firebase Authentication settings to enable access.
+            </div>
+          ) : null}
         </div>
       </div>
     </main>

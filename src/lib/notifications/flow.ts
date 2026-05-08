@@ -1,6 +1,8 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import { NotificationFlow } from "@/models/NotificationFlow";
+import { Approver } from "@/models/Approver";
+import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 
 export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected";
@@ -62,6 +64,33 @@ function normalizeRecipients(recipients: string | string[]) {
   );
 }
 
+function isValidEmail(input: string) {
+  if (!input || input.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+}
+
+function extractLastName(name: string) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "";
+}
+
+function prependGreeting(opts: {
+  body: string;
+  roleHint?: string;
+  lastName?: string;
+  formName: string;
+  formSlug: string;
+}) {
+  const ln = opts.lastName ? ` ${opts.lastName}` : "";
+  const greeting =
+    opts.roleHint === "hr"
+      ? `Dear, HR${ln}`
+      : opts.roleHint
+        ? `Dear, ${opts.roleHint}${ln}`
+        : `Dear,${ln}`;
+  return `${greeting}\n\nForm: ${opts.formName} (${opts.formSlug})\n\n${opts.body}`;
+}
+
 export async function listNotificationFlowSettings() {
   await connectMongo();
   const [forms, docs] = await Promise.all([
@@ -100,17 +129,78 @@ export async function sendFlowNotification(opts: {
   html?: string;
 }) {
   const flow = await getNotificationFlowSettings(opts.formSlug, opts.formName);
-  if (!eventEnabled(flow, opts.event)) return false;
+  if (!eventEnabled(flow, opts.event)) {
+    await NotificationDeliveryLog.create({
+      formSlug: opts.formSlug,
+      formName: opts.formName,
+      event: opts.event,
+      recipient: "",
+      subject: opts.subject,
+      status: "skipped",
+      error: "Notification event disabled by flow settings",
+    });
+    return false;
+  }
 
-  const recipients = normalizeRecipients([...normalizeRecipients(opts.to), ...flow.extraRecipients]);
-  if (recipients.length === 0) return false;
+  const recipients = normalizeRecipients([...normalizeRecipients(opts.to), ...flow.extraRecipients]).filter(
+    isValidEmail
+  );
+  if (recipients.length === 0) {
+    await NotificationDeliveryLog.create({
+      formSlug: opts.formSlug,
+      formName: opts.formName,
+      event: opts.event,
+      recipient: "",
+      subject: opts.subject,
+      status: "skipped",
+      error: "No valid recipients",
+    });
+    return false;
+  }
 
-  await sendNotificationEmail({
-    to: recipients,
-    subject: opts.subject,
-    text: opts.text,
-    html: opts.html,
-  });
+  const approvers = await Approver.find({ email: { $in: recipients } }).select({ email: 1, name: 1, roles: 1 }).lean();
+  const approverByEmail = new Map(approvers.map((item) => [String(item.email || "").toLowerCase(), item]));
+
+  for (const recipient of recipients) {
+    const profile = approverByEmail.get(recipient);
+    const roleHint = profile?.roles?.includes("hr") ? "hr" : profile?.roles?.[0] || "";
+    const lastName = extractLastName(String(profile?.name || ""));
+    const baseText = opts.text || "";
+    const finalText = prependGreeting({
+      body: baseText,
+      roleHint,
+      lastName,
+      formName: opts.formName,
+      formSlug: opts.formSlug,
+    });
+    try {
+      await sendNotificationEmail({
+        to: recipient,
+        subject: opts.subject,
+        text: finalText,
+        html: opts.html,
+      });
+      await NotificationDeliveryLog.create({
+        formSlug: opts.formSlug,
+        formName: opts.formName,
+        event: opts.event,
+        recipient,
+        subject: opts.subject,
+        status: "sent",
+      });
+    } catch (error) {
+      await NotificationDeliveryLog.create({
+        formSlug: opts.formSlug,
+        formName: opts.formName,
+        event: opts.event,
+        recipient,
+        subject: opts.subject,
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown notification failure",
+      });
+      throw error;
+    }
+  }
 
   return true;
 }

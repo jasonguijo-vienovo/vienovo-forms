@@ -4,7 +4,7 @@ import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
 import { RequestModel } from "@/models/Request";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import {
   cashAdvanceFieldMap,
   importedFieldMap,
@@ -31,15 +31,19 @@ const STATUS_TONES: Record<string, string> = {
 
 export default async function RequestDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ ref: string }>;
+  searchParams?: Promise<{ from?: string }>;
 }) {
   const { ref } = await params;
+  const decodedRef = decodeURIComponent(ref);
+  const resolvedSearchParams = (await searchParams) ?? {};
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
 
   await connectMongo();
-  const doc = await RequestModel.findOne({ referenceNo: ref }).lean();
+  const doc = await RequestModel.findOne({ referenceNo: decodedRef }).lean();
   if (!doc) notFound();
 
   const userEmail = session.user.email.toLowerCase();
@@ -47,7 +51,7 @@ export default async function RequestDetailPage({
   const submittedByName = doc.submittedBy?.name ?? "";
   const isOwner = submittedByEmail === userEmail;
   const isApprover = doc.approvalChain.some((s) => s.approverEmail === userEmail);
-  const canView = isOwner || isApprover || isAdminEmail(userEmail);
+  const canView = isOwner || isApprover || (await isAdminUser(userEmail));
   if (!canView) redirect("/dashboard");
 
   const currentStep = doc.approvalChain.find((s) => s.step === doc.currentStep) ?? null;
@@ -83,6 +87,11 @@ export default async function RequestDetailPage({
       : currentStep?.approverName
         ? `Pending approval from ${currentStep.approverName}`
         : `Current status: ${doc.status}`;
+  const returnHref =
+    typeof resolvedSearchParams.from === "string" && resolvedSearchParams.from.startsWith("/")
+      ? resolvedSearchParams.from
+      : "/dashboard";
+  const returnLabel = returnHref.startsWith("/admin/requests") ? "Back to admin queue" : "Back to dashboard";
 
   return (
     <>
@@ -219,7 +228,7 @@ export default async function RequestDetailPage({
             <div className="flex gap-2">
               {isOwner && doc.status === "pending" && hasEditableRuntime && (
                 <Link
-                  href={`/requests/${doc.referenceNo}/edit`}
+                  href={`/requests/${encodeURIComponent(doc.referenceNo)}/edit`}
                   className="flex-1 text-center bg-white border border-brand-200 text-brand-700 font-semibold py-2.5 rounded-lg hover:bg-brand-50 transition"
                 >
                   Edit request
@@ -227,17 +236,17 @@ export default async function RequestDetailPage({
               )}
               {isCurrentApprover && (
                 <Link
-                  href={`/requests/${doc.referenceNo}/approve`}
+                  href={`/requests/${encodeURIComponent(doc.referenceNo)}/approve`}
                   className="flex-1 text-center bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
                 >
                   Review / Approve
                 </Link>
               )}
               <Link
-                href="/dashboard"
+                href={returnHref}
                 className="flex-1 text-center bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
               >
-                Back to dashboard
+                {returnLabel}
               </Link>
             </div>
           </div>

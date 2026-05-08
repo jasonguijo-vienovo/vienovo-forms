@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { FormActionResult } from "@/lib/forms/action-result";
 
 type Approver = {
@@ -30,7 +31,7 @@ export type CashAdvanceFormProps = {
   user: { email: string; name: string };
   prefill: EmployeePrefill;
   initial?: CashAdvanceInitialValues;
-  payableToOptions: string[];
+  payableToOptions: Array<{ value: string; label: string }>;
   approvers: Approver[];
   submitAction: (formData: FormData) => Promise<FormActionResult>;
   submitLabel?: string;
@@ -218,20 +219,14 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
         <SectionTitle>Cash Advance Details</SectionTitle>
 
         <Field label="Payables to" required>
-          <input
-            list="payablesToOptions"
+          <SearchableSelect
             name="payablesTo"
             value={payablesTo}
-            onChange={(e) => setPayablesTo(e.target.value)}
+            onChange={setPayablesTo}
             required
-            className="field-input"
             placeholder="Type or select..."
+            options={payableToOptions}
           />
-          <datalist id="payablesToOptions">
-            {payableToOptions.map((v) => (
-              <option key={v} value={v} />
-            ))}
-          </datalist>
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -286,7 +281,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
       <Card>
         <SectionTitle>Supporting Document</SectionTitle>
         <p className="text-xs text-gray-400 mb-3">
-          Optional. PDF, DOC, XLS, PNG, JPG — max 10 MB.
+          Optional. PDF, DOC, XLS, PNG, JPG â€” max 10 MB.
         </p>
         <input type="hidden" name="supportingFileName" value={fileName} />
         <label
@@ -320,20 +315,13 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Approver" required>
-            <select
+            <SearchableSelect
               name="approverId"
               value={approverId}
-              onChange={(e) => setApproverId(e.target.value)}
+              onChange={setApproverId}
               required
-              className="field-input"
-            >
-              <option value="">-- Select --</option>
-              {approvers.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              options={approvers.map((a) => ({ value: a.id, label: a.name }))}
+            />
           </Field>
           <Field label="Approver's Email">
             <input
@@ -378,7 +366,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end items-center gap-3 pt-6">
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || !agreed}
             className="bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold px-8 py-2.5 rounded-lg shadow-md hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 w-full sm:w-auto"
           >
             {pending ? "Submitting..." : submitLabel ?? "Submit Request"}
@@ -460,3 +448,4 @@ function Field({
     </div>
   );
 }
+

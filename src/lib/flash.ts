@@ -11,6 +11,7 @@ function normalizeToast(input: unknown): FlashToast | null {
   return {
     tone,
     message: message.trim().slice(0, 240),
+    persistent: Boolean((input as { persistent?: unknown }).persistent),
   };
 }
 

@@ -18,7 +18,9 @@ const formDefinitionSchema = new Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     routePath: { type: String, default: "", trim: true },
+    externalFormUrl: { type: String, default: "", trim: true },
     source: { type: String, enum: FORM_DEFINITION_SOURCES, required: true, index: true },
+    isDeleted: { type: Boolean, default: false, index: true },
     status: { type: String, enum: FORM_DEFINITION_STATUSES, default: "draft", index: true },
     visibility: {
       type: String,
@@ -35,6 +37,9 @@ const formDefinitionSchema = new Schema(
     isImplemented: { type: Boolean, default: false, index: true },
     showInNavbar: { type: Boolean, default: false },
     sortOrder: { type: Number, default: 0, index: true },
+    writeResponsesToSheet: { type: Boolean, default: false },
+    responseSpreadsheetId: { type: String, default: "", trim: true },
+    responseSheetName: { type: String, default: "", trim: true },
     importSourceId: { type: Schema.Types.ObjectId, ref: "FormImport", default: null },
     notes: { type: String, default: "" },
   },
@@ -42,6 +47,15 @@ const formDefinitionSchema = new Schema(
 );
 
 formDefinitionSchema.index({ status: 1, visibility: 1, sortOrder: 1 });
+formDefinitionSchema.index({
+  visibility: 1,
+  availability: 1,
+  status: 1,
+  isImplemented: 1,
+  showInNavbar: 1,
+  sortOrder: 1,
+});
+formDefinitionSchema.index({ source: 1, status: 1, sortOrder: 1 });
 
 export type FormDefinitionDoc = InferSchemaType<typeof formDefinitionSchema> & {
   _id: mongoose.Types.ObjectId;

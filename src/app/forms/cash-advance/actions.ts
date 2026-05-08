@@ -3,15 +3,20 @@
 import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import {
   errorMessage,
   fail,
   okRedirect,
   type FormActionResult,
 } from "@/lib/forms/action-result";
-import { uploadToDriveFolder } from "@/lib/google/drive";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
+import { syncRequestMirror } from "@/lib/request-mirror";
+import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { RequestModel } from "@/models/Request";
 import { cashAdvanceFieldMap, diffFields } from "@/lib/request-fields";
@@ -35,6 +40,10 @@ export async function submitCashAdvance(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("cash-advance");
+    if (!definition || !getFormUserAccess(definition, { isAdmin: false }).canSubmit) {
+      throw new Error("This form is not available right now.");
+    }
 
     const approverId = s(formData, "approverId");
     const [approver, processor] = await Promise.all([
@@ -60,11 +69,9 @@ export async function submitCashAdvance(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID for Cash Advance attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "cash-advance",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -100,7 +107,43 @@ export async function submitCashAdvance(
       dateOfRequest: new Date(),
     };
 
-    await RequestModel.create({
+    const approvalChain = [
+      {
+        step: 1,
+        role: "cashAdvanceApprover",
+        approverEmail: approver.email,
+        approverName: approver.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+    const history = [
+      {
+        at: new Date(),
+        byEmail: submitterEmail,
+        byName: submitterName,
+        action: "submitted",
+        details: {},
+      },
+    ];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain,
+      currentStep: 1,
+      history,
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+    });
+
+    const createdRequest = await RequestModel.create({
       formType: "cash-advance",
       formSlug: "cash-advance",
       formName: "Cash Advance",
@@ -110,34 +153,56 @@ export async function submitCashAdvance(
         name: submitterName,
       },
       formData: formDataObj,
-      approvalChain: [
-        {
-          step: 1,
-          role: "cashAdvanceApprover",
-          approverEmail: approver.email,
-          approverName: approver.name,
-          status: "pending",
-        },
-        {
-          step: 2,
-          role: "processor",
-          approverEmail: processor.email,
-          approverName: processor.name,
-          status: "waiting",
-        },
-      ],
+      approvalChain,
       currentStep: 1,
       status: "pending",
-      history: [
-        {
-          at: new Date(),
-          byEmail: submitterEmail,
-          byName: submitterName,
-          action: "submitted",
-          details: {},
-        },
-      ],
+      history,
+      ...queueFields,
     });
+
+    await syncRequestMirror({
+      requestId: String(createdRequest._id),
+      referenceNo,
+      formSlug: "cash-advance",
+      formName: "Cash Advance",
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+      formData: formDataObj,
+      approvalChain: createdRequest.approvalChain,
+      currentStep: createdRequest.currentStep,
+      status: createdRequest.status,
+      history: createdRequest.history,
+      createdAt: createdRequest.createdAt,
+      updatedAt: createdRequest.updatedAt,
+    });
+
+    try {
+      const definition = await getFormDefinitionBySlug("cash-advance");
+      const spreadsheetId =
+        definition?.responseSpreadsheetId?.trim() ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+      const sheetTitle = definition?.responseSheetName?.trim() || "Cash Advance Responses";
+      if (definition?.writeResponsesToSheet && spreadsheetId) {
+        await appendResponseSheetRow({
+          spreadsheetId,
+          sheetTitle,
+          rowValues: buildResponseSheetRows({
+            referenceNo,
+            formSlug: "cash-advance",
+            formName: "Cash Advance",
+            submittedByEmail: submitterEmail,
+            submittedByName: submitterName,
+            values: formDataObj,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error("Cash Advance response export failed:", error);
+    }
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
@@ -205,11 +270,9 @@ export async function updateCashAdvance(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_CASH_ADVANCE_FOLDER_ID for Cash Advance attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "cash-advance",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -250,41 +313,77 @@ export async function updateCashAdvance(
       cashAdvanceFieldMap(formDataObj),
     );
 
+    const nextApprovalChain = [
+      {
+        step: 1,
+        role: "cashAdvanceApprover",
+        approverEmail: approver.email,
+        approverName: approver.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+
+    const historyEntry = {
+      at: new Date(),
+      byEmail: submitterEmail,
+      byName: submitterName,
+      action: "edited",
+      details: { resetToStep: 1, changedFields },
+    };
+    const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      history: nextHistory as any[],
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+    });
+
     await RequestModel.updateOne(
       { _id: (doc as any)._id },
       {
         $set: {
           formData: formDataObj,
-          approvalChain: [
-            {
-              step: 1,
-              role: "cashAdvanceApprover",
-              approverEmail: approver.email,
-              approverName: approver.name,
-              status: "pending",
-            },
-            {
-              step: 2,
-              role: "processor",
-              approverEmail: processor.email,
-              approverName: processor.name,
-              status: "waiting",
-            },
-          ],
+          approvalChain: nextApprovalChain,
           currentStep: 1,
           status: "pending",
+          ...queueFields,
         },
         $push: {
-          history: {
-            at: new Date(),
-            byEmail: submitterEmail,
-            byName: submitterName,
-            action: "edited",
-            details: { resetToStep: 1, changedFields },
-          },
+          history: historyEntry,
         },
       },
     );
+
+    await syncRequestMirror({
+      requestId: String((doc as any)._id),
+      referenceNo,
+      formSlug: "cash-advance",
+      formName: "Cash Advance",
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+      formData: formDataObj,
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      status: "pending",
+      history: nextHistory,
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+    });
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";

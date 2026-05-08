@@ -3,15 +3,20 @@
 import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import {
   errorMessage,
   fail,
   okRedirect,
   type FormActionResult,
 } from "@/lib/forms/action-result";
-import { uploadToDriveFolder } from "@/lib/google/drive";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
+import { syncRequestMirror } from "@/lib/request-mirror";
+import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -36,6 +41,10 @@ export async function submitTravelBooking(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("travel-booking");
+    if (!definition || !getFormUserAccess(definition, { isAdmin: false }).canSubmit) {
+      throw new Error("This form is not available right now.");
+    }
 
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
@@ -66,7 +75,8 @@ export async function submitTravelBooking(
       const maxBytes = 10 * 1024 * 1024;
       if (activityFile.size > maxBytes) throw new Error("Activity Schedule file must be 10 MB or less.");
       const bytes = Buffer.from(await activityFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
+      const uploaded = await uploadAttachment({
+        folder: "travel-booking",
         fileName: `${referenceNo}_${activityFile.name}`,
         mimeType: activityFile.type || "application/octet-stream",
         bytes,
@@ -123,7 +133,50 @@ export async function submitTravelBooking(
       activitySchedule,
     };
 
-    await RequestModel.create({
+    const approvalChain = [
+      {
+        step: 1,
+        role: "supervisor",
+        approverEmail: supervisor.email,
+        approverName: supervisor.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "head",
+        approverEmail: head.email,
+        approverName: head.name,
+        status: "waiting",
+      },
+      {
+        step: 3,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+    const history = [
+      {
+        at: new Date(),
+        byEmail: submitterEmail,
+        byName: submitterName,
+        action: "submitted",
+        details: {},
+      },
+    ];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain,
+      currentStep: 1,
+      history,
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+    });
+
+    const createdRequest = await RequestModel.create({
       formType: "travel-booking",
       formSlug: "travel-booking",
       formName: "Travel Booking",
@@ -133,40 +186,29 @@ export async function submitTravelBooking(
         name: submitterName,
       },
       formData: formDataObj,
-      approvalChain: [
-        {
-          step: 1,
-          role: "supervisor",
-          approverEmail: supervisor.email,
-          approverName: supervisor.name,
-          status: "pending",
-        },
-        {
-          step: 2,
-          role: "head",
-          approverEmail: head.email,
-          approverName: head.name,
-          status: "waiting",
-        },
-        {
-          step: 3,
-          role: "processor",
-          approverEmail: processor.email,
-          approverName: processor.name,
-          status: "waiting",
-        },
-      ],
+      approvalChain,
       currentStep: 1,
       status: "pending",
-      history: [
-        {
-          at: new Date(),
-          byEmail: submitterEmail,
-          byName: submitterName,
-          action: "submitted",
-          details: {},
-        },
-      ],
+      history,
+      ...queueFields,
+    });
+
+    await syncRequestMirror({
+      requestId: String(createdRequest._id),
+      referenceNo,
+      formSlug: "travel-booking",
+      formName: "Travel Booking",
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+      formData: formDataObj,
+      approvalChain: createdRequest.approvalChain,
+      currentStep: createdRequest.currentStep,
+      status: createdRequest.status,
+      history: createdRequest.history,
+      createdAt: createdRequest.createdAt,
+      updatedAt: createdRequest.updatedAt,
     });
 
     await Employee.updateOne(
@@ -183,10 +225,34 @@ export async function submitTravelBooking(
           departmentHeadEmail: head.email,
           isActive: true,
         },
-        $setOnInsert: { employeeId: "" },
       },
       { upsert: true },
     );
+
+    try {
+      const responseSpreadsheetId =
+        definition.responseSpreadsheetId?.trim() ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+      const sheetTitle = definition.responseSheetName?.trim() || "Travel Booking Responses";
+      if (definition.writeResponsesToSheet && responseSpreadsheetId) {
+        await appendResponseSheetRow({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle,
+          rowValues: buildResponseSheetRows({
+            referenceNo,
+            formSlug: "travel-booking",
+            formName: "Travel Booking",
+            submittedByEmail: submitterEmail,
+            submittedByName: submitterName,
+            values: formDataObj,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error("Travel Booking response export failed:", error);
+    }
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
@@ -260,7 +326,8 @@ export async function updateTravelBooking(
       const maxBytes = 10 * 1024 * 1024;
       if (activityFile.size > maxBytes) throw new Error("Activity Schedule file must be 10 MB or less.");
       const bytes = Buffer.from(await activityFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
+      const uploaded = await uploadAttachment({
+        folder: "travel-booking",
         fileName: `${referenceNo}_${activityFile.name}`,
         mimeType: activityFile.type || "application/octet-stream",
         bytes,
@@ -322,45 +389,63 @@ export async function updateTravelBooking(
       travelBookingFieldMap(formDataObj),
     );
 
+    const nextApprovalChain = [
+      {
+        step: 1,
+        role: "supervisor",
+        approverEmail: supervisor.email,
+        approverName: supervisor.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "head",
+        approverEmail: head.email,
+        approverName: head.name,
+        status: "waiting",
+      },
+      {
+        step: 3,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+
+    const historyEntry = {
+      at: new Date(),
+      byEmail: submitterEmail,
+      byName: submitterName,
+      action: "edited",
+      details: { resetToStep: 1, changedFields },
+    };
+    const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      history: nextHistory as any[],
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+    });
+
     await RequestModel.updateOne(
       { _id: (doc as any)._id },
       {
         $set: {
           formData: formDataObj,
-          approvalChain: [
-            {
-              step: 1,
-              role: "supervisor",
-              approverEmail: supervisor.email,
-              approverName: supervisor.name,
-              status: "pending",
-            },
-            {
-              step: 2,
-              role: "head",
-              approverEmail: head.email,
-              approverName: head.name,
-              status: "waiting",
-            },
-            {
-              step: 3,
-              role: "processor",
-              approverEmail: processor.email,
-              approverName: processor.name,
-              status: "waiting",
-            },
-          ],
+          approvalChain: nextApprovalChain,
           currentStep: 1,
           status: "pending",
+          ...queueFields,
         },
         $push: {
-          history: {
-            at: new Date(),
-            byEmail: submitterEmail,
-            byName: submitterName,
-            action: "edited",
-            details: { resetToStep: 1, changedFields },
-          },
+          history: historyEntry,
         },
       },
     );
@@ -379,10 +464,27 @@ export async function updateTravelBooking(
           departmentHeadEmail: head.email,
           isActive: true,
         },
-        $setOnInsert: { employeeId: "" },
       },
       { upsert: true },
     );
+
+    await syncRequestMirror({
+      requestId: String((doc as any)._id),
+      referenceNo,
+      formSlug: "travel-booking",
+      formName: "Travel Booking",
+      submittedBy: {
+        email: submitterEmail,
+        name: submitterName,
+      },
+      formData: formDataObj,
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      status: "pending",
+      history: nextHistory,
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+    });
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";

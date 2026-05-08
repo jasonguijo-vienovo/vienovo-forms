@@ -1,11 +1,13 @@
-import { redirect } from "next/navigation";
-import { isAdminEmail } from "@/lib/admin";
+﻿import { redirect } from "next/navigation";
+import { isAdminUser } from "@/lib/admin";
 import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
 import { connectMongo } from "@/lib/db/mongo";
 import { Lookup } from "@/models/Lookup";
 import { Approver } from "@/models/Approver";
 import { getEmployeeByEmail } from "@/lib/employee";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { CashAdvanceForm } from "./form";
 import { submitCashAdvance } from "./actions";
 
@@ -28,8 +30,12 @@ export default async function CashAdvancePage({
   const resolvedSearchParams = await searchParams;
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
-  const isAdmin = isAdminEmail(session.user.email);
+  const definition = await getFormDefinitionBySlug("cash-advance");
+  if (!definition) redirect("/forms");
+  const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
+  const access = getFormUserAccess(definition, { isAdmin, requesterPreview });
+  if (!access.canOpen) redirect("/dashboard");
 
   await connectMongo();
 
@@ -68,7 +74,7 @@ export default async function CashAdvancePage({
             firstName: nameParts.firstName,
             lastName: nameParts.lastName,
           }}
-          payableToOptions={payablesTo.map((p) => p.value)}
+          payableToOptions={payablesTo.map((p) => ({ value: p.value, label: p.label || p.value }))}
           approvers={approvers.map((a) => ({
             id: String(a._id),
             name: a.name,
@@ -80,3 +86,5 @@ export default async function CashAdvancePage({
     </>
   );
 }
+
+

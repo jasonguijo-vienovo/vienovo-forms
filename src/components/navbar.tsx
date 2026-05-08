@@ -1,23 +1,75 @@
 import Link from "next/link";
 import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
+import { ClickDropdown } from "@/components/click-dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { isAdminEmail } from "@/lib/admin";
 import { canAccessApprovals } from "@/lib/approval-access";
 import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
+import { AuditLog } from "@/models/AuditLog";
+import { RequestModel } from "@/models/Request";
 
 const HELP_DESK_URL = "https://itdashboard-mu.vercel.app/helpdesk/";
 
 export async function Navbar({
   adminShortcut,
+  showSystemActivity = false,
 }: {
   adminShortcut?: { href: string; label: string } | null;
+  showSystemActivity?: boolean;
 } = {}) {
   const session = await safeAuth();
   const showAdmin = isAdminEmail(session?.user?.email);
   const showApprovals = await canAccessApprovals(session?.user?.email);
   const navbarForms = await getNavbarForms();
+  const userEmail = session?.user?.email?.toLowerCase() ?? "";
+
+  let dashboardNotifications: Array<{ referenceNo: string; status: string; updatedAt: string }> = [];
+  let systemItems: Array<{ action: string; target: string; createdAt: string }> = [];
+  let pendingApprovalsCount = 0;
+  const checkedAt = new Date().toISOString();
+
+  if (showAdmin && userEmail) {
+    try {
+      await connectMongo();
+      const [requests, audits, pendingCount] = await Promise.all([
+        RequestModel.find({ "submittedBy.email": userEmail })
+          .sort({ updatedAt: -1 })
+          .limit(8)
+          .select({ referenceNo: 1, status: 1, updatedAt: 1 })
+          .lean(),
+        AuditLog.find({ action: { $regex: /(update|error|delete|edit)/i } })
+          .sort({ createdAt: -1 })
+          .limit(8)
+          .select({ action: 1, targetType: 1, targetId: 1, createdAt: 1 })
+          .lean(),
+        RequestModel.countDocuments({
+          status: "pending",
+          $or: [
+            { currentActorEmail: userEmail },
+            { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
+          ],
+        }),
+      ]);
+
+      dashboardNotifications = requests.map((row: any) => ({
+        referenceNo: String(row.referenceNo || ""),
+        status: String(row.status || "pending"),
+        updatedAt: new Date(row.updatedAt).toISOString(),
+      }));
+      systemItems = audits.map((row: any) => ({
+        action: String(row.action || "update"),
+        target: `${String(row.targetType || "")}:${String(row.targetId || "")}`.replace(/:$/, ""),
+        createdAt: new Date(row.createdAt).toISOString(),
+      }));
+      pendingApprovalsCount = Number(pendingCount ?? 0);
+    } catch {
+      dashboardNotifications = [];
+      systemItems = [];
+      pendingApprovalsCount = 0;
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 h-14 border-b border-surface-border bg-white">
@@ -31,7 +83,8 @@ export async function Navbar({
           {showApprovals ? <NavLink href="/approvals">Approvals</NavLink> : null}
           <NewRequestMenu
             options={navbarForms.map((form) => ({
-              href: form.routePath || `/forms/${form.slug}`,
+              href: getFormLaunchHref(form),
+              external: isExternalFormLaunch(form),
               title: form.name,
               subtitle: form.description,
             }))}
@@ -57,26 +110,83 @@ export async function Navbar({
                 Admin
               </Link>
             ) : null}
-            <button className="hidden sm:inline-flex p-2 text-slate-700 transition hover:text-brand-700" type="button">
-              <Bell className="h-5 w-5" />
-            </button>
-            <a className="hidden sm:inline-flex p-2 text-slate-700 transition hover:text-brand-700" href={HELP_DESK_URL} target="_blank" rel="noopener noreferrer">
-              <CircleHelp className="h-5 w-5" />
-            </a>
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/sign-in" });
-              }}
+            {showAdmin ? (
+              <ClickDropdown
+                className="relative hidden sm:block"
+                triggerClassName="inline-flex p-2 text-slate-700 transition hover:text-brand-700"
+                panelClassName="absolute right-0 top-10 z-50 w-[min(92vw,340px)] rounded-md border border-surface-border bg-white shadow-lg"
+                trigger={<Bell className="h-5 w-5" />}
+              >
+                  <div className="border-b border-surface-border px-3 py-2">
+                    <p className="text-sm font-semibold text-surface-text">Your request status</p>
+                    <p className="text-[11px] text-surface-muted">Last checked: {new Date(checkedAt).toLocaleTimeString()}</p>
+                  </div>
+                  <div className="max-h-[320px] overflow-auto p-2">
+                    {dashboardNotifications.length > 0 ? dashboardNotifications.map((item) => (
+                      <Link key={item.referenceNo} href={`/requests/${item.referenceNo}`} className="mb-2 block rounded border border-surface-border px-3 py-2 hover:bg-slate-50">
+                        <p className="text-xs font-semibold text-surface-text">{item.referenceNo}</p>
+                        <p className="mt-1">
+                          <span className={`status-pill ${statusTone(item.status)}`}>{item.status}</span>
+                        </p>
+                        <p className="text-[11px] text-surface-muted mt-1">{new Date(item.updatedAt).toLocaleString()}</p>
+                      </Link>
+                    )) : <p className="px-2 py-3 text-xs text-surface-muted">No request notifications yet.</p>}
+                  </div>
+              </ClickDropdown>
+            ) : null}
+            {showAdmin && showSystemActivity ? (
+              <ClickDropdown
+                className="relative hidden sm:block"
+                triggerClassName="inline-flex p-2 text-slate-700 transition hover:text-brand-700"
+                panelClassName="absolute right-0 top-10 z-50 w-[min(92vw,360px)] rounded-md border border-surface-border bg-white shadow-lg"
+                trigger={<CircleHelp className="h-5 w-5" />}
+              >
+                  <div className="border-b border-surface-border px-3 py-2">
+                    <p className="text-sm font-semibold text-surface-text">System activity</p>
+                    <p className="text-[11px] text-surface-muted">Last checked: {new Date(checkedAt).toLocaleTimeString()}</p>
+                  </div>
+                  <div className="max-h-[320px] overflow-auto p-2">
+                    {systemItems.length > 0 ? systemItems.map((item, i) => (
+                      <div key={`${item.target}-${i}`} className="mb-2 rounded border border-surface-border px-3 py-2">
+                        <p className="text-xs font-semibold text-surface-text">{systemTitle(item.action)}</p>
+                        <p className="text-xs text-surface-muted truncate">{systemMessage(item.action, item.target)}</p>
+                        <p className="text-[11px] text-surface-muted mt-1">{new Date(item.createdAt).toLocaleString()}</p>
+                      </div>
+                    )) : <p className="px-2 py-3 text-xs text-surface-muted">No recent system activity.</p>}
+                  </div>
+              </ClickDropdown>
+            ) : null}
+            <ClickDropdown
+              className="relative block"
+              triggerClassName="inline-flex p-2 text-slate-700 transition hover:text-brand-700"
+              panelClassName="absolute right-0 top-10 z-50 w-[min(92vw,280px)] rounded-md border border-surface-border bg-white shadow-lg"
+              trigger={<UserCircle className="h-5 w-5" />}
             >
-              <PendingSubmitButton
-                type="submit"
-                title={session.user.email ?? "Sign out"}
-                idleLabel={<UserCircle className="h-5 w-5" />}
-                pendingLabel="Signing out..."
-                className="p-2 text-slate-700 transition hover:text-brand-700"
-              />
-            </form>
+                <div className="border-b border-surface-border px-3 py-2">
+                  <p className="text-sm font-semibold text-surface-text">
+                    {session.user.name || "Signed in"}
+                  </p>
+                  <p className="text-xs text-surface-muted truncate">
+                    {session.user.email || ""}
+                  </p>
+                </div>
+                <div className="p-2">
+                  <form
+                    action={async () => {
+                      "use server";
+                      await signOut({ redirectTo: "/sign-in" });
+                    }}
+                  >
+                    <PendingSubmitButton
+                      type="submit"
+                      title={session.user.email ?? "Sign out"}
+                      idleLabel="Sign out"
+                      pendingLabel="Signing out..."
+                      className="btn-secondary w-full justify-center"
+                    />
+                  </form>
+                </div>
+            </ClickDropdown>
           </div>
         ) : (
           <Link
@@ -89,6 +199,27 @@ export async function Navbar({
       </div>
     </header>
   );
+}
+
+function statusTone(status: string) {
+  if (status === "approved") return "border-green-200 bg-green-50 text-green-800";
+  if (status === "rejected") return "border-red-200 bg-red-50 text-red-800";
+  if (status === "returned") return "border-blue-200 bg-blue-50 text-blue-800";
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function systemTitle(action: string) {
+  const value = action.toLowerCase();
+  if (value.includes("error") || value.includes("fail")) return "System error detected";
+  if (value.includes("delete") || value.includes("remove")) return "Record deleted";
+  if (value.includes("edit") || value.includes("update")) return "Settings updated";
+  return "System activity";
+}
+
+function systemMessage(action: string, target: string) {
+  const readable = action.replace(/[_-]+/g, " ").trim();
+  const verb = readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : "Activity";
+  return `${verb} on ${target || "system record"}`;
 }
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -118,7 +249,7 @@ function ExternalNavLink({ href, children }: { href: string; children: React.Rea
 function NewRequestMenu({
   options,
 }: {
-  options: Array<{ href: string; title: string; subtitle: string }>;
+  options: Array<{ href: string; external: boolean; title: string; subtitle: string }>;
 }) {
   return (
     <details className="relative">
@@ -133,6 +264,7 @@ function NewRequestMenu({
             <MenuLink
               key={option.href}
               href={option.href}
+              external={option.external}
               title={option.title}
               subtitle={option.subtitle}
             />
@@ -150,15 +282,28 @@ function NewRequestMenu({
 
 function MenuLink({
   href,
+  external,
   title,
   subtitle,
 }: {
   href: string;
+  external: boolean;
   title: string;
   subtitle: string;
 }) {
+  const className = "block px-3 py-2 hover:bg-brand-50 transition";
+
+  if (external) {
+    return (
+      <a href={href} className={className}>
+        <div className="text-sm font-semibold text-gray-800">{title}</div>
+        <div className="text-[11px] text-gray-500">{subtitle}</div>
+      </a>
+    );
+  }
+
   return (
-    <Link href={href} className="block px-3 py-2 hover:bg-brand-50 transition">
+    <Link href={href} className={className}>
       <div className="text-sm font-semibold text-gray-800">{title}</div>
       <div className="text-[11px] text-gray-500">{subtitle}</div>
     </Link>

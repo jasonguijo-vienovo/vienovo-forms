@@ -3,8 +3,10 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 export const APPROVER_ROLES = [
   "supervisor",
   "head",
+  "sla",
   "processor",
   "cashAdvanceApprover",
+  "hr",
 ] as const;
 export type ApproverRole = (typeof APPROVER_ROLES)[number];
 

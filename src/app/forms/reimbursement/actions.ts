@@ -3,15 +3,20 @@
 import { auth } from "@/auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import {
   errorMessage,
   fail,
   okRedirect,
   type FormActionResult,
 } from "@/lib/forms/action-result";
-import { uploadToDriveFolder } from "@/lib/google/drive";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
+import { syncRequestMirror } from "@/lib/request-mirror";
+import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -90,6 +95,10 @@ export async function submitReimbursement(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("reimbursement");
+    if (!definition || !getFormUserAccess(definition, { isAdmin: false }).canSubmit) {
+      throw new Error("This form is not available right now.");
+    }
 
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
@@ -142,11 +151,9 @@ export async function submitReimbursement(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID for Reimbursement attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "reimbursement",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -186,47 +193,73 @@ export async function submitReimbursement(
       dateOfRequest: new Date(),
     };
 
-    await RequestModel.create({
+    const approvalChain = [
+      {
+        step: 1,
+        role: "supervisor",
+        approverEmail: supervisor.email,
+        approverName: supervisor.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "head",
+        approverEmail: head.email,
+        approverName: head.name,
+        status: "waiting",
+      },
+      {
+        step: 3,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+    const history = [
+      {
+        at: new Date(),
+        byEmail: submitterEmail,
+        byName: submitterName,
+        action: "submitted",
+        details: {},
+      },
+    ];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain,
+      currentStep: 1,
+      history,
+      submittedBy: { email: submitterEmail, name: submitterName },
+    });
+
+    const createdRequest = await RequestModel.create({
       formType: "reimbursement",
       formSlug: "reimbursement",
       formName: "Reimbursement",
       referenceNo,
       submittedBy: { email: submitterEmail, name: submitterName },
       formData: formDataObj,
-      approvalChain: [
-        {
-          step: 1,
-          role: "supervisor",
-          approverEmail: supervisor.email,
-          approverName: supervisor.name,
-          status: "pending",
-        },
-        {
-          step: 2,
-          role: "head",
-          approverEmail: head.email,
-          approverName: head.name,
-          status: "waiting",
-        },
-        {
-          step: 3,
-          role: "processor",
-          approverEmail: processor.email,
-          approverName: processor.name,
-          status: "waiting",
-        },
-      ],
+      approvalChain,
       currentStep: 1,
       status: "pending",
-      history: [
-        {
-          at: new Date(),
-          byEmail: submitterEmail,
-          byName: submitterName,
-          action: "submitted",
-          details: {},
-        },
-      ],
+      history,
+      ...queueFields,
+    });
+
+    await syncRequestMirror({
+      requestId: String(createdRequest._id),
+      referenceNo,
+      formSlug: "reimbursement",
+      formName: "Reimbursement",
+      submittedBy: { email: submitterEmail, name: submitterName },
+      formData: formDataObj,
+      approvalChain: createdRequest.approvalChain,
+      currentStep: createdRequest.currentStep,
+      status: createdRequest.status,
+      history: createdRequest.history,
+      createdAt: createdRequest.createdAt,
+      updatedAt: createdRequest.updatedAt,
     });
 
     const fullName = `${formDataObj.firstName} ${formDataObj.lastName}`.trim();
@@ -244,6 +277,32 @@ export async function submitReimbursement(
       },
       { upsert: true },
     );
+
+    try {
+      const definition = await getFormDefinitionBySlug("reimbursement");
+      const spreadsheetId =
+        definition?.responseSpreadsheetId?.trim() ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+      const sheetTitle = definition?.responseSheetName?.trim() || "Reimbursement Responses";
+      if (definition?.writeResponsesToSheet && spreadsheetId) {
+        await appendResponseSheetRow({
+          spreadsheetId,
+          sheetTitle,
+          rowValues: buildResponseSheetRows({
+            referenceNo,
+            formSlug: "reimbursement",
+            formName: "Reimbursement",
+            submittedByEmail: submitterEmail,
+            submittedByName: submitterName,
+            values: formDataObj,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error("Reimbursement response export failed:", error);
+    }
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
@@ -338,11 +397,9 @@ export async function updateReimbursement(
     if (supportingFile instanceof File && supportingFile.size > 0) {
       const maxBytes = 10 * 1024 * 1024;
       if (supportingFile.size > maxBytes) throw new Error("Supporting document must be 10 MB or less.");
-      const folderId = process.env.GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID;
-      if (!folderId) throw new Error("Missing GOOGLE_DRIVE_REIMBURSEMENT_FOLDER_ID for Reimbursement attachments.");
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
-      const uploaded = await uploadToDriveFolder({
-        folderId,
+      const uploaded = await uploadAttachment({
+        folder: "reimbursement",
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -387,48 +444,78 @@ export async function updateReimbursement(
       reimbursementFieldMap(formDataObj),
     );
 
+    const nextApprovalChain = [
+      {
+        step: 1,
+        role: "supervisor",
+        approverEmail: supervisor.email,
+        approverName: supervisor.name,
+        status: "pending",
+      },
+      {
+        step: 2,
+        role: "head",
+        approverEmail: head.email,
+        approverName: head.name,
+        status: "waiting",
+      },
+      {
+        step: 3,
+        role: "processor",
+        approverEmail: processor.email,
+        approverName: processor.name,
+        status: "waiting",
+      },
+    ];
+
+    const historyEntry = {
+      at: new Date(),
+      byEmail: submitterEmail,
+      byName: submitterName,
+      action: "edited",
+      details: { changedFields },
+    };
+    const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
+    const queueFields = deriveRequestQueueFields({
+      status: "pending",
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      history: nextHistory as any[],
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+      submittedBy: { email: submitterEmail, name: submitterName },
+    });
+
     await RequestModel.updateOne(
       { _id: (doc as any)._id },
       {
         $set: {
           formData: formDataObj,
-          approvalChain: [
-            {
-              step: 1,
-              role: "supervisor",
-              approverEmail: supervisor.email,
-              approverName: supervisor.name,
-              status: "pending",
-            },
-            {
-              step: 2,
-              role: "head",
-              approverEmail: head.email,
-              approverName: head.name,
-              status: "waiting",
-            },
-            {
-              step: 3,
-              role: "processor",
-              approverEmail: processor.email,
-              approverName: processor.name,
-              status: "waiting",
-            },
-          ],
+          approvalChain: nextApprovalChain,
           currentStep: 1,
           status: "pending",
+          ...queueFields,
         },
         $push: {
-          history: {
-            at: new Date(),
-            byEmail: submitterEmail,
-            byName: submitterName,
-            action: "edited",
-            details: { changedFields },
-          },
+          history: historyEntry,
         },
       },
     );
+
+    await syncRequestMirror({
+      requestId: String((doc as any)._id),
+      referenceNo,
+      formSlug: "reimbursement",
+      formName: "Reimbursement",
+      submittedBy: { email: submitterEmail, name: submitterName },
+      formData: formDataObj,
+      approvalChain: nextApprovalChain,
+      currentStep: 1,
+      status: "pending",
+      history: nextHistory,
+      createdAt: (doc as any).createdAt,
+      updatedAt: historyEntry.at,
+    });
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";

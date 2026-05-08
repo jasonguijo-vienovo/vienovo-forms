@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
   AdminHelpPanel,
-  AdminMetricCard,
   AdminPageHeader,
   AdminSection,
   AdminStatusPill,
@@ -30,6 +29,17 @@ type ViewFilter = "all" | "active" | "inactive";
 export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showAddModal) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showAddModal]);
 
   const filtered = routes.filter((route) => {
     const matchesQuery =
@@ -58,38 +68,49 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
         eyebrow="Approval routing"
         title="Reimbursement routing"
         description="Manage the rules that auto-fill the immediate superior and department head on the reimbursement form."
+        actions={
+          <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
+            Add routing rule
+          </button>
+        }
       />
 
-      <AdminHelpPanel title="What this page does">
-        Each rule matches a department, cost center, and location. When the reimbursement form finds a
-        match, it uses that rule to prefill the approval people.
-      </AdminHelpPanel>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Total rules" value={routes.length} />
-        <AdminMetricCard label="Active rules" value={routes.filter((item) => item.isActive).length} tone="ok" />
-        <AdminMetricCard label="Inactive rules" value={routes.filter((item) => !item.isActive).length} />
-        <AdminMetricCard label="Visible now" value={filtered.length} hint="Current filtered result" />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CompactMetricCard label="Total rules" value={routes.length} />
+          <CompactMetricCard label="Active rules" value={routes.filter((item) => item.isActive).length} tone="ok" />
+          <CompactMetricCard label="Inactive rules" value={routes.filter((item) => !item.isActive).length} />
+          <CompactMetricCard label="Visible now" value={filtered.length} />
+        </div>
+        <AdminHelpPanel title="What this page does">
+          Each rule matches a department, cost center, and location. When the reimbursement form finds a
+          match, it uses that rule to prefill the approval people.
+        </AdminHelpPanel>
       </div>
 
-      <AdminSection
-        title="Add or update a routing rule"
-        description="If the same department, cost center, and location already exist, saving here updates that rule."
-      >
-        <form action={addRoute} className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <input name="department" placeholder="Department" required className="field-input" />
-          <input name="costCenter" placeholder="Cost center" required className="field-input" />
-          <input name="location" placeholder="Location" required className="field-input" />
-          <input name="supervisorEmail" placeholder="Immediate superior email" className="field-input" />
-          <input name="supervisorName" placeholder="Immediate superior name" className="field-input" />
-          <div className="flex items-center justify-end">
-            <PendingSubmitButton type="submit" idleLabel="Save rule" pendingLabel="Saving..." className="btn-primary w-full lg:w-auto" />
+      {showAddModal ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-4xl rounded-md border border-surface-border bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-surface-text">Add or update a routing rule</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} className="text-sm font-semibold text-surface-muted hover:text-surface-text">Close</button>
+            </div>
+            <form action={addRoute} className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <input name="department" placeholder="Department" required className="field-input" />
+              <input name="costCenter" placeholder="Cost center" required className="field-input" />
+              <input name="location" placeholder="Location" required className="field-input" />
+              <input name="supervisorEmail" placeholder="Immediate superior email" className="field-input" />
+              <input name="supervisorName" placeholder="Immediate superior name" className="field-input" />
+              <div className="flex items-center justify-end">
+                <PendingSubmitButton type="submit" idleLabel="Save rule" pendingLabel="Saving..." className="btn-primary w-full lg:w-auto" />
+              </div>
+              <input name="headEmail" placeholder="Department head email" className="field-input" />
+              <input name="headName" placeholder="Department head name" className="field-input" />
+              <div className="hidden lg:block" />
+            </form>
           </div>
-          <input name="headEmail" placeholder="Department head email" className="field-input" />
-          <input name="headName" placeholder="Department head name" className="field-input" />
-          <div className="hidden lg:block" />
-        </form>
-      </AdminSection>
+        </div>
+      ) : null}
 
       <AdminSection
         title="Routing rules"
@@ -119,7 +140,7 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
             description="Try another search or switch back to a broader filter."
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filtered.map((route) => (
               <article key={route._id} className="border border-surface-border bg-white p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -132,19 +153,36 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
                         {route.isActive ? "Active" : "Inactive"}
                       </AdminStatusPill>
                     </div>
-                    <p className="mt-3 text-sm text-surface-muted">
+                    <p className="mt-2 text-sm text-surface-muted">
                       Immediate superior: <strong>{route.supervisorName || "Not set"}</strong>
-                      {" · "}
+                      {" - "}
                       {route.supervisorEmail || "No email"}
                     </p>
                     <p className="mt-1 text-sm text-surface-muted">
                       Department head: <strong>{route.headName || "Not set"}</strong>
-                      {" · "}
+                      {" - "}
                       {route.headEmail || "No email"}
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
+                    {editingId === route._id ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(null)}
+                        className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingId(route._id)}
+                        className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                      >
+                        Edit
+                      </button>
+                    )}
                     <form action={toggleRoute}>
                       <input type="hidden" name="id" value={route._id} />
                       <PendingSubmitButton
@@ -166,8 +204,7 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
                   </div>
                 </div>
 
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-sm font-semibold text-brand-700">Edit this rule</summary>
+                {editingId === route._id ? (
                   <div className="mt-4 border border-surface-border bg-slate-50 p-4">
                     <form action={updateRoute} className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                       <input type="hidden" name="id" value={route._id} />
@@ -183,12 +220,31 @@ export function ReimbursementRoutingClient({ routes }: { routes: RouteRow[] }) {
                       </div>
                     </form>
                   </div>
-                </details>
+                ) : null}
               </article>
             ))}
           </div>
         )}
       </AdminSection>
+    </div>
+  );
+}
+
+function CompactMetricCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "ok" | "warn";
+}) {
+  const valueClass =
+    tone === "ok" ? "text-brand-700" : tone === "warn" ? "text-amber-700" : "text-surface-text";
+  return (
+    <div className="admin-panel px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { BellRing, Cog, FileInput, ListChecks, Route, Send, Users } from "lucide-react";
+import { BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
 import {
   AdminHelpPanel,
@@ -6,8 +6,10 @@ import {
   AdminPageHeader,
   AdminSection,
 } from "@/components/admin-ui";
+import { AdminSystemReadiness } from "@/components/admin-system-readiness";
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
+import { getSystemReadinessSnapshot } from "@/lib/system-readiness";
 import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
@@ -33,12 +35,17 @@ export default async function AdminOverviewPage() {
   ]);
 
   const liveFormCount = forms.filter(
-    (form) =>
-      form.status === "published" &&
-      form.visibility === "everyone" &&
-      form.availability === "available" &&
-      form.isImplemented,
+    (form) => form.runtime.requesterCanOpen,
   ).length;
+  const responseConnectedCount = forms.filter(
+    (form) => form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim()),
+  ).length;
+  const formsNeedingResponseSetup = forms.filter(
+    (form) =>
+      form.runtime.requesterCanOpen &&
+      (!form.writeResponsesToSheet || !form.responseSpreadsheetId?.trim()),
+  ).length;
+  const readiness = getSystemReadinessSnapshot();
 
   const nextSteps = buildNextSteps({
     importedDraftCount,
@@ -71,7 +78,7 @@ export default async function AdminOverviewPage() {
         cleanup.
       </AdminHelpPanel>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <AdminMetricCard
           label="Live forms"
           value={liveFormCount}
@@ -93,6 +100,24 @@ export default async function AdminOverviewPage() {
           value={approverNeedsReview}
           tone={approverNeedsReview > 0 ? "warn" : "ok"}
           hint="Emails that likely need fixing"
+        />
+        <AdminMetricCard
+          label="Forms with response tabs"
+          value={responseConnectedCount}
+          tone={responseConnectedCount > 0 ? "ok" : "warn"}
+          hint="Writing submissions to Sheets"
+        />
+        <AdminMetricCard
+          label="Live forms needing setup"
+          value={formsNeedingResponseSetup}
+          tone={formsNeedingResponseSetup > 0 ? "warn" : "ok"}
+          hint="Live forms missing response-sheet setup"
+        />
+      </div>
+      <div className="mt-4">
+        <AdminSystemReadiness
+          readiness={readiness}
+          description="Open this to check email, Sheets, Drive, auth, and database readiness in one place."
         />
       </div>
 
@@ -152,11 +177,76 @@ export default async function AdminOverviewPage() {
             description={`${processorCount} processors currently loaded for final handling steps.`}
           />
           <AdminCard
+            href="/admin/user-roles"
+            icon={<KeyRound className="h-5 w-5" />}
+            title="User roles"
+            description="Promote or demote who can access the admin console without mixing it into approver routing."
+          />
+          <AdminCard
             href="/admin/notifications"
             icon={<BellRing className="h-5 w-5" />}
             title="Notification flow"
             description="Turn per-form emails on or off and add extra recipients without changing routing."
           />
+        </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Response tab connections"
+        description="Each form can copy submissions to one Google Sheets tab. This helps us scale as more forms are added."
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {forms.map((form) => {
+            const connected = form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim());
+            return (
+              <div key={form.slug} className="border border-surface-border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-surface-text">{form.name}</p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      Form ID: <code>{form.slug}</code>
+                    </p>
+                  </div>
+                  <span
+                    className={
+                      connected
+                        ? "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200"
+                        : "inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200"
+                    }
+                  >
+                    {connected ? "Connected" : "Needs setup"}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2 text-sm text-surface-muted">
+                  <p>
+                    Export:{" "}
+                    <strong className="text-surface-text">
+                      {form.writeResponsesToSheet ? "Enabled" : "Off"}
+                    </strong>
+                  </p>
+                  <p>
+                    Spreadsheet:{" "}
+                    {form.responseSpreadsheetId?.trim() ? (
+                      <a
+                        href={`https://docs.google.com/spreadsheets/d/${form.responseSpreadsheetId.trim()}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-brand-700 underline break-all"
+                      >
+                        {`https://docs.google.com/spreadsheets/d/${form.responseSpreadsheetId.trim()}`}
+                      </a>
+                    ) : (
+                      <code>not set</code>
+                    )}
+                  </p>
+                  <p>
+                    Tab:{" "}
+                    <code>{form.responseSheetName?.trim() || `${form.name} Responses`}</code>
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </AdminSection>
 

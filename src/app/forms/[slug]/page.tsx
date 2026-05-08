@@ -1,20 +1,22 @@
 import { notFound, redirect } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-import { isAdminEmail } from "@/lib/admin";
+import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
+import { getFormUserAccess } from "@/lib/forms/runtime-state";
 import { hydrateImportedFormRuntime } from "@/lib/imported-forms";
 import { safeAuth } from "@/lib/safe-auth";
 import { FormImport } from "@/models/FormImport";
 import { submitImportedForm } from "./actions";
 import { ImportedFormFrame } from "./imported-form-frame";
+import { DuplicateModal } from "./duplicate-modal";
 
 export default async function ImportedFormPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ preview?: string }>;
+  searchParams?: Promise<{ preview?: string; submitError?: string }>;
 }) {
   const { slug } = await params;
   const resolvedSearchParams = await searchParams;
@@ -24,17 +26,18 @@ export default async function ImportedFormPage({
   const definition = await getFormDefinitionBySlug(slug);
   if (!definition || definition.source !== "imported") notFound();
 
-  const isAdmin = isAdminEmail(session.user.email);
+  const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
   const showAdminDiagnostics = isAdmin && !requesterPreview;
-  if (definition.visibility === "admin" && !isAdmin) redirect("/dashboard");
-  if (definition.status !== "published" && !isAdmin) redirect("/dashboard");
-  if ((definition.availability !== "available" || !definition.isImplemented) && !isAdmin) {
+  const access = getFormUserAccess(definition, { isAdmin, requesterPreview });
+  if (!access.canOpen) {
     redirect("/dashboard");
   }
 
   await connectMongo();
-  const imported = await FormImport.findOne({ slug }).lean();
+  const imported = definition.importSourceId
+    ? await FormImport.findById(definition.importSourceId).lean()
+    : await FormImport.findOne({ slug }).lean();
   if (!imported) notFound();
 
   const runtime = await hydrateImportedFormRuntime({
@@ -63,7 +66,7 @@ export default async function ImportedFormPage({
             : null
         }
       />
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4">
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4 overflow-x-hidden">
         <div className="bg-white rounded-2xl shadow-sm border border-brand-100 overflow-hidden">
           <div className="bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-6 py-6 text-white">
             {showAdminDiagnostics ? (
@@ -80,18 +83,33 @@ export default async function ImportedFormPage({
           </div>
 
           <div className="p-6 space-y-5">
-            {showAdminDiagnostics && runtime.warnings.length > 0 && (
+            {resolvedSearchParams?.submitError === "duplicate" ? (
+              <DuplicateModal slug={slug} />
+            ) : null}
+            {showAdminDiagnostics &&
+            ((imported.parseDiagnostics?.warnings?.length ?? 0) > 0 || runtime.warnings.length > 0) && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold mb-1">Things to review</p>
                 <ul className="space-y-1 text-xs list-disc pl-4">
-                  {runtime.warnings.map((warning) => (
+                  {[...(imported.parseDiagnostics?.warnings ?? []), ...runtime.warnings].map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
                 </ul>
               </div>
             )}
 
-            {showAdminDiagnostics && (
+            {showAdminDiagnostics && (imported.parseDiagnostics?.blockers?.length ?? 0) > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                <p className="font-semibold mb-1">Publish blockers</p>
+                <ul className="space-y-1 text-xs list-disc pl-4">
+                  {(imported.parseDiagnostics?.blockers ?? []).map((blocker) => (
+                    <li key={blocker}>{blocker}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {showAdminDiagnostics && slug !== "employee-information" && (
               <div className="rounded-xl border border-brand-100 bg-white p-4 text-sm text-gray-600 space-y-2">
                 <p className="font-semibold text-gray-800">Spreadsheet wiring</p>
                 <p>
@@ -125,7 +143,7 @@ export default async function ImportedFormPage({
               </div>
             ) : (
               <ImportedFormFrame
-                htmlSource={imported.htmlSource ?? ""}
+                htmlSource={runtime.hydratedHtml || imported.htmlSource || ""}
                 fields={runtime.fields}
                 submitAction={submitAction}
               />

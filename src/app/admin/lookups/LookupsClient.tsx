@@ -1,15 +1,17 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminStatusPill } from "@/components/admin-ui";
 import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { addLookup, deleteLookup, toggleLookup, updateLookup } from "./actions";
+import { addLookup, addLookupBulk, addLookupFromApproverRole, deleteLookup, deleteLookupCategory, toggleLookup, updateLookup } from "./actions";
 
 export type LookupAdminItem = {
   id: string;
   value: string;
+  label?: string;
   isActive: boolean;
 };
 
@@ -26,8 +28,11 @@ export default function LookupsClient(props: {
   itemsByCategory: Record<string, LookupAdminItem[]>;
 }) {
   const { categoryLabels, groups, itemsByCategory } = props;
+  const router = useRouter();
+  const [isScanning, startScan] = useTransition();
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
+  const [openAddPanelByCategory, setOpenAddPanelByCategory] = useState<Record<string, "bulk" | "single">>({});
   const selectedGroup = groups.find((g) => g.key === selectedGroupKey) ?? groups[0];
   const visibleCategories =
     selectedGroup?.categories.filter((category) =>
@@ -85,14 +90,24 @@ export default function LookupsClient(props: {
               meta={`${visibleCategories.length} of ${selectedGroup.categories.length} dropdown groups shown`}
             >
               <div className="mb-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-surface-muted">
+                    Tip: imported dropdowns can be updated from the importer, then fine-tuned here.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startScan(() => router.refresh())}
+                    disabled={isScanning}
+                    className="btn-secondary"
+                  >
+                    {isScanning ? "Scanning..." : "Scan dropdowns"}
+                  </button>
+                </div>
                 <AdminSearchField
                   value={categoryQuery}
                   onChange={setCategoryQuery}
                   placeholder="Search dropdown groups in this form"
                 />
-                <div className="text-xs text-surface-muted">
-                  Tip: imported dropdowns can be updated from the importer, then fine-tuned here.
-                </div>
               </div>
 
               {visibleCategories.length === 0 ? (
@@ -106,7 +121,6 @@ export default function LookupsClient(props: {
                 <details
                   key={cat}
                   className="border border-surface-border bg-white p-5"
-                  open={idx === 0}
                 >
                   <summary className="flex items-center justify-between cursor-pointer select-none list-none">
                     <div className="flex items-center gap-2">
@@ -118,24 +132,110 @@ export default function LookupsClient(props: {
                   </summary>
 
                   <div className="mt-4">
-                    <form action={addLookup} className="mb-4">
-                      <PendingFormState className="flex gap-2">
-                        <input type="hidden" name="category" value={cat} />
-                        <input
-                          type="text"
-                          name="value"
-                          placeholder="Add a new value..."
-                          required
-                          className="field-input flex-1"
-                        />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Add value"
-                          pendingLabel="Adding..."
-                          className="btn-primary"
-                        />
-                      </PendingFormState>
-                    </form>
+                    <div className="mb-3 flex justify-end">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <form action={addLookupFromApproverRole} className="flex items-center gap-2">
+                          <input type="hidden" name="category" value={cat} />
+                          <select name="approverRole" defaultValue="sla" className="field-input min-w-[140px] py-1 text-xs">
+                            <option value="sla">SLA</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="head">Head</option>
+                            <option value="processor">Processor</option>
+                            <option value="cashAdvanceApprover">Cash Advance Approver</option>
+                            <option value="hr">HR</option>
+                          </select>
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Add from approver role"
+                            pendingLabel="Adding..."
+                            className="btn-secondary text-xs"
+                          />
+                        </form>
+                        <form
+                          action={deleteLookupCategory}
+                          onSubmit={(e) => {
+                            if (!confirm("Delete this whole dropdown group and all its values?")) e.preventDefault();
+                          }}
+                        >
+                          <input type="hidden" name="category" value={cat} />
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Delete dropdown group"
+                            pendingLabel="Deleting group..."
+                            className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                          />
+                        </form>
+                      </div>
+                    </div>
+                    <div className="mb-4 grid gap-3 lg:grid-cols-2">
+                      <details
+                        className={`rounded border border-surface-border p-3 ${
+                          (openAddPanelByCategory[cat] ?? "bulk") === "bulk" ? "bg-slate-50" : "bg-white"
+                        }`}
+                        open={(openAddPanelByCategory[cat] ?? "bulk") === "bulk"}
+                        onToggle={(event) => {
+                          if ((event.currentTarget as HTMLDetailsElement).open) {
+                            setOpenAddPanelByCategory((prev) => ({ ...prev, [cat]: "bulk" }));
+                          }
+                        }}
+                      >
+                        <summary className="text-sm font-semibold text-surface-text">Bulk add</summary>
+                        <form action={addLookupBulk} className="mt-3">
+                          <PendingFormState className="space-y-2">
+                            <input type="hidden" name="category" value={cat} />
+                            <textarea
+                              name="bulkValues"
+                              rows={6}
+                              placeholder={"One value per line\nExample:\nOption A\nOption B\nOption C"}
+                              className="field-input font-mono text-xs"
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-surface-muted">Duplicates are auto-skipped.</p>
+                              <PendingSubmitButton
+                                type="submit"
+                                idleLabel="Bulk add"
+                                pendingLabel="Adding..."
+                                className="btn-secondary"
+                              />
+                            </div>
+                          </PendingFormState>
+                        </form>
+                      </details>
+
+                      <details
+                        className={`rounded border border-surface-border p-3 ${
+                          (openAddPanelByCategory[cat] ?? "bulk") === "single" ? "bg-slate-50" : "bg-white"
+                        }`}
+                        open={(openAddPanelByCategory[cat] ?? "bulk") === "single"}
+                        onToggle={(event) => {
+                          if ((event.currentTarget as HTMLDetailsElement).open) {
+                            setOpenAddPanelByCategory((prev) => ({ ...prev, [cat]: "single" }));
+                          }
+                        }}
+                      >
+                        <summary className="text-sm font-semibold text-surface-text">Single add value</summary>
+                        <form action={addLookup} className="mt-3">
+                          <PendingFormState className="space-y-2">
+                            <input type="hidden" name="category" value={cat} />
+                            <input
+                              type="text"
+                              name="value"
+                              placeholder="Add one value..."
+                              required
+                              className="field-input w-full"
+                            />
+                            <div className="flex justify-end">
+                              <PendingSubmitButton
+                                type="submit"
+                                idleLabel="Add value"
+                                pendingLabel="Adding..."
+                                className="btn-primary"
+                              />
+                            </div>
+                          </PendingFormState>
+                        </form>
+                      </details>
+                    </div>
 
                     {!itemsByCategory[cat] || itemsByCategory[cat].length === 0 ? (
                       <AdminEmptyState
@@ -157,7 +257,7 @@ export default function LookupsClient(props: {
                                     : "text-gray-400 line-through"
                                 }`}
                               >
-                                {item.value}
+                                {item.label ? `${item.label} <${item.value}>` : item.value}
                               </div>
                               <details className="mt-1">
                                 <summary className="text-xs text-gray-500 hover:text-brand-700 cursor-pointer select-none">
@@ -224,4 +324,6 @@ export default function LookupsClient(props: {
     </div>
   );
 }
+
+
 

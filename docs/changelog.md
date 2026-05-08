@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-08
+
+### Authentication hardening
+- Removed the `AUTH_DEV_BYPASS` credentials sign-in path while keeping Microsoft Entra ID intact.
+- Removed dev-bypass admin escalation so admin access now depends on `ADMIN_EMAILS` and stored user roles only.
+- Updated the sign-in screen, readiness messaging, and setup docs to reflect the supported sign-in flows.
+- Added Firebase Authentication as an optional second sign-in path using Firebase Google sign-in on the client and Firebase Admin ID-token verification on the server.
+
 ## 2026-05-04
 
 ### Build and runtime fixes

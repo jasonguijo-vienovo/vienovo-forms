@@ -1,4 +1,5 @@
-import { connectMongo } from "@/lib/db/mongo";
+﻿import { connectMongo } from "@/lib/db/mongo";
+import { parseImportedFormHtml } from "@/lib/imported-forms";
 import { Lookup, LOOKUP_CATEGORIES, parseImportedLookupCategory } from "@/models/Lookup";
 import { FormImport } from "@/models/FormImport";
 import LookupsClient, { type LookupAdminGroup } from "./LookupsClient";
@@ -52,7 +53,7 @@ export default async function LookupsPage() {
   await connectMongo();
   const [all, imports] = await Promise.all([
     Lookup.find({}).sort({ category: 1, sortOrder: 1 }).lean(),
-    FormImport.find({}).select({ slug: 1, name: 1 }).lean(),
+    FormImport.find({}).select({ slug: 1, name: 1, htmlSource: 1 }).lean(),
   ]);
   const importNameBySlugKey = new Map(
     imports.map((item) => [item.slug.toLowerCase().replace(/[^a-z0-9]+/g, ""), item.name])
@@ -62,7 +63,7 @@ export default async function LookupsPage() {
 
   const itemsByCategory: Record<
     string,
-    Array<{ id: string; value: string; isActive: boolean }>
+    Array<{ id: string; value: string; label?: string; isActive: boolean }>
   > = {};
   const categoryLabels: Record<string, string> = { ...CATEGORY_LABELS };
   for (const cat of allCategories) itemsByCategory[cat] = [];
@@ -71,6 +72,7 @@ export default async function LookupsPage() {
       itemsByCategory[item.category].push({
         id: String(item._id),
         value: item.value,
+        label: item.label || "",
         isActive: item.isActive,
       });
     }
@@ -78,13 +80,57 @@ export default async function LookupsPage() {
 
   const assigned = new Set(FORM_GROUPS.flatMap((g) => g.categories));
   const importedGroups = new Map<string, string[]>();
+  const importedLabelByCategory = new Map<string, string>();
+  const importedCanonicalBySlugAndLabel = new Map<string, string>();
+  for (const imported of imports) {
+    const runtime = parseImportedFormHtml(imported.htmlSource ?? "");
+    for (const field of runtime.fields) {
+      if (field.type !== "select") continue;
+      const fieldKey = field.name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (!fieldKey) continue;
+      const slugKey = imported.slug.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      const inferredLabel = field.label || humanizeImportedField(field.name);
+      const labelKey = inferredLabel.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      const inferredCategory = `imported:${slugKey}:${fieldKey}`;
+      const category =
+        importedCanonicalBySlugAndLabel.get(`${slugKey}:${labelKey}`) || inferredCategory;
+      importedCanonicalBySlugAndLabel.set(`${slugKey}:${labelKey}`, category);
+      importedLabelByCategory.set(category, inferredLabel);
+      const categories = importedGroups.get(slugKey) ?? [];
+      if (!categories.includes(category)) categories.push(category);
+      importedGroups.set(slugKey, categories);
+    }
+  }
+
   for (const category of allCategories) {
     const parsed = parseImportedLookupCategory(category);
     if (!parsed) continue;
+    const labelKey = (importedLabelByCategory.get(category) || parsed.fieldKey)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+    const canonicalCategory =
+      importedCanonicalBySlugAndLabel.get(`${parsed.slugKey}:${labelKey}`) || category;
+    importedCanonicalBySlugAndLabel.set(`${parsed.slugKey}:${labelKey}`, canonicalCategory);
     const categories = importedGroups.get(parsed.slugKey) ?? [];
-    categories.push(category);
+    if (!categories.includes(canonicalCategory)) categories.push(canonicalCategory);
     importedGroups.set(parsed.slugKey, categories);
-    categoryLabels[category] = humanizeImportedField(parsed.fieldKey);
+    categoryLabels[canonicalCategory] =
+      importedLabelByCategory.get(canonicalCategory) ||
+      importedLabelByCategory.get(category) ||
+      humanizeImportedField(parsed.fieldKey);
+  }
+
+  for (const [slugKey, categories] of importedGroups.entries()) {
+    for (const category of categories) {
+      if (!allCategories.includes(category)) allCategories.push(category);
+      if (!itemsByCategory[category]) itemsByCategory[category] = [];
+      if (!categoryLabels[category]) {
+        const parsed = parseImportedLookupCategory(category);
+        categoryLabels[category] =
+          importedLabelByCategory.get(category) ||
+          (parsed ? humanizeImportedField(parsed.fieldKey) : category);
+      }
+    }
   }
 
   const otherCategories = allCategories.filter(
@@ -119,3 +165,4 @@ function humanizeImportedField(input: string) {
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
+
