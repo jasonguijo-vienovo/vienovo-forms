@@ -77,9 +77,10 @@ function messageFromError(error: unknown) {
   return "The import could not be saved. Please try again.";
 }
 
-function revalidateImportSurfaces() {
+function revalidateImportSurfaces(scope: "all" | "importer" = "all") {
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  if (scope === "importer") return;
   revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
@@ -115,13 +116,14 @@ export async function createFormImport(formData: FormData) {
       notes: s(formData, "notes"),
       createdByEmail: email,
       createdByName: session.user.name ?? email,
+      ensureRegistryEntry: false,
     });
 
     await setFlashToast({
       tone: "success",
       message: result.replaced ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
     });
-    await writeAuditLog({
+    void writeAuditLog({
       actorEmail: email,
       action: "save_form_import",
       targetType: "form-import",
@@ -137,13 +139,15 @@ export async function createFormImport(formData: FormData) {
         blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
         warningCount: result.diagnostics.parseDiagnostics.warningCount,
       },
+    }).catch((auditError) => {
+      console.error("createFormImport audit failed:", auditError);
     });
   } catch (error) {
     console.error("createFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
   }
 
-  revalidateImportSurfaces();
+  revalidateImportSurfaces("importer");
   redirect(FORM_IMPORTS_PATH);
 }
 
