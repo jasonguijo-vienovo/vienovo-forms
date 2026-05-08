@@ -6,7 +6,7 @@ import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminSt
 import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { addLookup, addLookupBulk, deleteLookup, deleteLookupCategory, toggleLookup, updateLookup } from "./actions";
+import { addLookup, addLookupBulk, addLookupFromApproverRole, deleteLookup, deleteLookupCategory, toggleLookup, updateLookup } from "./actions";
 
 export type LookupAdminItem = {
   id: string;
@@ -132,20 +132,39 @@ export default function LookupsClient(props: {
 
                   <div className="mt-4">
                     <div className="mb-3 flex justify-end">
-                      <form
-                        action={deleteLookupCategory}
-                        onSubmit={(e) => {
-                          if (!confirm("Delete this whole dropdown group and all its values?")) e.preventDefault();
-                        }}
-                      >
-                        <input type="hidden" name="category" value={cat} />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Delete dropdown group"
-                          pendingLabel="Deleting group..."
-                          className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
-                        />
-                      </form>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <form action={addLookupFromApproverRole} className="flex items-center gap-2">
+                          <input type="hidden" name="category" value={cat} />
+                          <select name="approverRole" defaultValue="sla" className="field-input min-w-[140px] py-1 text-xs">
+                            <option value="sla">SLA</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="head">Head</option>
+                            <option value="processor">Processor</option>
+                            <option value="cashAdvanceApprover">Cash Advance Approver</option>
+                            <option value="hr">HR</option>
+                          </select>
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Add from approver role"
+                            pendingLabel="Adding..."
+                            className="btn-secondary text-xs"
+                          />
+                        </form>
+                        <form
+                          action={deleteLookupCategory}
+                          onSubmit={(e) => {
+                            if (!confirm("Delete this whole dropdown group and all its values?")) e.preventDefault();
+                          }}
+                        >
+                          <input type="hidden" name="category" value={cat} />
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Delete dropdown group"
+                            pendingLabel="Deleting group..."
+                            className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                          />
+                        </form>
+                      </div>
                     </div>
                     <div className="mb-4 grid gap-3 lg:grid-cols-2">
                       <details

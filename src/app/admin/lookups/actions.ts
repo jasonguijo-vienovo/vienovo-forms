@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { Lookup, parseImportedLookupCategory, type LookupCategory } from "@/models/Lookup";
+import { APPROVER_ROLES, Approver, type ApproverRole } from "@/models/Approver";
 import { requireAdmin } from "@/lib/admin";
 
 function parseCategory(value: FormDataEntryValue | null): LookupCategory {
@@ -128,6 +129,67 @@ export async function addLookupBulk(formData: FormData) {
   await setFlashToast({
     tone: "success",
     message: `Bulk add complete: ${incomingUnique.length} added, ${lines.length - incomingUnique.length} skipped.`,
+  });
+  revalidatePath("/admin/lookups");
+}
+
+export async function addLookupFromApproverRole(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+  const rawCategory = parseCategory(formData.get("category"));
+  const category = await resolveImportedCategoryAlias(rawCategory);
+  const role = String(formData.get("approverRole") ?? "").trim() as ApproverRole;
+  if (!APPROVER_ROLES.includes(role)) {
+    await setFlashToast({ tone: "error", message: "Choose a valid approver role." });
+    revalidatePath("/admin/lookups");
+    return;
+  }
+
+  const approvers = await Approver.find({ isActive: true, roles: role }).select({ name: 1 }).lean();
+  const candidateValues = approvers.map((item) => String(item.name ?? "").trim()).filter(Boolean);
+  if (candidateValues.length === 0) {
+    await setFlashToast({ tone: "success", message: `No active approvers found for role "${role}".` });
+    revalidatePath("/admin/lookups");
+    return;
+  }
+
+  const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
+  const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
+  const seenIncoming = new Set<string>();
+  const toInsert: string[] = [];
+
+  for (const value of candidateValues) {
+    const key = normalizeKey(value);
+    if (!key) continue;
+    if (seenIncoming.has(key)) continue;
+    seenIncoming.add(key);
+    if (existingKeys.has(key)) continue;
+    toInsert.push(value);
+  }
+
+  if (toInsert.length === 0) {
+    await setFlashToast({
+      tone: "success",
+      message: `No new values added from role "${role}". Existing dropdown values already match.`,
+    });
+    revalidatePath("/admin/lookups");
+    return;
+  }
+
+  const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 }).lean();
+  const startOrder = (last?.sortOrder ?? -1) + 1;
+  await Lookup.insertMany(
+    toInsert.map((value, idx) => ({
+      category,
+      value,
+      sortOrder: startOrder + idx,
+      isActive: true,
+    })),
+  );
+  await resequenceCategoryAlphabetically(String(category));
+  await setFlashToast({
+    tone: "success",
+    message: `Added ${toInsert.length} value(s) from approver role "${role}".`,
   });
   revalidatePath("/admin/lookups");
 }
