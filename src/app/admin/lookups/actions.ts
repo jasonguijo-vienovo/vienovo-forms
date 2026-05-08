@@ -15,7 +15,10 @@ function parseCategory(value: FormDataEntryValue | null): LookupCategory {
 }
 
 function normalizeKey(input: string) {
-  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return input
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 async function resequenceCategoryAlphabetically(category: string) {
@@ -50,6 +53,14 @@ export async function addLookup(formData: FormData) {
   const category = await resolveImportedCategoryAlias(rawCategory);
   const value = String(formData.get("value") ?? "").trim();
   if (!value) return;
+  const valueKey = normalizeKey(value);
+  const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
+  const exists = existing.some((item) => normalizeKey(String(item.value)) === valueKey);
+  if (exists) {
+    await setFlashToast({ tone: "success", message: `Skipped: "${value}" already exists.` });
+    revalidatePath("/admin/lookups");
+    return;
+  }
   const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 });
   await Lookup.create({
     category,
@@ -59,6 +70,65 @@ export async function addLookup(formData: FormData) {
   });
   await resequenceCategoryAlphabetically(String(category));
   await setFlashToast({ tone: "success", message: `Added dropdown value: ${value}` });
+  revalidatePath("/admin/lookups");
+}
+
+export async function addLookupBulk(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+  const rawCategory = parseCategory(formData.get("category"));
+  const category = await resolveImportedCategoryAlias(rawCategory);
+  const raw = String(formData.get("bulkValues") ?? "");
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    await setFlashToast({ tone: "error", message: "Paste at least one value (one per line)." });
+    revalidatePath("/admin/lookups");
+    return;
+  }
+
+  const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
+  const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
+  const incomingUnique: string[] = [];
+  const incomingKeys = new Set<string>();
+
+  for (const value of lines) {
+    const key = normalizeKey(value);
+    if (!key) continue;
+    if (incomingKeys.has(key)) continue;
+    incomingKeys.add(key);
+    if (existingKeys.has(key)) continue;
+    incomingUnique.push(value);
+  }
+
+  if (incomingUnique.length === 0) {
+    await setFlashToast({
+      tone: "success",
+      message: `No new values added. All ${lines.length} pasted value(s) already exist.`,
+    });
+    revalidatePath("/admin/lookups");
+    return;
+  }
+
+  const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 }).lean();
+  const startOrder = (last?.sortOrder ?? -1) + 1;
+  await Lookup.insertMany(
+    incomingUnique.map((value, idx) => ({
+      category,
+      value,
+      sortOrder: startOrder + idx,
+      isActive: true,
+    })),
+  );
+
+  await resequenceCategoryAlphabetically(String(category));
+  await setFlashToast({
+    tone: "success",
+    message: `Bulk add complete: ${incomingUnique.length} added, ${lines.length - incomingUnique.length} skipped.`,
+  });
   revalidatePath("/admin/lookups");
 }
 
