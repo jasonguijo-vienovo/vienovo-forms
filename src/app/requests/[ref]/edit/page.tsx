@@ -37,14 +37,17 @@ export default async function EditRequestPage({
   params: Promise<{ ref: string }>;
 }) {
   const { ref } = await params;
+  const decodedRef = decodeURIComponent(ref);
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
   const userEmail = session.user.email.toLowerCase();
 
   await connectMongo();
-  const doc = await RequestModel.findOne({ referenceNo: ref }).lean();
+  const doc = await RequestModel.findOne({ referenceNo: decodedRef }).lean();
   if (!doc) notFound();
-  if (doc.submittedBy?.email?.toLowerCase() !== userEmail) redirect(`/requests/${ref}`);
+  if (doc.submittedBy?.email?.toLowerCase() !== userEmail) {
+    redirect(`/requests/${encodeURIComponent(decodedRef)}`);
+  }
 
   const fd = (doc as any).formData ?? {};
   const userName = session.user.name ?? "";

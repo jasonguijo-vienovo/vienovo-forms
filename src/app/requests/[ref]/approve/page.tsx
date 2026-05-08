@@ -14,20 +14,21 @@ export default async function ApproveRequestPage({
   params: Promise<{ ref: string }>;
 }) {
   const { ref } = await params;
+  const decodedRef = decodeURIComponent(ref);
   const session = await safeAuth();
   if (!session?.user?.email) redirect("/sign-in");
   const userEmail = session.user.email.toLowerCase();
 
   await connectMongo();
-  const doc = await RequestModel.findOne({ referenceNo: ref }).lean();
+  const doc = await RequestModel.findOne({ referenceNo: decodedRef }).lean();
   if (!doc) notFound();
 
   const current = doc.approvalChain.find((a) => a.step === doc.currentStep) ?? null;
-  if (!current || current.status !== "pending") redirect(`/requests/${ref}`);
-  if (current.approverEmail !== userEmail) redirect(`/requests/${ref}`);
+  if (!current || current.status !== "pending") redirect(`/requests/${encodeURIComponent(decodedRef)}`);
+  if (current.approverEmail !== userEmail) redirect(`/requests/${encodeURIComponent(decodedRef)}`);
 
-  const approveAction = approveCurrentStep.bind(null, ref);
-  const rejectAction = rejectCurrentStep.bind(null, ref);
+  const approveAction = approveCurrentStep.bind(null, decodedRef);
+  const rejectAction = rejectCurrentStep.bind(null, decodedRef);
 
   return (
     <>
@@ -84,7 +85,7 @@ export default async function ApproveRequestPage({
           </div>
 
           <div className="mt-5">
-            <Link href={`/requests/${ref}`} className="text-sm text-brand-700 hover:underline">
+            <Link href={`/requests/${encodeURIComponent(decodedRef)}`} className="text-sm text-brand-700 hover:underline">
               Back to request
             </Link>
           </div>

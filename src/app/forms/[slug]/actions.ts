@@ -724,7 +724,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       console.error("Imported form submit notification failed:", notificationError);
     }
 
-    redirect(`/requests/${referenceNo}`);
+    redirect(`/requests/${encodeURIComponent(referenceNo)}`);
   } catch (error) {
     if (isRedirectError(error)) throw error;
     console.error(`submitImportedForm failed for ${slug}:`, error);
