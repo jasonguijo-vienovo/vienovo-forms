@@ -140,20 +140,37 @@ export async function Navbar({
                 </div>
               </details>
             ) : null}
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/sign-in" });
-              }}
-            >
-              <PendingSubmitButton
-                type="submit"
-                title={session.user.email ?? "Sign out"}
-                idleLabel={<UserCircle className="h-5 w-5" />}
-                pendingLabel="Signing out..."
-                className="p-2 text-slate-700 transition hover:text-brand-700"
-              />
-            </form>
+            <details className="relative block">
+              <summary className="inline-flex cursor-pointer list-none p-2 text-slate-700 transition hover:text-brand-700">
+                <UserCircle className="h-5 w-5" />
+              </summary>
+              <div className="absolute right-0 top-10 z-50 w-[min(92vw,280px)] rounded-md border border-surface-border bg-white shadow-lg">
+                <div className="border-b border-surface-border px-3 py-2">
+                  <p className="text-sm font-semibold text-surface-text">
+                    {session.user.name || "Signed in"}
+                  </p>
+                  <p className="text-xs text-surface-muted truncate">
+                    {session.user.email || ""}
+                  </p>
+                </div>
+                <div className="p-2">
+                  <form
+                    action={async () => {
+                      "use server";
+                      await signOut({ redirectTo: "/sign-in" });
+                    }}
+                  >
+                    <PendingSubmitButton
+                      type="submit"
+                      title={session.user.email ?? "Sign out"}
+                      idleLabel="Sign out"
+                      pendingLabel="Signing out..."
+                      className="btn-secondary w-full justify-center"
+                    />
+                  </form>
+                </div>
+              </div>
+            </details>
           </div>
         ) : (
           <Link
