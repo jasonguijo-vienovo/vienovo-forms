@@ -23,6 +23,7 @@ export function PendingSubmitButton({
   const { pending } = useFormStatus();
   const [clicked, setClicked] = useState(false);
   const isBusy = pending || clicked;
+  const isDisabled = Boolean(disabled) || isBusy;
   const resolvedPendingLabel = pendingLabel ?? "Processing...";
 
   useEffect(() => {
@@ -32,16 +33,23 @@ export function PendingSubmitButton({
   return (
     <button
       {...props}
+      onPointerDown={(event) => {
+        if (isDisabled) return;
+        // Immediate visual feedback before server roundtrip starts.
+        setClicked(true);
+        props.onPointerDown?.(event);
+      }}
       onClick={(event) => {
         if (isBusy) {
           event.preventDefault();
           return;
         }
-        setClicked(true);
+        if (!clicked) setClicked(true);
         props.onClick?.(event);
       }}
-      disabled={disabled || isBusy}
+      disabled={isDisabled}
       aria-busy={isBusy}
+      aria-disabled={isDisabled}
       aria-live="polite"
       data-state={isBusy ? "pending" : "idle"}
       className={cn(
