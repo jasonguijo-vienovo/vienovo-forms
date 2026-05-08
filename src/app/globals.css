@@ -260,6 +260,30 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   line-height: 1.25rem;
 }
 
+details > summary {
+  cursor: pointer;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details > :not(summary) {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 180ms ease, opacity 180ms ease;
+}
+
+details > :not(summary) > * {
+  overflow: hidden;
+}
+
+details[open] > :not(summary) {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
 @supports (view-transition-name: none) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
@@ -299,5 +323,20 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   @keyframes slide-out-right {
     from { transform: translateX(0); opacity: 1; }
     to { transform: translateX(24px); opacity: 0.85; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  details > :not(summary) {
+    transition: none !important;
   }
 }

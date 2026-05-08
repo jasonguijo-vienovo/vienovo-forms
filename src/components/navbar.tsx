@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
+import { ClickDropdown } from "@/components/click-dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
 import { isAdminUser } from "@/lib/admin";
@@ -97,11 +98,12 @@ export async function Navbar({
               </Link>
             ) : null}
             {showAdmin ? (
-              <details className="relative hidden sm:block">
-                <summary className="inline-flex cursor-pointer list-none p-2 text-slate-700 transition hover:text-brand-700">
-                  <Bell className="h-5 w-5" />
-                </summary>
-                <div className="absolute right-0 top-10 z-50 w-[min(92vw,340px)] rounded-md border border-surface-border bg-white shadow-lg">
+              <ClickDropdown
+                className="relative hidden sm:block"
+                triggerClassName="inline-flex p-2 text-slate-700 transition hover:text-brand-700"
+                panelClassName="absolute right-0 top-10 z-50 w-[min(92vw,340px)] rounded-md border border-surface-border bg-white shadow-lg"
+                trigger={<Bell className="h-5 w-5" />}
+              >
                   <div className="border-b border-surface-border px-3 py-2">
                     <p className="text-sm font-semibold text-surface-text">Your request status</p>
                     <p className="text-[11px] text-surface-muted">Last checked: {new Date(checkedAt).toLocaleTimeString()}</p>
@@ -117,15 +119,15 @@ export async function Navbar({
                       </Link>
                     )) : <p className="px-2 py-3 text-xs text-surface-muted">No request notifications yet.</p>}
                   </div>
-                </div>
-              </details>
+              </ClickDropdown>
             ) : null}
             {showAdmin && showSystemActivity ? (
-              <details className="relative hidden sm:block">
-                <summary className="inline-flex cursor-pointer list-none p-2 text-slate-700 transition hover:text-brand-700">
-                  <CircleHelp className="h-5 w-5" />
-                </summary>
-                <div className="absolute right-0 top-10 z-50 w-[min(92vw,360px)] rounded-md border border-surface-border bg-white shadow-lg">
+              <ClickDropdown
+                className="relative hidden sm:block"
+                triggerClassName="inline-flex p-2 text-slate-700 transition hover:text-brand-700"
+                panelClassName="absolute right-0 top-10 z-50 w-[min(92vw,360px)] rounded-md border border-surface-border bg-white shadow-lg"
+                trigger={<CircleHelp className="h-5 w-5" />}
+              >
                   <div className="border-b border-surface-border px-3 py-2">
                     <p className="text-sm font-semibold text-surface-text">System activity</p>
                     <p className="text-[11px] text-surface-muted">Last checked: {new Date(checkedAt).toLocaleTimeString()}</p>
@@ -139,14 +141,14 @@ export async function Navbar({
                       </div>
                     )) : <p className="px-2 py-3 text-xs text-surface-muted">No recent system activity.</p>}
                   </div>
-                </div>
-              </details>
+              </ClickDropdown>
             ) : null}
-            <details className="relative block">
-              <summary className="inline-flex cursor-pointer list-none p-2 text-slate-700 transition hover:text-brand-700">
-                <UserCircle className="h-5 w-5" />
-              </summary>
-              <div className="absolute right-0 top-10 z-50 w-[min(92vw,280px)] rounded-md border border-surface-border bg-white shadow-lg">
+            <ClickDropdown
+              className="relative block"
+              triggerClassName="inline-flex p-2 text-slate-700 transition hover:text-brand-700"
+              panelClassName="absolute right-0 top-10 z-50 w-[min(92vw,280px)] rounded-md border border-surface-border bg-white shadow-lg"
+              trigger={<UserCircle className="h-5 w-5" />}
+            >
                 <div className="border-b border-surface-border px-3 py-2">
                   <p className="text-sm font-semibold text-surface-text">
                     {session.user.name || "Signed in"}
@@ -171,8 +173,7 @@ export async function Navbar({
                     />
                   </form>
                 </div>
-              </div>
-            </details>
+            </ClickDropdown>
           </div>
         ) : (
           <Link
