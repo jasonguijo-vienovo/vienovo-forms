@@ -187,7 +187,7 @@ export default async function EditRequestPage({
             user={{ email: userEmail, name: userName }}
             prefill={prefill}
             initial={initial}
-            payableToOptions={payablesTo.map((p) => p.value)}
+            payableToOptions={payablesTo.map((p) => ({ value: p.value, label: p.label || p.value }))}
             approvers={approvers.map((a) => ({
               id: String(a._id),
               name: a.name,
