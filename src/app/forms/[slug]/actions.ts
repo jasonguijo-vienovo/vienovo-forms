@@ -460,9 +460,31 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     }
 
     const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
+    const salaryLoanApprovers = isSalaryLoan
+      ? (
+          await Approver.find({
+            isActive: true,
+            roles: "sla",
+            email: { $exists: true, $ne: "" },
+          })
+            .sort({ name: 1 })
+            .select({ name: 1, email: 1 })
+            .lean()
+        )
+      : [];
     const referenceNo = isSalaryLoan
       ? await generateSalaryLoanReferenceNo()
       : await generateReferenceNo("imported");
+    const importedApprovalChain = isSalaryLoan
+      ? salaryLoanApprovers.map((approver, index) => ({
+          step: index + 1,
+          role: "sla",
+          approverEmail: String(approver.email ?? "").trim().toLowerCase(),
+          approverName: String(approver.name ?? "").trim(),
+          status: index === 0 ? "pending" : "waiting",
+        }))
+      : [];
+    const importedStatus = importedApprovalChain.length > 0 ? "pending" : "submitted";
 
     const history = [
       {
@@ -474,9 +496,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       },
     ];
     const queueFields = deriveRequestQueueFields({
-      status: "submitted",
-      approvalChain: [],
-      currentStep: 0,
+      status: importedStatus,
+      approvalChain: importedApprovalChain,
+      currentStep: importedApprovalChain.length > 0 ? 1 : 0,
       history,
       submittedBy: { email, name },
     });
@@ -496,9 +518,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         fieldLabels: labels,
         values,
       },
-      approvalChain: [],
-      currentStep: 0,
-      status: "submitted",
+      approvalChain: importedApprovalChain,
+      currentStep: importedApprovalChain.length > 0 ? 1 : 0,
+      status: importedStatus,
       history,
       ...queueFields,
     });
@@ -518,9 +540,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         fieldLabels: labels,
         values,
       },
-      approvalChain: [],
-      currentStep: 0,
-      status: "submitted",
+      approvalChain: importedApprovalChain,
+      currentStep: importedApprovalChain.length > 0 ? 1 : 0,
+      status: importedStatus,
       history: createdRequest.history,
       createdAt: createdRequest.createdAt,
       updatedAt: createdRequest.updatedAt,
@@ -709,17 +731,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       }
       if (isSalaryLoan) {
         const salaryLoanRow = buildSalaryLoanApplicationRow({ referenceNo, values, labels });
-        const slaApproverRecipients = (
-          await Approver.find({
-            isActive: true,
-            roles: "sla",
-            email: { $exists: true, $ne: "" },
-          })
-            .select({ email: 1 })
-            .lean()
-        )
-          .map((item) => String(item.email ?? "").trim().toLowerCase())
-          .filter(Boolean);
+        const firstSlaApprover = importedApprovalChain.find((step) => step.step === 1) ?? null;
+        const slaApproverRecipients = firstSlaApprover?.approverEmail ? [firstSlaApprover.approverEmail] : [];
 
         if (slaApproverRecipients.length > 0) {
           const approverSubject = `Salary Loan Application needs review (${referenceNo})`;

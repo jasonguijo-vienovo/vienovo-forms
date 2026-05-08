@@ -2,6 +2,7 @@ import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import { NotificationFlow } from "@/models/NotificationFlow";
 import { Approver } from "@/models/Approver";
+import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 
 export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected";
@@ -128,12 +129,34 @@ export async function sendFlowNotification(opts: {
   html?: string;
 }) {
   const flow = await getNotificationFlowSettings(opts.formSlug, opts.formName);
-  if (!eventEnabled(flow, opts.event)) return false;
+  if (!eventEnabled(flow, opts.event)) {
+    await NotificationDeliveryLog.create({
+      formSlug: opts.formSlug,
+      formName: opts.formName,
+      event: opts.event,
+      recipient: "",
+      subject: opts.subject,
+      status: "skipped",
+      error: "Notification event disabled by flow settings",
+    });
+    return false;
+  }
 
   const recipients = normalizeRecipients([...normalizeRecipients(opts.to), ...flow.extraRecipients]).filter(
     isValidEmail
   );
-  if (recipients.length === 0) return false;
+  if (recipients.length === 0) {
+    await NotificationDeliveryLog.create({
+      formSlug: opts.formSlug,
+      formName: opts.formName,
+      event: opts.event,
+      recipient: "",
+      subject: opts.subject,
+      status: "skipped",
+      error: "No valid recipients",
+    });
+    return false;
+  }
 
   const approvers = await Approver.find({ email: { $in: recipients } }).select({ email: 1, name: 1, roles: 1 }).lean();
   const approverByEmail = new Map(approvers.map((item) => [String(item.email || "").toLowerCase(), item]));
@@ -150,12 +173,33 @@ export async function sendFlowNotification(opts: {
       formName: opts.formName,
       formSlug: opts.formSlug,
     });
-    await sendNotificationEmail({
-      to: recipient,
-      subject: opts.subject,
-      text: finalText,
-      html: opts.html,
-    });
+    try {
+      await sendNotificationEmail({
+        to: recipient,
+        subject: opts.subject,
+        text: finalText,
+        html: opts.html,
+      });
+      await NotificationDeliveryLog.create({
+        formSlug: opts.formSlug,
+        formName: opts.formName,
+        event: opts.event,
+        recipient,
+        subject: opts.subject,
+        status: "sent",
+      });
+    } catch (error) {
+      await NotificationDeliveryLog.create({
+        formSlug: opts.formSlug,
+        formName: opts.formName,
+        event: opts.event,
+        recipient,
+        subject: opts.subject,
+        status: "failed",
+        error: error instanceof Error ? error.message : "Unknown notification failure",
+      });
+      throw error;
+    }
   }
 
   return true;
