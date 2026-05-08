@@ -13,8 +13,10 @@ const HELP_DESK_URL = "https://itdashboard-mu.vercel.app/helpdesk/";
 
 export async function Navbar({
   adminShortcut,
+  showSystemActivity = false,
 }: {
   adminShortcut?: { href: string; label: string } | null;
+  showSystemActivity?: boolean;
 } = {}) {
   const session = await safeAuth();
   const showAdmin = await isAdminUser(session?.user?.email);
@@ -118,7 +120,7 @@ export async function Navbar({
                 </div>
               </details>
             ) : null}
-            {showAdmin ? (
+            {showAdmin && showSystemActivity ? (
               <details className="relative hidden sm:block">
                 <summary className="inline-flex cursor-pointer list-none p-2 text-slate-700 transition hover:text-brand-700">
                   <CircleHelp className="h-5 w-5" />
