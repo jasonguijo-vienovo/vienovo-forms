@@ -263,7 +263,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 @supports (view-transition-name: none) {
   ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation-duration: 180ms;
+    animation-duration: 120ms;
     animation-timing-function: ease;
   }
 

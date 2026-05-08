@@ -2,7 +2,7 @@
 
 import Link, { type LinkProps } from "next/link";
 import { useRouter } from "next/navigation";
-import { type MouseEvent, type ReactNode } from "react";
+import { useEffect, type MouseEvent, type ReactNode } from "react";
 
 type SmoothPageLinkProps = LinkProps & {
   className?: string;
@@ -31,6 +31,11 @@ export function SmoothPageLink({
     if (disabled) return;
     router.prefetch(nextHref);
   };
+
+  useEffect(() => {
+    prefetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextHref, disabled]);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (disabled) {
@@ -71,6 +76,7 @@ export function SmoothPageLink({
       onMouseEnter={prefetch}
       onFocus={prefetch}
       onTouchStart={prefetch}
+      onPointerDown={prefetch}
       className={className}
       {...rest}
     >
