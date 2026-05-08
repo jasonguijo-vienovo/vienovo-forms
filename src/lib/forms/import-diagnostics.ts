@@ -7,6 +7,7 @@ export type ImportDiagnosticsInput = {
   slug: string;
   htmlSource: string;
   appsScriptSource: string;
+  externalFormUrl?: string;
   spreadsheetBindings?: unknown;
   writeResponsesToSheet?: boolean;
   responseSheetName?: string;
@@ -56,21 +57,23 @@ export function summarizeImportedSource(htmlSource: string, appsScriptSource: st
 export function analyzeImportedSource(input: ImportDiagnosticsInput): ImportDiagnosticsResult {
   const htmlSource = input.htmlSource?.trim() ?? "";
   const appsScriptSource = input.appsScriptSource?.trim() ?? "";
+  const externalFormUrl = String(input.externalFormUrl ?? "").trim();
   const bindings = parseSpreadsheetBindings(input.spreadsheetBindings);
   const runtime = parseImportedFormHtml(htmlSource);
   const warnings = [...runtime.warnings];
   const blockers: string[] = [];
+  const hasExternalFormUrl = Boolean(externalFormUrl);
 
   if (!input.slug.trim()) {
     blockers.push("A form ID is required.");
   }
-  if (!htmlSource) {
+  if (!htmlSource && !hasExternalFormUrl) {
     blockers.push("HTML source is required.");
   }
-  if (!appsScriptSource) {
+  if (!appsScriptSource && !hasExternalFormUrl) {
     blockers.push("Apps Script source is required.");
   }
-  if (runtime.fields.length === 0) {
+  if (runtime.fields.length === 0 && !hasExternalFormUrl) {
     blockers.push("No supported fields were detected in the imported HTML.");
   }
 
@@ -96,11 +99,14 @@ export function analyzeImportedSource(input: ImportDiagnosticsInput): ImportDiag
   if (input.writeResponsesToSheet && !String(input.responseSheetName ?? "").trim()) {
     warnings.push("Sheet response copy is enabled without a custom response sheet name.");
   }
+  if (hasExternalFormUrl && !htmlSource && !appsScriptSource) {
+    warnings.push("This import will launch an external form URL instead of the in-app runtime.");
+  }
 
   const readinessState: FormImportReadinessState =
     blockers.length > 0 ? "blocked" : warnings.length > 0 ? "needs-review" : "ready";
   const sourceChecksum = createHash("sha256")
-    .update(`${input.slug}\n${htmlSource}\n${appsScriptSource}`)
+    .update(`${input.slug}\n${externalFormUrl}\n${htmlSource}\n${appsScriptSource}`)
     .digest("hex");
 
   return {

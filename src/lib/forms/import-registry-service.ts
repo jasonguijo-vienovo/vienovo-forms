@@ -110,6 +110,7 @@ function buildImportedRegistrySeed(imported: {
   _id: unknown;
   slug: string;
   name: string;
+  externalFormUrl?: string;
   notes?: string;
   writeResponsesToSheet?: boolean;
   responseSheetName?: string;
@@ -119,6 +120,7 @@ function buildImportedRegistrySeed(imported: {
     slug: imported.slug,
     name: imported.name,
     routePath: `/forms/${imported.slug}`,
+    externalFormUrl: normalizeExternalFormUrl(imported.externalFormUrl || ""),
     source: "imported" as const,
     importSourceId: imported._id,
     notes: imported.notes || "",
@@ -133,6 +135,7 @@ async function ensureImportedRegistryEntry(
     _id: unknown;
     slug: string;
     name: string;
+    externalFormUrl?: string;
     notes?: string;
     writeResponsesToSheet?: boolean;
     responseSheetName?: string;
@@ -173,6 +176,7 @@ async function ensureImportedRegistryEntry(
           $set: {
             slug: seed.slug,
             routePath: seed.routePath,
+            externalFormUrl: seed.externalFormUrl,
             source: seed.source,
             importSourceId: seed.importSourceId,
           },
@@ -214,16 +218,19 @@ export async function saveImportDraft(input: {
   responseSheetName: string;
   htmlSource: string;
   appsScriptSource: string;
+  externalFormUrl: string;
   notes: string;
   createdByEmail: string;
   createdByName: string;
   ensureRegistryEntry?: boolean;
 }) {
+  const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
   const diagnostics = analyzeImportedSource({
     name: input.name,
     slug: input.slug,
     htmlSource: input.htmlSource,
     appsScriptSource: input.appsScriptSource,
+    externalFormUrl: normalizedExternalFormUrl,
     spreadsheetBindings: input.spreadsheetBindings,
     writeResponsesToSheet: input.writeResponsesToSheet,
     responseSheetName: input.responseSheetName,
@@ -244,7 +251,8 @@ export async function saveImportDraft(input: {
         $set: {
           name: input.name,
           slug: input.slug,
-          sourceType: "google-apps-script",
+          sourceType: normalizedExternalFormUrl && !input.htmlSource.trim() && !input.appsScriptSource.trim() ? "external-link" : "google-apps-script",
+          externalFormUrl: normalizedExternalFormUrl,
           spreadsheetId: input.spreadsheetId,
           spreadsheetBindings: diagnostics.bindings,
           writeResponsesToSheet: input.writeResponsesToSheet,
@@ -294,6 +302,7 @@ export async function updateImportConfig(input: {
   spreadsheetBindings: unknown;
   writeResponsesToSheet: boolean;
   responseSheetName: string;
+  externalFormUrl: string;
   notes: string;
 }) {
   return runWithOptionalTransaction(async (session) => {
@@ -302,11 +311,13 @@ export async function updateImportConfig(input: {
       throw new Error("Import draft not found.");
     }
 
+    const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
     const diagnostics = analyzeImportedSource({
       name: existing.name,
       slug: existing.slug,
       htmlSource: existing.htmlSource ?? "",
       appsScriptSource: existing.appsScriptSource ?? "",
+      externalFormUrl: normalizedExternalFormUrl,
       spreadsheetBindings: input.spreadsheetBindings,
       writeResponsesToSheet: input.writeResponsesToSheet,
       responseSheetName: input.responseSheetName,
@@ -318,11 +329,15 @@ export async function updateImportConfig(input: {
       { _id: existing._id },
       {
         $set: {
+          externalFormUrl: normalizedExternalFormUrl,
           spreadsheetId: input.spreadsheetId,
           spreadsheetBindings: diagnostics.bindings,
           writeResponsesToSheet: input.writeResponsesToSheet,
           responseSheetName: input.responseSheetName,
           notes: input.notes,
+          sourceType: normalizedExternalFormUrl && !String(existing.htmlSource ?? "").trim() && !String(existing.appsScriptSource ?? "").trim()
+            ? "external-link"
+            : "google-apps-script",
           sourceChecksum: diagnostics.sourceChecksum,
           readinessState: diagnostics.readinessState,
           lastParsedAt: new Date(),
@@ -337,6 +352,7 @@ export async function updateImportConfig(input: {
       { importSourceId: existing._id },
       {
         $set: {
+          externalFormUrl: normalizedExternalFormUrl,
           writeResponsesToSheet: input.writeResponsesToSheet,
           responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || input.spreadsheetId,
           responseSheetName: input.responseSheetName || `${existing.name} Responses`,
@@ -383,6 +399,7 @@ export async function publishImportedForm(input: { id: string; actorEmail?: stri
       writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
       responseSheetName: imported.responseSheetName ?? "",
       spreadsheetId: imported.spreadsheetId ?? "",
+      externalFormUrl: imported.externalFormUrl ?? "",
       defaultResponseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     });
 
@@ -395,6 +412,7 @@ export async function publishImportedForm(input: { id: string; actorEmail?: stri
       {
         $set: {
           status: "implemented",
+          externalFormUrl: normalizeExternalFormUrl(imported.externalFormUrl ?? ""),
           sourceChecksum: diagnostics.sourceChecksum,
           readinessState: diagnostics.readinessState,
           lastParsedAt: new Date(),
@@ -419,8 +437,9 @@ export async function publishImportedForm(input: { id: string; actorEmail?: stri
           status: "published",
           visibility: "everyone",
           availability: "available",
-          isImplemented: true,
+          isImplemented: String(imported.htmlSource ?? "").trim().length > 0,
           routePath: `/forms/${imported.slug}`,
+          externalFormUrl: normalizeExternalFormUrl(imported.externalFormUrl ?? ""),
           writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
           responseSpreadsheetId:
             String(definition.responseSpreadsheetId ?? "").trim() ||

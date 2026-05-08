@@ -62,7 +62,19 @@ export function StepOneCreateDraftForm({ action }: StepOneCreateDraftFormProps) 
           <Field label="Form name"><input name="name" className="field-input" placeholder="Required only when saving one pasted form" /></Field>
           <Field label="Suggested form ID"><input name="slug" className="field-input" placeholder="Optional for one form; batch uses file names" /></Field>
         </div>
-        <Field label="Spreadsheet ID"><input name="spreadsheetId" className="field-input" /></Field>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Spreadsheet ID"><input name="spreadsheetId" className="field-input" placeholder="For dropdown reads or response exports" /></Field>
+          <Field label="External form URL"><input name="externalFormUrl" type="url" className="field-input" placeholder="https://script.google.com/..." /></Field>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field label="Response sheet tab"><input name="responseSheetName" className="field-input" placeholder="Example: Leave Request Responses" /></Field>
+          <Field label="Response export">
+            <label className="flex items-center gap-2 rounded border border-surface-border bg-white px-3 py-2 text-sm text-surface-text">
+              <input type="checkbox" name="writeResponsesToSheet" className="accent-brand-600" />
+              <span>Copy submissions to the response spreadsheet tab</span>
+            </label>
+          </Field>
+        </div>
 
         <details className="rounded-md border border-surface-border bg-slate-50 p-4">
           <summary className="cursor-pointer text-sm font-semibold text-surface-text">Option A: Upload source files</summary>
@@ -107,6 +119,10 @@ export function StepOneCreateDraftForm({ action }: StepOneCreateDraftFormProps) 
             </Field>
           </div>
         </details>
+
+        <div className="rounded border border-surface-border bg-slate-50 px-3 py-2 text-xs text-surface-muted">
+          To create an external-link-only import, enter the form name, optional form ID, external form URL, and spreadsheet/response fields above, then leave the HTML and Apps Script source empty.
+        </div>
 
         <div className="rounded border border-surface-border bg-slate-50 px-3 py-2 text-xs text-surface-muted">{selectedSummary}</div>
         {errors.length > 0 ? (
