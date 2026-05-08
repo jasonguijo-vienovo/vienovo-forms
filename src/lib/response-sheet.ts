@@ -7,6 +7,17 @@ import {
 
 type RowValues = Record<string, unknown>;
 
+function toColumnLetters(columnNumber: number) {
+  let n = columnNumber;
+  let letters = "";
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letters = String.fromCharCode(65 + rem) + letters;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letters;
+}
+
 function titleCaseFromKey(value: string) {
   return value
     .replace(/[_-]+/g, " ")
@@ -118,4 +129,39 @@ export async function appendResponseSheetRow(opts: {
     sheetTitle,
     values: row,
   });
+}
+
+export async function updateResponseSheetStatusByReference(opts: {
+  spreadsheetId: string;
+  sheetTitle: string;
+  referenceNo: string;
+  status: "pending" | "approved" | "rejected";
+}) {
+  const spreadsheetId = opts.spreadsheetId.trim();
+  const sheetTitle = opts.sheetTitle.trim();
+  const referenceNo = opts.referenceNo.trim();
+  if (!spreadsheetId || !sheetTitle || !referenceNo) return false;
+
+  const rows = await readSpreadsheetMatrix(spreadsheetId, `${sheetTitle}!A1:ZZ5000`);
+  if (!rows.length) return false;
+
+  const headers = rows[0].map((value) => String(value ?? "").trim());
+  const refCol = headers.findIndex((header) => header === "Ref #");
+  const statusCol = headers.findIndex((header) => header === "Status");
+  if (refCol < 0 || statusCol < 0) return false;
+
+  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+    const rowRef = String(rows[rowIndex]?.[refCol] ?? "").trim();
+    if (rowRef !== referenceNo) continue;
+    const rowNumber = rowIndex + 1;
+    const colLetters = toColumnLetters(statusCol + 1);
+    await writeSpreadsheetRow({
+      spreadsheetId,
+      range: `${sheetTitle}!${colLetters}${rowNumber}`,
+      values: [opts.status],
+    });
+    return true;
+  }
+
+  return false;
 }

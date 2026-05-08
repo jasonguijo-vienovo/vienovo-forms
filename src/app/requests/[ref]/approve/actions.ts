@@ -6,8 +6,21 @@ import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
+import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { RequestModel } from "@/models/Request";
+
+const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
+const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
+
+function isSalaryLoanRequest(formSlug: string, formName: string, referenceNo: string) {
+  const compact = (input: string) => String(input ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return (
+    compact(referenceNo).startsWith("sla") ||
+    compact(formSlug).includes("salaryloan") ||
+    compact(formName).includes("salaryloan")
+  );
+}
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -80,6 +93,18 @@ export async function approveCurrentStep(referenceNo: string, formData: FormData
   const formSlug = doc.formSlug || doc.formType;
   const formName = doc.formName || doc.formType;
   const submittedByEmail = doc.submittedBy?.email ?? "";
+  if (isSalaryLoanRequest(formSlug, formName, referenceNo)) {
+    try {
+      await updateResponseSheetStatusByReference({
+        spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+        sheetTitle: SALARY_LOAN_SHEET_NAME,
+        referenceNo,
+        status: nextStatus === "approved" ? "approved" : "pending",
+      });
+    } catch (error) {
+      console.error("Failed to sync salary loan status to sheet:", error);
+    }
+  }
 
   await syncRequestMirror({
     requestId: String((doc as any)._id),
@@ -197,6 +222,18 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
   const formSlug = doc.formSlug || doc.formType;
   const formName = doc.formName || doc.formType;
   const submittedByEmail = doc.submittedBy?.email ?? "";
+  if (isSalaryLoanRequest(formSlug, formName, referenceNo)) {
+    try {
+      await updateResponseSheetStatusByReference({
+        spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+        sheetTitle: SALARY_LOAN_SHEET_NAME,
+        referenceNo,
+        status: "rejected",
+      });
+    } catch (error) {
+      console.error("Failed to sync salary loan rejection to sheet:", error);
+    }
+  }
 
   await syncRequestMirror({
     requestId: String((doc as any)._id),
