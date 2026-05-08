@@ -45,6 +45,7 @@ export function ApproversClient({
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -57,6 +58,7 @@ export function ApproversClient({
         .includes(query.toLowerCase());
 
     if (!matchesQuery) return false;
+    if (roleFilter !== "all" && !approver.roles.includes(roleFilter)) return false;
     if (view === "review") return approver.emailNeedsReview;
     if (view === "active") return approver.isActive;
     if (view === "inactive") return !approver.isActive;
@@ -141,6 +143,14 @@ export function ApproversClient({
               { value: "active", label: "Active" },
               { value: "inactive", label: "Inactive" },
               { value: "hr_missing_email", label: "HR missing email" },
+            ]}
+          />
+          <AdminFilterTabs
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={[
+              { value: "all", label: "All roles" },
+              ...roles.map((role) => ({ value: role, label: role === "sla" ? "SLA role" : role })),
             ]}
           />
         </div>
