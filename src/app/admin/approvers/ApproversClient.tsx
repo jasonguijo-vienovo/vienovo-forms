@@ -29,6 +29,7 @@ type ViewFilter = "all" | "review" | "active" | "inactive" | "hr_missing_email";
 const ROLE_TONE: Record<string, string> = {
   supervisor: "border-blue-200 bg-blue-50 text-blue-700",
   departmenthead: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  sla: "border-cyan-200 bg-cyan-50 text-cyan-700",
   cashadvance: "border-emerald-200 bg-emerald-50 text-emerald-700",
   finalapprover: "border-amber-200 bg-amber-50 text-amber-700",
   processor: "border-violet-200 bg-violet-50 text-violet-700",
