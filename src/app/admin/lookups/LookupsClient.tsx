@@ -11,6 +11,7 @@ import { addLookup, addLookupBulk, addLookupFromApproverRole, deleteLookup, dele
 export type LookupAdminItem = {
   id: string;
   value: string;
+  label?: string;
   isActive: boolean;
 };
 
@@ -256,7 +257,7 @@ export default function LookupsClient(props: {
                                     : "text-gray-400 line-through"
                                 }`}
                               >
-                                {item.value}
+                                {item.label ? `${item.label} <${item.value}>` : item.value}
                               </div>
                               <details className="mt-1">
                                 <summary className="text-xs text-gray-500 hover:text-brand-700 cursor-pointer select-none">
@@ -323,5 +324,6 @@ export default function LookupsClient(props: {
     </div>
   );
 }
+
 
 

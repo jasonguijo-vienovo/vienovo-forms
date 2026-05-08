@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { redirect } from "next/navigation";
 import { isAdminUser } from "@/lib/admin";
 import { safeAuth } from "@/lib/safe-auth";
 import { Navbar } from "@/components/navbar";
@@ -74,7 +74,7 @@ export default async function CashAdvancePage({
             firstName: nameParts.firstName,
             lastName: nameParts.lastName,
           }}
-          payableToOptions={payablesTo.map((p) => p.value)}
+          payableToOptions={payablesTo.map((p) => ({ value: p.value, label: p.label || p.value }))}
           approvers={approvers.map((a) => ({
             id: String(a._id),
             name: a.name,
@@ -86,3 +86,5 @@ export default async function CashAdvancePage({
     </>
   );
 }
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
@@ -31,7 +31,7 @@ export type CashAdvanceFormProps = {
   user: { email: string; name: string };
   prefill: EmployeePrefill;
   initial?: CashAdvanceInitialValues;
-  payableToOptions: string[];
+  payableToOptions: Array<{ value: string; label: string }>;
   approvers: Approver[];
   submitAction: (formData: FormData) => Promise<FormActionResult>;
   submitLabel?: string;
@@ -219,20 +219,14 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
         <SectionTitle>Cash Advance Details</SectionTitle>
 
         <Field label="Payables to" required>
-          <input
-            list="payablesToOptions"
+          <SearchableSelect
             name="payablesTo"
             value={payablesTo}
-            onChange={(e) => setPayablesTo(e.target.value)}
+            onChange={setPayablesTo}
             required
-            className="field-input"
             placeholder="Type or select..."
+            options={payableToOptions}
           />
-          <datalist id="payablesToOptions">
-            {payableToOptions.map((v) => (
-              <option key={v} value={v} />
-            ))}
-          </datalist>
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -287,7 +281,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
       <Card>
         <SectionTitle>Supporting Document</SectionTitle>
         <p className="text-xs text-gray-400 mb-3">
-          Optional. PDF, DOC, XLS, PNG, JPG — max 10 MB.
+          Optional. PDF, DOC, XLS, PNG, JPG â€” max 10 MB.
         </p>
         <input type="hidden" name="supportingFileName" value={fileName} />
         <label
@@ -454,3 +448,4 @@ function Field({
     </div>
   );
 }
+

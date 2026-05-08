@@ -1,4 +1,4 @@
-import { connectMongo } from "@/lib/db/mongo";
+﻿import { connectMongo } from "@/lib/db/mongo";
 import { parseImportedFormHtml } from "@/lib/imported-forms";
 import { Lookup, LOOKUP_CATEGORIES, parseImportedLookupCategory } from "@/models/Lookup";
 import { FormImport } from "@/models/FormImport";
@@ -63,7 +63,7 @@ export default async function LookupsPage() {
 
   const itemsByCategory: Record<
     string,
-    Array<{ id: string; value: string; isActive: boolean }>
+    Array<{ id: string; value: string; label?: string; isActive: boolean }>
   > = {};
   const categoryLabels: Record<string, string> = { ...CATEGORY_LABELS };
   for (const cat of allCategories) itemsByCategory[cat] = [];
@@ -72,6 +72,7 @@ export default async function LookupsPage() {
       itemsByCategory[item.category].push({
         id: String(item._id),
         value: item.value,
+        label: item.label || "",
         isActive: item.isActive,
       });
     }
@@ -164,3 +165,4 @@ function humanizeImportedField(input: string) {
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
+

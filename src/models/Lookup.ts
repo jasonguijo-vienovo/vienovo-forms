@@ -1,4 +1,4 @@
-import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+﻿import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 export const LOOKUP_CATEGORIES = [
   "department",
@@ -34,6 +34,7 @@ const lookupSchema = new Schema(
   {
     category: { type: String, required: true, index: true },
     value: { type: String, required: true, trim: true },
+    label: { type: String, default: "", trim: true },
     sortOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
@@ -47,3 +48,4 @@ export type LookupDoc = InferSchemaType<typeof lookupSchema> & { _id: mongoose.T
 export const Lookup: Model<LookupDoc> =
   (mongoose.models.Lookup as Model<LookupDoc>) ||
   mongoose.model<LookupDoc>("Lookup", lookupSchema);
+

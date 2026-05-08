@@ -3,23 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
-import { Lookup, parseImportedLookupCategory, type LookupCategory } from "@/models/Lookup";
-import { APPROVER_ROLES, Approver, type ApproverRole } from "@/models/Approver";
 import { requireAdmin } from "@/lib/admin";
+import { APPROVER_ROLES, Approver, type ApproverRole } from "@/models/Approver";
+import { Lookup, parseImportedLookupCategory, type LookupCategory } from "@/models/Lookup";
 
 function parseCategory(value: FormDataEntryValue | null): LookupCategory {
   const v = String(value ?? "");
-  if (!v.trim()) {
-    throw new Error(`Invalid category: ${v}`);
-  }
+  if (!v.trim()) throw new Error(`Invalid category: ${v}`);
   return v.trim();
 }
 
 function normalizeKey(input: string) {
-  return input
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "");
+  return input.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 async function resequenceCategoryAlphabetically(category: string) {
@@ -54,6 +49,7 @@ export async function addLookup(formData: FormData) {
   const category = await resolveImportedCategoryAlias(rawCategory);
   const value = String(formData.get("value") ?? "").trim();
   if (!value) return;
+
   const valueKey = normalizeKey(value);
   const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
   const exists = existing.some((item) => normalizeKey(String(item.value)) === valueKey);
@@ -62,13 +58,16 @@ export async function addLookup(formData: FormData) {
     revalidatePath("/admin/lookups");
     return;
   }
+
   const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 });
   await Lookup.create({
     category,
     value,
+    label: "",
     sortOrder: (last?.sortOrder ?? -1) + 1,
     isActive: true,
   });
+
   await resequenceCategoryAlphabetically(String(category));
   await setFlashToast({ tone: "success", message: `Added dropdown value: ${value}` });
   revalidatePath("/admin/lookups");
@@ -80,10 +79,7 @@ export async function addLookupBulk(formData: FormData) {
   const rawCategory = parseCategory(formData.get("category"));
   const category = await resolveImportedCategoryAlias(rawCategory);
   const raw = String(formData.get("bulkValues") ?? "");
-  const lines = raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 
   if (lines.length === 0) {
     await setFlashToast({ tone: "error", message: "Paste at least one value (one per line)." });
@@ -120,6 +116,7 @@ export async function addLookupBulk(formData: FormData) {
     incomingUnique.map((value, idx) => ({
       category,
       value,
+      label: "",
       sortOrder: startOrder + idx,
       isActive: true,
     })),
@@ -139,17 +136,15 @@ export async function addLookupFromApproverRole(formData: FormData) {
   const rawCategory = parseCategory(formData.get("category"));
   const category = await resolveImportedCategoryAlias(rawCategory);
   const role = String(formData.get("approverRole") ?? "").trim() as ApproverRole;
+
   if (!APPROVER_ROLES.includes(role)) {
     await setFlashToast({ tone: "error", message: "Choose a valid approver role." });
     revalidatePath("/admin/lookups");
     return;
   }
 
-  const approvers = await Approver.find({ isActive: true, roles: role }).select({ email: 1 }).lean();
-  const candidateValues = approvers
-    .map((item) => String(item.email ?? "").trim().toLowerCase())
-    .filter(Boolean);
-  if (candidateValues.length === 0) {
+  const approvers = await Approver.find({ isActive: true, roles: role }).select({ name: 1, email: 1 }).lean();
+  if (approvers.length === 0) {
     await setFlashToast({ tone: "success", message: `No active approver emails found for role "${role}".` });
     revalidatePath("/admin/lookups");
     return;
@@ -158,15 +153,17 @@ export async function addLookupFromApproverRole(formData: FormData) {
   const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
   const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
   const seenIncoming = new Set<string>();
-  const toInsert: string[] = [];
+  const toInsert: Array<{ value: string; label: string }> = [];
 
-  for (const value of candidateValues) {
+  for (const approver of approvers) {
+    const value = String(approver.email ?? "").trim().toLowerCase();
+    const label = String(approver.name ?? "").trim();
     const key = normalizeKey(value);
     if (!key) continue;
     if (seenIncoming.has(key)) continue;
     seenIncoming.add(key);
     if (existingKeys.has(key)) continue;
-    toInsert.push(value);
+    toInsert.push({ value, label });
   }
 
   if (toInsert.length === 0) {
@@ -181,13 +178,15 @@ export async function addLookupFromApproverRole(formData: FormData) {
   const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 }).lean();
   const startOrder = (last?.sortOrder ?? -1) + 1;
   await Lookup.insertMany(
-    toInsert.map((value, idx) => ({
+    toInsert.map((entry, idx) => ({
       category,
-      value,
+      value: entry.value,
+      label: entry.label,
       sortOrder: startOrder + idx,
       isActive: true,
     })),
   );
+
   await resequenceCategoryAlphabetically(String(category));
   await setFlashToast({
     tone: "success",
@@ -204,10 +203,7 @@ export async function toggleLookup(formData: FormData) {
   if (!doc) return;
   doc.isActive = !doc.isActive;
   await doc.save();
-  await setFlashToast({
-    tone: "success",
-    message: `${doc.value} ${doc.isActive ? "activated" : "deactivated"}.`,
-  });
+  await setFlashToast({ tone: "success", message: `${doc.value} ${doc.isActive ? "activated" : "deactivated"}.` });
   revalidatePath("/admin/lookups");
 }
 
@@ -217,10 +213,7 @@ export async function deleteLookup(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const doc = await Lookup.findById(id).lean();
   await Lookup.findByIdAndDelete(id);
-  await setFlashToast({
-    tone: "success",
-    message: `${doc?.value ?? "Dropdown value"} deleted.`,
-  });
+  await setFlashToast({ tone: "success", message: `${doc?.value ?? "Dropdown value"} deleted.` });
   revalidatePath("/admin/lookups");
 }
 
