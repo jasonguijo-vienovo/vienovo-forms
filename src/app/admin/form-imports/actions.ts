@@ -116,6 +116,7 @@ export async function createFormImport(formData: FormData) {
       notes: s(formData, "notes"),
       createdByEmail: email,
       createdByName: session.user.name ?? email,
+      ensureRegistryEntry: false,
     });
 
     await setFlashToast({

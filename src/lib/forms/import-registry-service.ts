@@ -202,6 +202,7 @@ export async function saveImportDraft(input: {
   notes: string;
   createdByEmail: string;
   createdByName: string;
+  ensureRegistryEntry?: boolean;
 }) {
   const diagnostics = analyzeImportedSource({
     name: input.name,
@@ -260,7 +261,9 @@ export async function saveImportDraft(input: {
     }
 
     await FormImport.deleteMany({ slug: input.slug, _id: { $ne: created._id } }, sessionOptions(session));
-    await ensureImportedRegistryEntry(created, session);
+    if (input.ensureRegistryEntry ?? true) {
+      await ensureImportedRegistryEntry(created, session);
+    }
 
     return {
       importRecord: created,
