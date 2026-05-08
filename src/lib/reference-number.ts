@@ -1,30 +1,23 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { RequestModel, type FormType } from "@/models/Request";
 
-const REF_PREFIX = "SLA - ";
-const REF_POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-const REF_LENGTH = 6;
-const MAX_TRIES = 12;
+const PREFIX: Record<FormType, string> = {
+  "travel-booking": "TB",
+  "cash-advance": "CA",
+  "reimbursement": "RB",
+  "request-for-payment": "RFP",
+  "cashiering": "CSH",
+  imported: "IMP",
+};
 
 export async function generateReferenceNo(formType: FormType): Promise<string> {
   await connectMongo();
-  void formType;
-
-  for (let attempt = 0; attempt < MAX_TRIES; attempt += 1) {
-    const token = randomToken(REF_LENGTH);
-    const referenceNo = `${REF_PREFIX}${token}`;
-    const exists = await RequestModel.exists({ referenceNo });
-    if (!exists) return referenceNo;
-  }
-
-  throw new Error("Failed to generate a unique reference number.");
-}
-
-function randomToken(length: number) {
-  let value = "";
-  for (let i = 0; i < length; i += 1) {
-    const index = Math.floor(Math.random() * REF_POOL.length);
-    value += REF_POOL[index];
-  }
-  return value;
+  const now = new Date();
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const count = await RequestModel.countDocuments({
+    formType,
+    createdAt: { $gte: dayStart },
+  });
+  return `${PREFIX[formType]}-${ymd}-${String(count + 1).padStart(4, "0")}`;
 }
