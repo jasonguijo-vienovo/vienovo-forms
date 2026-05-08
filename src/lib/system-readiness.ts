@@ -33,10 +33,17 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
   );
 
   const entraReady = Boolean(
-    process.env.AUTH_DEV_BYPASS === "1" ||
-      (hasValue(process.env.AUTH_MICROSOFT_ENTRA_ID_ID) &&
-        hasValue(process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) &&
-        hasValue(process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER)),
+    hasValue(process.env.AUTH_MICROSOFT_ENTRA_ID_ID) &&
+      hasValue(process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET) &&
+      hasValue(process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER),
+  );
+  const firebaseReady = Boolean(
+    hasValue(process.env.NEXT_PUBLIC_FIREBASE_API_KEY) &&
+      hasValue(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN) &&
+      hasValue(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) &&
+      hasValue(process.env.NEXT_PUBLIC_FIREBASE_APP_ID) &&
+      hasValue(process.env.FIREBASE_ADMIN_CLIENT_EMAIL) &&
+      hasValue(process.env.FIREBASE_ADMIN_PRIVATE_KEY),
   );
 
   const items: SystemReadinessItem[] = [
@@ -73,13 +80,14 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
     {
       key: "auth",
       label: "Authentication",
-      ready: entraReady,
-      detail:
-        process.env.AUTH_DEV_BYPASS === "1"
-          ? "Dev bypass is active."
-          : entraReady
-            ? "Microsoft Entra ID credentials are configured."
-            : "Microsoft Entra ID is incomplete and dev bypass is off.",
+      ready: entraReady || firebaseReady,
+      detail: entraReady && firebaseReady
+        ? "Microsoft Entra ID and Firebase Authentication are configured."
+        : entraReady
+          ? "Microsoft Entra ID credentials are configured."
+          : firebaseReady
+            ? "Firebase Authentication is configured."
+            : "Microsoft Entra ID and Firebase Authentication are incomplete.",
     },
   ];
 

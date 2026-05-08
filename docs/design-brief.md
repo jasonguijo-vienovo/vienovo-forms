@@ -107,7 +107,7 @@ Admin pages can show technical details, but advanced details should sit inside e
 
 ### Goal
 
-Let employees sign in with the least friction possible. During development, the dev bypass should still feel intentional and not broken.
+Let employees sign in with the least friction possible through Microsoft Entra or, when configured, Firebase Authentication.
 
 ### Layout
 
@@ -115,15 +115,14 @@ Let employees sign in with the least friction possible. During development, the 
 - Vienovo logo at top.
 - Clear heading: "Sign in to Vienovo Forms".
 - Microsoft sign-in as the primary action when configured.
-- Dev bypass email/password area only when enabled.
+- Firebase email/password sign-in only when enabled.
 - Short error and loading states.
 
 ### Components
 
 - Logo
-- Email input
-- Password input if needed
 - Primary sign-in button with loading state
+- Email and password inputs when Firebase sign-in is enabled
 - Error toast or inline error
 
 ### Screenshot Placeholder
