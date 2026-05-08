@@ -35,7 +35,9 @@ export default async function ImportedFormPage({
   }
 
   await connectMongo();
-  const imported = await FormImport.findOne({ slug }).lean();
+  const imported = definition.importSourceId
+    ? await FormImport.findById(definition.importSourceId).lean()
+    : await FormImport.findOne({ slug }).lean();
   if (!imported) notFound();
 
   const runtime = await hydrateImportedFormRuntime({
