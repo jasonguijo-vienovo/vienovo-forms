@@ -233,11 +233,9 @@ export default async function DashboardPage({
               </span>
               <div className="flex gap-2">
                 <SmoothPageLink href={`/dashboard?page=${Math.max(1, page - 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`} disabled={!hasPrevPage} aria-disabled={!hasPrevPage} className={`btn-secondary ${hasPrevPage ? "" : "pointer-events-none opacity-50"}`} direction="previous">
-                  direction="previous"
                   Previous
                 </SmoothPageLink>
                 <SmoothPageLink href={`/dashboard?page=${Math.min(totalPages, page + 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`} disabled={!hasNextPage} aria-disabled={!hasNextPage} className={`btn-secondary ${hasNextPage ? "" : "pointer-events-none opacity-50"}`} direction="next">
-                  direction="next"
                   Next
                 </SmoothPageLink>
               </div>
