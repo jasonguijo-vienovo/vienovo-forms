@@ -15,6 +15,7 @@ export type AppFormDefinition = {
   description: string;
   routePath: string;
   externalFormUrl: string;
+  importSourceId?: string;
   source: "native" | "imported";
   status: FormDefinitionStatus;
   visibility: FormDefinitionVisibility;
@@ -177,6 +178,7 @@ function normalizeFormDefinitionRow(row: any): Omit<AppFormDefinition, "runtime"
     description: row.description ?? "",
     routePath: row.routePath || `/forms/${row.slug}`,
     externalFormUrl: row.externalFormUrl ?? "",
+    importSourceId: row.importSourceId ? String(row.importSourceId) : undefined,
     source: row.source,
     status: row.status,
     visibility: row.visibility,

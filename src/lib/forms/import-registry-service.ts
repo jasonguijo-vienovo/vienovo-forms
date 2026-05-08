@@ -548,6 +548,19 @@ export async function updateFormDefinitionSettings(input: {
   const nextRoutePath = form.source === "imported" ? `/forms/${input.requestedSlug}` : input.routePath;
 
   const result = await runWithOptionalTransaction(async (session) => {
+    const linkedImport =
+      form.source === "imported"
+        ? form.importSourceId
+          ? await FormImport.findById(form.importSourceId).select({ _id: 1, slug: 1 }).session(session).lean()
+          : await FormImport.findOne({ slug: form.slug }).select({ _id: 1, slug: 1 }).session(session).lean()
+        : null;
+
+    if (form.source === "imported" && input.requestedSlug !== form.slug && !linkedImport) {
+      throw new Error(
+        "This imported form is missing its linked import record. Repair or re-import it before renaming the form ID.",
+      );
+    }
+
     const conflicting = await FormDefinition.findOne({
       slug: input.requestedSlug,
       _id: { $ne: form._id },
@@ -568,6 +581,7 @@ export async function updateFormDefinitionSettings(input: {
           description: input.description,
           routePath: nextRoutePath,
           externalFormUrl: normalizedExternalFormUrl,
+          importSourceId: linkedImport?._id ?? form.importSourceId ?? null,
           notes: input.notes,
           status: input.status,
           visibility: input.visibility,
@@ -585,7 +599,7 @@ export async function updateFormDefinitionSettings(input: {
     if (form.source === "imported" && input.requestedSlug !== form.slug) {
       await Promise.all([
         FormImport.updateOne(
-          { _id: form.importSourceId },
+          { _id: linkedImport?._id },
           { $set: { slug: input.requestedSlug } },
           sessionOptions(session),
         ),

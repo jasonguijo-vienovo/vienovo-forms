@@ -292,7 +292,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       throw new Error(access.blockerMessage || "This form is not available right now.");
     }
 
-    const imported = await FormImport.findOne({ slug }).lean();
+    const imported = definition.importSourceId
+      ? await FormImport.findById(definition.importSourceId).lean()
+      : await FormImport.findOne({ slug }).lean();
     if (!imported) throw new Error("Import source not found.");
 
     const runtime = parseImportedFormHtml(imported.htmlSource ?? "");
