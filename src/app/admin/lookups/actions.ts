@@ -145,10 +145,12 @@ export async function addLookupFromApproverRole(formData: FormData) {
     return;
   }
 
-  const approvers = await Approver.find({ isActive: true, roles: role }).select({ name: 1 }).lean();
-  const candidateValues = approvers.map((item) => String(item.name ?? "").trim()).filter(Boolean);
+  const approvers = await Approver.find({ isActive: true, roles: role }).select({ email: 1 }).lean();
+  const candidateValues = approvers
+    .map((item) => String(item.email ?? "").trim().toLowerCase())
+    .filter(Boolean);
   if (candidateValues.length === 0) {
-    await setFlashToast({ tone: "success", message: `No active approvers found for role "${role}".` });
+    await setFlashToast({ tone: "success", message: `No active approver emails found for role "${role}".` });
     revalidatePath("/admin/lookups");
     return;
   }
@@ -189,7 +191,7 @@ export async function addLookupFromApproverRole(formData: FormData) {
   await resequenceCategoryAlphabetically(String(category));
   await setFlashToast({
     tone: "success",
-    message: `Added ${toInsert.length} value(s) from approver role "${role}".`,
+    message: `Added ${toInsert.length} approver email value(s) from role "${role}".`,
   });
   revalidatePath("/admin/lookups");
 }
