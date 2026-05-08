@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import {
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { SmoothPageLink } from "@/components/smooth-page-link";
 import {
   AdminEmptyState,
   AdminHelpPanel,
@@ -406,8 +407,7 @@ export function RequestsClient({
             {filteredCount === 1 ? "" : "s"}.
           </p>
           <div className="flex items-center gap-2">
-            <Link
-              href={pageInfo.hasPrevious ? buildCursorHref(pathname, searchParams, "before", pageInfo.previousCursor) : "#"}
+            <SmoothPageLink href={pageInfo.hasPrevious ? buildCursorHref(pathname, searchParams, "before", pageInfo.previousCursor) : "#"} disabled={!pageInfo.hasPrevious} direction="previous"
               aria-disabled={!pageInfo.hasPrevious}
               className={[
                 "btn-secondary",
@@ -416,9 +416,8 @@ export function RequestsClient({
             >
               <ChevronLeft className="h-4 w-4" />
               Previous
-            </Link>
-            <Link
-              href={pageInfo.hasNext ? buildCursorHref(pathname, searchParams, "after", pageInfo.nextCursor) : "#"}
+            </SmoothPageLink>
+            <SmoothPageLink href={pageInfo.hasNext ? buildCursorHref(pathname, searchParams, "after", pageInfo.nextCursor) : "#"} disabled={!pageInfo.hasNext} direction="next"
               aria-disabled={!pageInfo.hasNext}
               className={[
                 "btn-secondary",
@@ -427,7 +426,7 @@ export function RequestsClient({
             >
               Next
               <ChevronRight className="h-4 w-4" />
-            </Link>
+            </SmoothPageLink>
           </div>
         </div>
       </AdminSection>
@@ -796,3 +795,6 @@ function savedViewLabel(view: AdminRequestSavedView, needsProcessorCount: number
   if (view === "reimbursement") return "Reimbursement";
   return `Needs processor${needsProcessorCount > 0 ? ` (${needsProcessorCount})` : ""}`;
 }
+
+
+

@@ -210,19 +210,37 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   border-radius: 0.25rem;
   background: white;
   border: 1px solid var(--surface-border);
   color: var(--fg);
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
-  transition: background 0.15s;
+  transition: background 0.12s, transform 0.08s, box-shadow 0.12s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .btn-secondary:hover {
   background: #f6f8fa;
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .btn-secondary {
+    min-height: 3rem;
+    padding: 0.75rem 1rem;
+  }
 }
 
 .admin-page .btn-primary,
@@ -240,4 +258,46 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25rem;
+}
+
+@supports (view-transition-name: none) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 180ms;
+    animation-timing-function: ease;
+  }
+
+  html[data-nav-direction="next"]::view-transition-old(root) {
+    animation-name: slide-out-left;
+  }
+  html[data-nav-direction="next"]::view-transition-new(root) {
+    animation-name: slide-in-right;
+  }
+
+  html[data-nav-direction="previous"]::view-transition-old(root) {
+    animation-name: slide-out-right;
+  }
+  html[data-nav-direction="previous"]::view-transition-new(root) {
+    animation-name: slide-in-left;
+  }
+
+  @keyframes slide-in-right {
+    from { transform: translateX(24px); opacity: 0.85; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  @keyframes slide-out-left {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(-24px); opacity: 0.85; }
+  }
+
+  @keyframes slide-in-left {
+    from { transform: translateX(-24px); opacity: 0.85; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  @keyframes slide-out-right {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(24px); opacity: 0.85; }
+  }
 }

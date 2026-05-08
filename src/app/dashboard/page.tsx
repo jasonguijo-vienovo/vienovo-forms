@@ -14,6 +14,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Types } from "mongoose";
 import { Navbar } from "@/components/navbar";
+import { SmoothPageLink } from "@/components/smooth-page-link";
 import { connectMongo } from "@/lib/db/mongo";
 import { getCatalogForms } from "@/lib/form-definitions";
 import type { FormRuntimeState } from "@/lib/forms/runtime-state";
@@ -231,18 +232,14 @@ export default async function DashboardPage({
                 Page {page} of {totalPages}
               </span>
               <div className="flex gap-2">
-                <Link
-                  href={`/dashboard?page=${Math.max(1, page - 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className={`btn-secondary ${hasPrevPage ? "" : "pointer-events-none opacity-50"}`}
-                >
+                <SmoothPageLink href={`/dashboard?page=${Math.max(1, page - 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`} disabled={!hasPrevPage} aria-disabled={!hasPrevPage} className={`btn-secondary ${hasPrevPage ? "" : "pointer-events-none opacity-50"}`} direction="previous">
+                  direction="previous"
                   Previous
-                </Link>
-                <Link
-                  href={`/dashboard?page=${Math.min(totalPages, page + 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-                  className={`btn-secondary ${hasNextPage ? "" : "pointer-events-none opacity-50"}`}
-                >
+                </SmoothPageLink>
+                <SmoothPageLink href={`/dashboard?page=${Math.min(totalPages, page + 1)}&status=${encodeURIComponent(statusFilter)}${q ? `&q=${encodeURIComponent(q)}` : ""}`} disabled={!hasNextPage} aria-disabled={!hasNextPage} className={`btn-secondary ${hasNextPage ? "" : "pointer-events-none opacity-50"}`} direction="next">
+                  direction="next"
                   Next
-                </Link>
+                </SmoothPageLink>
               </div>
             </div>
           </Panel>
@@ -417,5 +414,8 @@ function RequestRow({ request }: { request: any }) {
     </div>
   );
 }
+
+
+
 
 
