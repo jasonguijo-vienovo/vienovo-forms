@@ -35,21 +35,14 @@ export default async function AdminOverviewPage() {
   ]);
 
   const liveFormCount = forms.filter(
-    (form) =>
-      form.status === "published" &&
-      form.visibility === "everyone" &&
-      form.availability === "available" &&
-      form.isImplemented,
+    (form) => form.runtime.requesterCanOpen,
   ).length;
   const responseConnectedCount = forms.filter(
     (form) => form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim()),
   ).length;
   const formsNeedingResponseSetup = forms.filter(
     (form) =>
-      form.status === "published" &&
-      form.visibility === "everyone" &&
-      form.availability === "available" &&
-      form.isImplemented &&
+      form.runtime.requesterCanOpen &&
       (!form.writeResponsesToSheet || !form.responseSpreadsheetId?.trim()),
   ).length;
   const readiness = getSystemReadinessSnapshot();

@@ -87,6 +87,7 @@ export async function updateFormDefinition(formData: FormData) {
       description: s(formData, "description"),
       requestedSlug,
       routePath: s(formData, "routePath"),
+      externalFormUrl: s(formData, "externalFormUrl"),
       notes: s(formData, "notes"),
       status,
       visibility,

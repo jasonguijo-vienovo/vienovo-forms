@@ -19,7 +19,7 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
   const [imports, definitions, syncedLookupRows] = await Promise.all([
     FormImport.find({}).sort({ createdAt: -1 }).lean(),
     FormDefinition.find({ source: "imported" })
-      .select({ slug: 1, status: 1, visibility: 1, availability: 1, isImplemented: 1 })
+      .select({ slug: 1, status: 1, visibility: 1, availability: 1, isImplemented: 1, externalFormUrl: 1 })
       .lean(),
     Lookup.find({ category: /^imported:/, isActive: true })
       .select({ category: 1, value: 1 })
@@ -48,7 +48,11 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
 
   const readyForReview = imports.filter((item) => Boolean(definitionBySlug[item.slug])).length;
   const published = definitions.filter(
-    (item) => item.status === "published" && item.visibility === "everyone" && item.availability === "available" && item.isImplemented
+    (item) =>
+      item.status === "published" &&
+      item.visibility === "everyone" &&
+      item.availability === "available" &&
+      (item.isImplemented || Boolean(String(item.externalFormUrl ?? "").trim()))
   ).length;
 
   return (

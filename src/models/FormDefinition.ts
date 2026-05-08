@@ -18,6 +18,7 @@ const formDefinitionSchema = new Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     routePath: { type: String, default: "", trim: true },
+    externalFormUrl: { type: String, default: "", trim: true },
     source: { type: String, enum: FORM_DEFINITION_SOURCES, required: true, index: true },
     isDeleted: { type: Boolean, default: false, index: true },
     status: { type: String, enum: FORM_DEFINITION_STATUSES, default: "draft", index: true },

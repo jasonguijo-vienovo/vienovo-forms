@@ -36,15 +36,7 @@ export default async function AdminFormsPage() {
 }
 
 function isLiveForRequesters(form: {
-  status: string;
-  visibility: string;
-  availability: string;
-  isImplemented: boolean;
+  runtime: { requesterCanOpen: boolean };
 }) {
-  return (
-    form.status === "published" &&
-    form.visibility === "everyone" &&
-    form.availability === "available" &&
-    form.isImplemented
-  );
+  return form.runtime.requesterCanOpen;
 }
