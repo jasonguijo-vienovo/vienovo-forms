@@ -1,10 +1,11 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
-import { Approver, APPROVER_ROLES, type ApproverRole } from "@/models/Approver";
 import { requireAdmin } from "@/lib/admin";
+import { Approver, APPROVER_ROLES, type ApproverRole } from "@/models/Approver";
+import { Lookup } from "@/models/Lookup";
 
 function parseRoles(formData: FormData): ApproverRole[] {
   const out: ApproverRole[] = [];
@@ -12,6 +13,57 @@ function parseRoles(formData: FormData): ApproverRole[] {
     if (formData.get(`role_${role}`) === "on") out.push(role);
   }
   return out;
+}
+
+const AUTO_SYNC_ROLE_TO_CATEGORY: Array<{ role: ApproverRole; category: string }> = [
+  { role: "sla", category: "cashAdvancePayableTo" },
+];
+
+async function syncApproverRoleLookupCategory(role: ApproverRole, category: string) {
+  const approvers = await Approver.find({ isActive: true, roles: role, email: { $ne: "" } })
+    .select({ name: 1, email: 1 })
+    .lean();
+
+  const existing = await Lookup.find({ category }).sort({ sortOrder: 1, value: 1 }).lean();
+  const existingByValue = new Map(existing.map((item) => [String(item.value).trim().toLowerCase(), item]));
+
+  const toInsert: Array<{ value: string; label: string }> = [];
+
+  for (const approver of approvers) {
+    const email = String(approver.email ?? "").trim().toLowerCase();
+    const name = String(approver.name ?? "").trim();
+    if (!email) continue;
+
+    const match = existingByValue.get(email);
+    if (match) {
+      if ((match.label ?? "") !== name || !match.isActive) {
+        await Lookup.updateOne({ _id: match._id }, { $set: { label: name, isActive: true } });
+      }
+      continue;
+    }
+
+    toInsert.push({ value: email, label: name });
+  }
+
+  if (toInsert.length > 0) {
+    const last = existing[existing.length - 1];
+    const startOrder = (last?.sortOrder ?? -1) + 1;
+    await Lookup.insertMany(
+      toInsert.map((item, idx) => ({
+        category,
+        value: item.value,
+        label: item.label,
+        sortOrder: startOrder + idx,
+        isActive: true,
+      })),
+    );
+  }
+}
+
+async function syncAutoLookupRoles() {
+  for (const item of AUTO_SYNC_ROLE_TO_CATEGORY) {
+    await syncApproverRoleLookupCategory(item.role, item.category);
+  }
 }
 
 export async function addApprover(formData: FormData) {
@@ -34,6 +86,7 @@ export async function addApprover(formData: FormData) {
       emailNeedsReview: !email,
       isActive: true,
     });
+    await syncAutoLookupRoles();
     await setFlashToast({ tone: "success", message: `Approver ${name} added.` });
   } catch (error) {
     const duplicateName =
@@ -49,6 +102,7 @@ export async function addApprover(formData: FormData) {
     });
   }
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
 }
 
 export async function updateApprover(formData: FormData) {
@@ -65,7 +119,9 @@ export async function updateApprover(formData: FormData) {
   doc.roles = roles;
   doc.emailNeedsReview = !email;
   await doc.save();
+  await syncAutoLookupRoles();
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
 }
 
 export async function toggleApprover(formData: FormData) {
@@ -76,7 +132,9 @@ export async function toggleApprover(formData: FormData) {
   if (!doc) return;
   doc.isActive = !doc.isActive;
   await doc.save();
+  await syncAutoLookupRoles();
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
 }
 
 export async function deleteApprover(formData: FormData) {
@@ -84,5 +142,7 @@ export async function deleteApprover(formData: FormData) {
   await connectMongo();
   const id = String(formData.get("id") ?? "");
   await Approver.findByIdAndDelete(id);
+  await syncAutoLookupRoles();
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
 }
