@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -6,7 +6,7 @@ import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminSt
 import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { addLookup, addLookupBulk, deleteLookup, toggleLookup, updateLookup } from "./actions";
+import { addLookup, addLookupBulk, deleteLookup, deleteLookupCategory, toggleLookup, updateLookup } from "./actions";
 
 export type LookupAdminItem = {
   id: string;
@@ -131,6 +131,22 @@ export default function LookupsClient(props: {
                   </summary>
 
                   <div className="mt-4">
+                    <div className="mb-3 flex justify-end">
+                      <form
+                        action={deleteLookupCategory}
+                        onSubmit={(e) => {
+                          if (!confirm("Delete this whole dropdown group and all its values?")) e.preventDefault();
+                        }}
+                      >
+                        <input type="hidden" name="category" value={cat} />
+                        <PendingSubmitButton
+                          type="submit"
+                          idleLabel="Delete dropdown group"
+                          pendingLabel="Deleting group..."
+                          className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                        />
+                      </form>
+                    </div>
                     <div className="mb-4 grid gap-3 lg:grid-cols-2">
                       <details
                         className={`rounded border border-surface-border p-3 ${
@@ -288,4 +304,5 @@ export default function LookupsClient(props: {
     </div>
   );
 }
+
 
