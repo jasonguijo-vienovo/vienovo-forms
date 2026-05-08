@@ -168,6 +168,7 @@ export async function createFormImport(formData: FormData) {
             responseSheetName: s(formData, "responseSheetName"),
             htmlSource: htmlFile.text,
             appsScriptSource,
+            externalFormUrl: s(formData, "externalFormUrl"),
             notes: s(formData, "notes"),
             createdByEmail: email,
             createdByName: session.user.name ?? email,
@@ -241,6 +242,7 @@ export async function createFormImport(formData: FormData) {
         responseSheetName: s(formData, "responseSheetName"),
         htmlSource,
         appsScriptSource,
+        externalFormUrl: s(formData, "externalFormUrl"),
         notes: s(formData, "notes"),
         createdByEmail: email,
         createdByName: session.user.name ?? email,
@@ -293,6 +295,7 @@ export async function updateFormImportConfig(formData: FormData) {
     spreadsheetBindings: bindingsFromFormData(formData),
     writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
     responseSheetName: s(formData, "responseSheetName"),
+    externalFormUrl: s(formData, "externalFormUrl"),
     notes: s(formData, "notes"),
   });
 

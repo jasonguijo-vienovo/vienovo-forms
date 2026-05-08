@@ -91,7 +91,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
                   <PipelineChip done label="Draft" />
                   <PipelineChip done={Boolean(definition)} label="Registry" />
                   <PipelineChip done={!item.spreadsheetId || (synced.valueCount ?? 0) > 0} label="Sync" />
-                  <PipelineChip done={Boolean(item.parseDiagnostics?.parsedFieldCount)} label="Preview" />
+                  <PipelineChip done={Boolean(item.parseDiagnostics?.parsedFieldCount) || Boolean(String(item.externalFormUrl ?? "").trim())} label="Preview" />
                   <PipelineChip done={isLive} label="Live" />
                 </div>
               </button>;
@@ -141,7 +141,13 @@ function DraftPanel({ item, definition, statuses }: any) {
     </details>
     <details><summary className="cursor-pointer text-sm font-semibold text-brand-700">Spreadsheet</summary>
       <form action={updateFormImportConfig} className="mt-2 space-y-2"><input type="hidden" name="id" value={String(item._id)} />
+        <input name="externalFormUrl" defaultValue={item.externalFormUrl ?? ""} className="field-input" placeholder="External form URL (optional)" />
         <input name="spreadsheetId" defaultValue={item.spreadsheetId ?? ""} className="field-input" placeholder="Spreadsheet ID" />
+        <input name="responseSheetName" defaultValue={item.responseSheetName ?? ""} className="field-input" placeholder="Response sheet tab" />
+        <label className="flex items-center gap-2 text-sm text-surface-text">
+          <input type="checkbox" name="writeResponsesToSheet" defaultChecked={Boolean(item.writeResponsesToSheet)} className="accent-brand-600" />
+          <span>Copy submissions to response sheet</span>
+        </label>
         <textarea name="spreadsheetBindings" rows={4} defaultValue={JSON.stringify(item.spreadsheetBindings ?? {}, null, 2)} className="field-input font-mono text-xs" />
         <PendingSubmitButton type="submit" idleLabel="Save settings" pendingLabel="Saving..." className="btn-secondary" />
       </form>
