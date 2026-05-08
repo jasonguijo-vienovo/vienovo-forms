@@ -115,14 +115,14 @@ Let employees sign in with the least friction possible through Microsoft Entra o
 - Vienovo logo at top.
 - Clear heading: "Sign in to Vienovo Forms".
 - Microsoft sign-in as the primary action when configured.
-- Firebase email/password sign-in only when enabled.
+- Firebase Google sign-in only when enabled.
 - Short error and loading states.
 
 ### Components
 
 - Logo
 - Primary sign-in button with loading state
-- Email and password inputs when Firebase sign-in is enabled
+- Google sign-in button when Firebase sign-in is enabled
 - Error toast or inline error
 
 ### Screenshot Placeholder
