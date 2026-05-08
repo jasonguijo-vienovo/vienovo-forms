@@ -42,9 +42,55 @@ const EMPLOYEE_INFORMATION_HEADERS = [
   "Job Title",
   "Status",
 ] as const;
+const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
+const SALARY_LOAN_HEADERS = [
+  "Timestamp",
+  "Ref #",
+  "Email",
+  "ID Number",
+  "Last Name",
+  "First Name",
+  "Middle Name",
+  "Department",
+  "Job Designation",
+  "Location",
+  "Date of Employment",
+  "Months Tenure",
+  "Manager / Supervisor",
+  "Status",
+] as const;
 
 function normalizeKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function isSalaryLoanForm(slug: string, formName: string) {
+  const slugKey = normalizeKey(slug);
+  const nameKey = normalizeKey(formName);
+  return (
+    slugKey.includes("salaryloanapplication") ||
+    slugKey.includes("salaryloan") ||
+    nameKey.includes("salaryloanapplication") ||
+    nameKey.includes("salaryloan")
+  );
+}
+
+function generateSlaCode(length = 6) {
+  const pool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let token = "";
+  for (let i = 0; i < length; i += 1) {
+    token += pool[Math.floor(Math.random() * pool.length)];
+  }
+  return `SLA - ${token}`;
+}
+
+async function generateSalaryLoanReferenceNo() {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const ref = generateSlaCode(6);
+    const exists = await RequestModel.exists({ referenceNo: ref });
+    if (!exists) return ref;
+  }
+  throw new Error("Could not generate a unique Salary Loan reference number.");
 }
 
 function normalizeCompare(input: string) {
@@ -109,6 +155,49 @@ function buildEmployeeInformationRow(opts: {
   } as Record<string, string>;
 }
 
+function buildSalaryLoanApplicationRow(opts: {
+  referenceNo: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const timestamp = new Date().toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+
+  const row: Record<string, string> = {
+    Timestamp: timestamp,
+    "Ref #": opts.referenceNo,
+    Email: findValue(opts.values, opts.labels, "email", "emailaddress", "email address"),
+    "ID Number": findValue(opts.values, opts.labels, "idnumber", "id number", "employeeid", "employee id"),
+    "Last Name": findValue(opts.values, opts.labels, "lastname", "last name"),
+    "First Name": findValue(opts.values, opts.labels, "firstname", "first name"),
+    "Middle Name": findValue(opts.values, opts.labels, "middlename", "middle name"),
+    Department: findValue(opts.values, opts.labels, "department"),
+    "Job Designation": findValue(opts.values, opts.labels, "jobdesignation", "job designation", "jobtitle", "job title", "position"),
+    Location: findValue(opts.values, opts.labels, "location"),
+    "Date of Employment": findValue(opts.values, opts.labels, "dateofemployment", "date of employment", "employmentdate", "employment date"),
+    "Months Tenure": findValue(opts.values, opts.labels, "monthstenure", "months tenure", "tenure"),
+    "Manager / Supervisor": findValue(
+      opts.values,
+      opts.labels,
+      "manager",
+      "supervisor",
+      "manager/supervisor",
+      "manager / supervisor",
+    ),
+    Status: "pending",
+  };
+
+  return row;
+}
+
 async function ensureNoEmployeeInfoDuplicate(row: Record<string, string>) {
   const matrix = await readSpreadsheetMatrix(
     EMPLOYEE_INFORMATION_SPREADSHEET_ID,
@@ -169,6 +258,31 @@ async function enforceEmployeeInformationHeaders() {
   await writeSpreadsheetRow({
     spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
     range: `${EMPLOYEE_INFORMATION_SHEET_NAME}!A1`,
+    values: [...currentHeaders, ...missing],
+  });
+}
+
+async function enforceSalaryLoanHeaders() {
+  const matrix = await readSpreadsheetMatrix(
+    EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+    `${SALARY_LOAN_SHEET_NAME}!A1:ZZ1`,
+  );
+  const currentHeaders = (matrix[0] ?? []).map((value) => String(value ?? "").trim());
+  const missing = SALARY_LOAN_HEADERS.filter(
+    (header) => !currentHeaders.some((existing) => normalizeKey(existing) === normalizeKey(header)),
+  );
+  if (currentHeaders.length === 0) {
+    await writeSpreadsheetRow({
+      spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+      range: `${SALARY_LOAN_SHEET_NAME}!A1`,
+      values: [...SALARY_LOAN_HEADERS],
+    });
+    return;
+  }
+  if (missing.length === 0) return;
+  await writeSpreadsheetRow({
+    spreadsheetId: EMPLOYEE_INFORMATION_SPREADSHEET_ID,
+    range: `${SALARY_LOAN_SHEET_NAME}!A1`,
     values: [...currentHeaders, ...missing],
   });
 }
@@ -345,7 +459,10 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       await ensureNoEmployeeInfoDuplicate(employeeRow);
     }
 
-    const referenceNo = await generateReferenceNo("imported");
+    const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
+    const referenceNo = isSalaryLoan
+      ? await generateSalaryLoanReferenceNo()
+      : await generateReferenceNo("imported");
 
     const history = [
       {
@@ -418,10 +535,14 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         "";
     const responseSheetName = isEmployeeInformation
       ? EMPLOYEE_INFORMATION_SHEET_NAME
+      : isSalaryLoan
+      ? SALARY_LOAN_SHEET_NAME
       : definition.responseSheetName?.trim() ||
         (imported as any).responseSheetName?.trim() ||
         `${imported.name} Responses`;
     const shouldWriteResponses = isEmployeeInformation
+      ? true
+      : isSalaryLoan
       ? true
       : definition.writeResponsesToSheet || Boolean((imported as any).writeResponsesToSheet);
 
@@ -447,18 +568,36 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           labels: {},
           values: employeeRow,
         });
+      } else if (isSalaryLoan) {
+        await enforceSalaryLoanHeaders();
+        const salaryLoanRow = buildSalaryLoanApplicationRow({
+          referenceNo,
+          values,
+          labels,
+        });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: salaryLoanRow,
+        });
       } else {
-      await writeImportedSubmissionToSheet({
-        spreadsheetId: responseSpreadsheetId,
-        sheetTitle: responseSheetName,
-        referenceNo,
-        slug,
-        importedName: imported.name,
-        submittedByEmail: email,
-        submittedByName: name,
-        labels,
-        values,
-      });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels,
+          values,
+        });
       }
     }
 
