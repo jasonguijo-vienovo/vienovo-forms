@@ -5,7 +5,7 @@ import { ClickDropdown } from "@/components/click-dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
 import { isAdminUser } from "@/lib/admin";
-import { getNavbarForms } from "@/lib/form-definitions";
+import { getFormLaunchHref, getNavbarForms, isExternalFormLaunch } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
 import { AuditLog } from "@/models/AuditLog";
 import { RequestModel } from "@/models/Request";
@@ -71,7 +71,8 @@ export async function Navbar({
           <NavLink href="/dashboard">Dashboard</NavLink>
           <NewRequestMenu
             options={navbarForms.map((form) => ({
-              href: form.routePath || `/forms/${form.slug}`,
+              href: getFormLaunchHref(form),
+              external: isExternalFormLaunch(form),
               title: form.name,
               subtitle: form.description,
             }))}
@@ -236,7 +237,7 @@ function ExternalNavLink({ href, children }: { href: string; children: React.Rea
 function NewRequestMenu({
   options,
 }: {
-  options: Array<{ href: string; title: string; subtitle: string }>;
+  options: Array<{ href: string; external: boolean; title: string; subtitle: string }>;
 }) {
   return (
     <details className="relative">
@@ -251,6 +252,7 @@ function NewRequestMenu({
             <MenuLink
               key={option.href}
               href={option.href}
+              external={option.external}
               title={option.title}
               subtitle={option.subtitle}
             />
@@ -268,15 +270,28 @@ function NewRequestMenu({
 
 function MenuLink({
   href,
+  external,
   title,
   subtitle,
 }: {
   href: string;
+  external: boolean;
   title: string;
   subtitle: string;
 }) {
+  const className = "block px-3 py-2 hover:bg-brand-50 transition";
+
+  if (external) {
+    return (
+      <a href={href} className={className}>
+        <div className="text-sm font-semibold text-gray-800">{title}</div>
+        <div className="text-[11px] text-gray-500">{subtitle}</div>
+      </a>
+    );
+  }
+
   return (
-    <Link href={href} className="block px-3 py-2 hover:bg-brand-50 transition">
+    <Link href={href} className={className}>
       <div className="text-sm font-semibold text-gray-800">{title}</div>
       <div className="text-[11px] text-gray-500">{subtitle}</div>
     </Link>

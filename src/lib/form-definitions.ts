@@ -14,6 +14,7 @@ export type AppFormDefinition = {
   name: string;
   description: string;
   routePath: string;
+  externalFormUrl: string;
   source: "native" | "imported";
   status: FormDefinitionStatus;
   visibility: FormDefinitionVisibility;
@@ -28,6 +29,14 @@ export type AppFormDefinition = {
   _id?: string;
   runtime: FormRuntimeState;
 };
+
+export function getFormLaunchHref(form: Pick<AppFormDefinition, "slug" | "routePath" | "externalFormUrl">) {
+  return form.externalFormUrl || form.routePath || `/forms/${form.slug}`;
+}
+
+export function isExternalFormLaunch(form: Pick<AppFormDefinition, "externalFormUrl">) {
+  return Boolean(String(form.externalFormUrl || "").trim());
+}
 
 function sortCatalog(forms: AppFormDefinition[]) {
   return [...forms].sort((a, b) => {
@@ -45,6 +54,7 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     name: "Travel Booking",
     description: "Book a flight, hotel, or company travel.",
     routePath: "/forms/travel-booking",
+    externalFormUrl: "",
     source: "native",
     status: "published",
     visibility: "everyone",
@@ -62,6 +72,7 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     name: "Cash Advance",
     description: "Request advance funds for upcoming expenses.",
     routePath: "/forms/cash-advance",
+    externalFormUrl: "",
     source: "native",
     status: "published",
     visibility: "everyone",
@@ -79,6 +90,7 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     name: "Reimbursement",
     description: "Get reimbursed for expenses you already paid for.",
     routePath: "/forms/reimbursement",
+    externalFormUrl: "",
     source: "native",
     status: "published",
     visibility: "everyone",
@@ -96,6 +108,7 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     name: "Request for Payment",
     description: "Request payment to a vendor or supplier.",
     routePath: "/forms/request-for-payment",
+    externalFormUrl: "",
     source: "native",
     status: "published",
     visibility: "everyone",
@@ -113,6 +126,7 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     name: "Cashiering",
     description: "Cashier-related transactions and requests.",
     routePath: "/forms/cashiering",
+    externalFormUrl: "",
     source: "native",
     status: "published",
     visibility: "everyone",
@@ -130,6 +144,7 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     name: "Leave Request",
     description: "Submit planned leave requests for manager review and approval.",
     routePath: "/forms/leave-request",
+    externalFormUrl: "",
     source: "native",
     status: "published",
     visibility: "everyone",
@@ -161,6 +176,7 @@ function normalizeFormDefinitionRow(row: any): Omit<AppFormDefinition, "runtime"
     name: row.name,
     description: row.description ?? "",
     routePath: row.routePath || `/forms/${row.slug}`,
+    externalFormUrl: row.externalFormUrl ?? "",
     source: row.source,
     status: row.status,
     visibility: row.visibility,
@@ -186,6 +202,7 @@ function mergeBuiltInWithOverride(
     ...builtin,
     ...normalized,
     source: "native",
+    externalFormUrl: normalized.externalFormUrl || builtin.externalFormUrl,
     routePath: normalized.routePath || builtin.routePath,
   };
 }
@@ -230,6 +247,7 @@ export async function syncBuiltInForms() {
             name: form.name,
             description: form.description,
             routePath: form.routePath,
+            externalFormUrl: form.externalFormUrl,
             status: form.status,
             visibility: form.visibility,
             availability: form.availability,
@@ -315,7 +333,7 @@ export async function getCatalogForms(opts?: {
         isDeleted: { $ne: true },
         status: includeDrafts ? { $ne: "archived" } : "published",
         ...(includeAdminOnly ? {} : { visibility: { $ne: "admin" } }),
-        ...(includeUnavailable ? {} : { availability: "available", isImplemented: true }),
+        ...(includeUnavailable ? {} : { availability: "available" }),
       })
         .sort({ sortOrder: 1, name: 1 })
         .lean(),

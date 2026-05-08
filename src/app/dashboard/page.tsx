@@ -16,7 +16,7 @@ import { Types } from "mongoose";
 import { Navbar } from "@/components/navbar";
 import { SmoothPageLink } from "@/components/smooth-page-link";
 import { connectMongo } from "@/lib/db/mongo";
-import { getCatalogForms } from "@/lib/form-definitions";
+import { getCatalogForms, getFormLaunchHref, isExternalFormLaunch } from "@/lib/form-definitions";
 import type { FormRuntimeState } from "@/lib/forms/runtime-state";
 import { safeAuth } from "@/lib/safe-auth";
 import { RequestModel } from "@/models/Request";
@@ -299,6 +299,7 @@ function FormCard({
   availability,
   isImplemented,
   routePath,
+  externalFormUrl,
   runtime,
 }: {
   slug: string;
@@ -308,11 +309,14 @@ function FormCard({
   availability: "available" | "coming-soon";
   isImplemented: boolean;
   routePath: string;
+  externalFormUrl: string;
   runtime: FormRuntimeState;
 }) {
   const available = runtime.requesterCanOpen;
   const Icon = formIcon(slug);
   const badgeText = status !== "published" ? "Pending" : "Soon";
+  const href = getFormLaunchHref({ slug, routePath, externalFormUrl });
+  const isExternal = isExternalFormLaunch({ externalFormUrl });
 
   const inner = (
     <div
@@ -339,7 +343,14 @@ function FormCard({
     </div>
   );
 
-  return available ? <Link href={routePath || `/forms/${slug}`}>{inner}</Link> : inner;
+  if (!available) return inner;
+  return isExternal ? (
+    <a href={href} className="block">
+      {inner}
+    </a>
+  ) : (
+    <Link href={href}>{inner}</Link>
+  );
 }
 
 function Panel({

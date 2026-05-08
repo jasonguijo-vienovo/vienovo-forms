@@ -4,6 +4,7 @@ type FormRuntimeInput = {
   visibility: "everyone" | "admin";
   availability: "available" | "coming-soon";
   isImplemented: boolean;
+  externalFormUrl?: string;
   showInNavbar: boolean;
 };
 
@@ -17,14 +18,15 @@ export type FormRuntimeState = {
 };
 
 export function projectFormRuntimeState(form: FormRuntimeInput): FormRuntimeState {
-  const isLive = form.status === "published" && form.availability === "available" && form.isImplemented;
+  const hasLaunchTarget = form.isImplemented || Boolean(String(form.externalFormUrl ?? "").trim());
+  const isLive = form.status === "published" && form.availability === "available" && hasLaunchTarget;
 
   let state: FormRuntimeState["state"] = "live";
   if (form.status === "archived") {
     state = "archived";
   } else if (form.status !== "published") {
     state = "draft";
-  } else if (form.availability !== "available" || !form.isImplemented) {
+  } else if (form.availability !== "available" || !hasLaunchTarget) {
     state = "coming-soon";
   } else if (form.visibility === "admin") {
     state = "admin-only";

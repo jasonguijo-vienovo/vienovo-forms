@@ -12,6 +12,19 @@ function normalizeLookupKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function isDefinitionLive(definition: any) {
+  return (
+    definition?.status === "published" &&
+    definition?.visibility === "everyone" &&
+    definition?.availability === "available" &&
+    (definition?.isImplemented || Boolean(String(definition?.externalFormUrl ?? "").trim()))
+  );
+}
+
+function definitionLaunchHref(item: any, definition: any) {
+  return String(definition?.externalFormUrl ?? "").trim() || `/forms/${item.slug}`;
+}
+
 export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlugKey, statuses }: any) {
   const [q, setQ] = useState("");
   const [view, setView] = useState<"all"|"needs_registry"|"needs_sync"|"live">("all");
@@ -22,7 +35,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
   const filtered = useMemo(() => imports.filter((item: any) => {
     const definition = definitionBySlug[item.slug];
     const synced = syncedStatsBySlugKey[normalizeLookupKey(item.slug)] ?? { valueCount: 0 };
-    const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
+    const isLive = isDefinitionLive(definition);
     const matches = !q || [item.name, item.slug].join(" ").toLowerCase().includes(q.toLowerCase());
     if (!matches) return false;
     if (view === "needs_registry") return !definition;
@@ -61,7 +74,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
               {visible.map((item: any) => {
               const definition = definitionBySlug[item.slug];
               const synced = syncedStatsBySlugKey[normalizeLookupKey(item.slug)] ?? { valueCount: 0 };
-              const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
+              const isLive = isDefinitionLive(definition);
                 return <button key={String(item._id)} type="button" onClick={()=>setSelectedId(String(item._id))} className={`w-full border p-4 text-left ${String(item._id)===selectedId?"border-brand-400 ring-1 ring-brand-200":"border-surface-border"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div>
@@ -106,13 +119,15 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
 }
 
 function DraftPanel({ item, definition, statuses }: any) {
-  const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
+  const isLive = isDefinitionLive(definition);
   const syncedNeeded = Boolean(item.spreadsheetId);
   const nextAction = !definition ? "registry" : (syncedNeeded ? "sync" : (!isLive ? "publish" : "preview"));
+  const previewHref = definitionLaunchHref(item, definition);
+  const previewLabel = definition?.externalFormUrl ? "Open external" : "Preview";
   return <div className="space-y-3">
     <div className="flex items-center justify-between">
       <h3 className="text-sm font-semibold text-surface-text">Edit import settings</h3>
-      <Link href={`/forms/${item.slug}`} className="btn-secondary"><Eye className="h-4 w-4" />Preview</Link>
+      <Link href={previewHref} className="btn-secondary"><Eye className="h-4 w-4" />{previewLabel}</Link>
     </div>
     <div className="flex flex-wrap gap-2">
       <AdminStatusPill tone={isLive?"ok":"warn"}>{isLive?"Live":"Internal only"}</AdminStatusPill>
@@ -135,7 +150,7 @@ function DraftPanel({ item, definition, statuses }: any) {
       {nextAction === "registry" ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Add registry" pendingLabel="Working..." className="btn-primary" /></form> : null}
       {nextAction === "sync" ? <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Sync from spreadsheet" pendingLabel="Syncing..." className="btn-primary" /></form> : null}
       {nextAction === "publish" ? <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Publish live" pendingLabel="Publishing..." className="btn-primary" /></form> : null}
-      {nextAction === "preview" ? <Link href={`/forms/${item.slug}`} className="btn-primary"><Eye className="h-4 w-4" />Next: Open preview</Link> : null}
+      {nextAction === "preview" ? <Link href={previewHref} className="btn-primary"><Eye className="h-4 w-4" />{definition?.externalFormUrl ? "Next: Open external form" : "Next: Open preview"}</Link> : null}
       {!definition ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Layers3 className="h-4 w-4" />Add registry</span>} pendingLabel="Working..." className="btn-secondary" /></form> : null}
       <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><DatabaseZap className="h-4 w-4" />Sync</span>} pendingLabel="Syncing..." className="btn-secondary" /></form>
       <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Publish</span>} pendingLabel="Publishing..." className="btn-primary" /></form>

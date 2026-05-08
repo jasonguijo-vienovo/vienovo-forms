@@ -34,6 +34,21 @@ function requestMirrorCollectionName(slug: string) {
   return `requests_${normalized || "general"}`;
 }
 
+function normalizeExternalFormUrl(input: string) {
+  const value = String(input || "").trim();
+  if (!value) return "";
+
+  try {
+    const parsed = new URL(value);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new Error("External form URL must start with http:// or https://");
+    }
+    return parsed.toString();
+  } catch {
+    throw new Error("External form URL must be a valid http:// or https:// link.");
+  }
+}
+
 export function slugifyFormId(input: string) {
   return input
     .toLowerCase()
@@ -492,6 +507,7 @@ export async function updateFormDefinitionSettings(input: {
   description: string;
   requestedSlug: string;
   routePath: string;
+  externalFormUrl: string;
   notes: string;
   status: FormDefinitionStatus;
   visibility: FormDefinitionVisibility;
@@ -511,6 +527,8 @@ export async function updateFormDefinitionSettings(input: {
   if (!FORM_DEFINITION_AVAILABILITIES.includes(input.availability)) {
     throw new Error(`Invalid availability: ${input.availability}`);
   }
+
+  const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
 
   const form = input.id
     ? await FormDefinition.findById(input.id).lean()
@@ -549,6 +567,7 @@ export async function updateFormDefinitionSettings(input: {
           name: input.name,
           description: input.description,
           routePath: nextRoutePath,
+          externalFormUrl: normalizedExternalFormUrl,
           notes: input.notes,
           status: input.status,
           visibility: input.visibility,

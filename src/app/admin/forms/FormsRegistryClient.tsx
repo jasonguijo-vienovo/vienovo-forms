@@ -22,6 +22,7 @@ type RegistryForm = {
   name: string;
   description: string;
   routePath: string;
+  externalFormUrl: string;
   source: "native" | "imported";
   status: string;
   visibility: string;
@@ -97,7 +98,7 @@ export function FormsRegistryClient({
     return forms.filter((form) => {
       const matchesQuery =
         !debouncedQuery ||
-        [form.name, form.slug, form.description, form.routePath]
+        [form.name, form.slug, form.description, form.routePath, form.externalFormUrl]
           .join(" ")
           .toLowerCase()
           .includes(debouncedQuery);
@@ -227,7 +228,9 @@ export function FormsRegistryClient({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-base font-semibold text-surface-text">{form.name}</p>
-                        <p className="mt-1 truncate text-xs text-surface-muted">{form.slug} • {form.routePath}</p>
+                        <p className="mt-1 truncate text-xs text-surface-muted">
+                          {form.slug} • {form.externalFormUrl ? "External Google Apps Script form" : form.routePath}
+                        </p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1">
                         <AdminStatusPill tone={liveForUsers ? "ok" : "warn"}>{liveForUsers ? "Live" : "Not live"}</AdminStatusPill>
@@ -337,7 +340,8 @@ export function FormsRegistryClient({
 
 function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, onDirtyChange, isEditMode }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; onDirtyChange: (dirty: boolean) => void; isEditMode: boolean }) {
   const liveForUsers = isLiveForRequesters(form);
-  const implementedRoute = form.isImplemented && form.routePath;
+  const launchUrl = form.externalFormUrl || form.routePath;
+  const implementedRoute = (form.isImplemented || Boolean(form.externalFormUrl)) && launchUrl;
   const sourceExists = form.source === "native" || importedSet.has(form.slug);
   const [openVisibility, setOpenVisibility] = useState(true);
   const [openRouting, setOpenRouting] = useState(true);
@@ -358,9 +362,9 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
 
       {implementedRoute ? (
         <div className="flex">
-          <Link href={form.routePath} className="btn-secondary">
+          <Link href={launchUrl} className="btn-secondary">
             <Eye className="h-4 w-4" />
-            Open form
+            {form.externalFormUrl ? "Open external form" : "Open form"}
           </Link>
         </div>
       ) : null}
@@ -389,6 +393,8 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
             <Field label="Form name"><input name="name" defaultValue={form.name} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
             <Field label="Form ID"><input name="newSlug" defaultValue={form.slug} readOnly={!isEditMode || form.source === "native"} className={`field-input ${!isEditMode || form.source === "native" ? "field-locked" : ""}`} /></Field>
             <Field label="Route path"><input name="routePath" defaultValue={form.routePath} readOnly={!isEditMode || form.source === "imported"} className={`field-input ${!isEditMode || form.source === "imported" ? "field-locked" : ""}`} /></Field>
+            <Field label="External form URL"><input name="externalFormUrl" type="url" defaultValue={form.externalFormUrl} readOnly={!isEditMode} placeholder="https://script.google.com/..." className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+            {form.externalFormUrl ? <p className="text-xs text-surface-muted">Requester links will open this URL instead of the in-app form route.</p> : null}
             <Field label="Short description"><textarea name="description" rows={3} defaultValue={form.description} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
           </>
         ) : null}
@@ -438,8 +444,8 @@ function SectionToggle({ title, open, onToggle }: { title: string; open: boolean
   );
 }
 
-function isLiveForRequesters(form: { status: string; visibility: string; availability: string; isImplemented: boolean }) {
-  return form.status === "published" && form.visibility === "everyone" && form.availability === "available" && form.isImplemented;
+function isLiveForRequesters(form: { status: string; visibility: string; availability: string; isImplemented: boolean; externalFormUrl?: string }) {
+  return form.status === "published" && form.visibility === "everyone" && form.availability === "available" && (form.isImplemented || Boolean(String(form.externalFormUrl ?? "").trim()));
 }
 function humanizeStatus(status: string) {
   if (status === "published") return "Published";
