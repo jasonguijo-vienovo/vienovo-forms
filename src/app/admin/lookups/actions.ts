@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
@@ -172,5 +172,18 @@ export async function updateLookup(formData: FormData) {
   await doc.save();
   await resequenceCategoryAlphabetically(String(doc.category));
   await setFlashToast({ tone: "success", message: "Dropdown value updated." });
+  revalidatePath("/admin/lookups");
+}
+
+export async function deleteLookupCategory(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+  const rawCategory = parseCategory(formData.get("category"));
+  const category = await resolveImportedCategoryAlias(rawCategory);
+  const result = await Lookup.deleteMany({ category });
+  await setFlashToast({
+    tone: "success",
+    message: `Deleted ${result.deletedCount ?? 0} value(s) from dropdown group.`,
+  });
   revalidatePath("/admin/lookups");
 }
