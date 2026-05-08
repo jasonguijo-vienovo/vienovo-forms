@@ -3,9 +3,9 @@ import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
 import { ClickDropdown } from "@/components/click-dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { connectMongo } from "@/lib/db/mongo";
-import { isAdminUser } from "@/lib/admin";
-import { getFormLaunchHref, getNavbarForms, isExternalFormLaunch } from "@/lib/form-definitions";
+import { isAdminEmail } from "@/lib/admin";
+import { canAccessApprovals } from "@/lib/approval-access";
+import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
 import { AuditLog } from "@/models/AuditLog";
 import { RequestModel } from "@/models/Request";
@@ -20,7 +20,8 @@ export async function Navbar({
   showSystemActivity?: boolean;
 } = {}) {
   const session = await safeAuth();
-  const showAdmin = await isAdminUser(session?.user?.email);
+  const showAdmin = isAdminEmail(session?.user?.email);
+  const showApprovals = await canAccessApprovals(session?.user?.email);
   const navbarForms = await getNavbarForms();
   const userEmail = session?.user?.email?.toLowerCase() ?? "";
 
@@ -79,17 +80,7 @@ export async function Navbar({
 
         <nav className="hidden sm:flex h-full items-center gap-6 text-sm">
           <NavLink href="/dashboard">Dashboard</NavLink>
-          <Link
-            href="/dashboard#pending-approvals"
-            className="relative flex h-full items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700"
-          >
-            Pending approvals
-            {pendingApprovalsCount > 0 ? (
-              <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
-                {pendingApprovalsCount}
-              </span>
-            ) : null}
-          </Link>
+          {showApprovals ? <NavLink href="/approvals">Approvals</NavLink> : null}
           <NewRequestMenu
             options={navbarForms.map((form) => ({
               href: getFormLaunchHref(form),

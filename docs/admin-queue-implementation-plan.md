@@ -1,380 +1,440 @@
-# Admin Queue Implementation Plan
+# Approver Queue Implementation Plan
 
-## Objective
+## Implementation Status
 
-Turn the current `/admin/requests` page into a scalable operations queue that admins can filter, scan, and navigate without hunting through a long list.
+Implemented on branch `feat/native-form-submit-debug`.
 
-This plan is based on [docs/admin-queue-research.md](/c:/Users/JasonGabrielGuijo/Downloads/vienovo-forms/vienovo-forms/docs/admin-queue-research.md).
+Delivered:
 
-## Success Criteria
+- new approver-only `/approvals` workspace
+- navbar visibility for eligible approvers and admins
+- pending queue plus recently approved and recently rejected sections
+- single-request approve/reject with comment from the queue
+- bulk approve and bulk reject with shared comment support
+- shared approval mutation service reused by the existing request approval page
 
-- Admins can find any request by reference number, requester, form, status, assignee, or date range.
-- Search and filters work against the database result set, not just the rows currently loaded in the browser.
-- Queue state is shareable through the URL.
-- The page shows real queue counts from MongoDB.
-- The table includes enough context to avoid opening multiple detail pages just to identify the right request.
-- The first release improves navigation without requiring a major schema migration.
-- Later releases add queue-specific fields and indexes so performance stays stable as request volume grows.
+Verified:
 
-## Recommended Build Path
+- `npm run typecheck`
+- `npm run build`
 
-## Phase 1: Server-Driven Queue
+Caveats still present in the repo:
 
-Target outcome: admins can reliably find and page through requests.
+- `next lint` is still interactive because ESLint has not been fully configured in this app yet
+- Next warns about multiple `package-lock.json` files when building
+- build logs still show the existing Mongo fallback warning when local Mongo is not running
 
-### Scope
+## Summary
 
-Update the queue to read filter, sort, and pagination state from `searchParams`, query MongoDB on the server, and render only the current page of results.
+Add a dedicated approver workspace for signed-in approvers so they can quickly review and act on requests assigned to them without digging through the general requester dashboard or the admin-only queue.
 
-### User Experience
+This should be an approver-facing page, not a replacement for the existing admin queue.
 
-- Keep the page table-first.
-- Replace client-only filtering with URL-backed controls.
-- Add a compact filter toolbar above the table.
-- Add pagination controls below the table.
-- Keep "Open request" as the primary action.
+## Context
 
-### Filters
+The current app already has several relevant pieces:
 
-Implement these first:
+- Requester dashboard shows a small `Pending approvals` list for the signed-in user.
+- Request detail page already supports approver visibility and shows the full approval chain.
+- Request approval page already supports approve/reject actions for the current approver.
+- Admins already have a read-only `/admin/requests` queue for all requests.
 
-- `q`: reference number, requester name, requester email, form name, form slug
-- `status`: `all`, `pending`, `submitted`, `approved`, `returned`, `rejected`
-- `form`: all form slugs/types
-- `assignee`: current approval actor email, derived from the current approval step at read time for now
-- `from`: submitted date lower bound
-- `to`: submitted date upper bound
-- `limit`: `25`, `50`, `100`
-- `page`: offset page number for the first implementation
+The screenshot brief asks for:
 
-### Sorting
+- a role-based approval page for approvers
+- visibility in the top navbar
+- cards/grid layout
+- sections for to-approve and recently approved
+- request details on click
+- approve/reject/comment actions
+- bulk actions for efficient multi-approval
 
-Implement:
+## Key Finding
 
-- `sort=createdAt`
-- `sort=updatedAt`
-- `direction=asc|desc`
+This repo does not currently have a real session-level `approver` role being assigned in auth.
 
-Default:
+- `src/auth.ts` declares an optional role type, but session population only sets `id`.
+- Access today is mostly determined by:
+  - admin email allowlist via `src/lib/admin.ts`
+  - approver membership inferred from `Request.approvalChain[].approverEmail`
+  - approver definitions stored in `Approver` documents
 
-- `sort=createdAt`
-- `direction=desc`
+So the new page should initially be gated by approver eligibility based on email and request/approver data, not by a new auth role unless we intentionally add one later.
 
-### Data Work
+## Recommended Scope
 
-Update [src/app/admin/requests/page.tsx](/c:/Users/JasonGabrielGuijo/Downloads/vienovo-forms/vienovo-forms/src/app/admin/requests/page.tsx) to:
+### Phase 1
 
-- accept `searchParams`
-- normalize and validate query params
-- build a MongoDB filter
-- fetch one page of rows
-- fetch real total count for active filters
-- fetch status summary counts
-- select `updatedAt`, `approvalChain`, and `currentStep`
-- compute current step and current assignee for display
+Ship a dedicated approver queue page that:
 
-Update [src/app/admin/requests/RequestsClient.tsx](/c:/Users/JasonGabrielGuijo/Downloads/vienovo-forms/vienovo-forms/src/app/admin/requests/RequestsClient.tsx) to:
+- is available to signed-in users whose email appears in active approver data or pending request steps
+- shows requests currently waiting for their action
+- shows recently acted requests for their email
+- links into the existing request detail and request approval pages
+- supports single-request approve/reject/comment using the existing approval action path
 
-- remove local array filtering as the source of truth
-- render controlled filter links/forms that update the URL
-- render pagination metadata
-- display submitted and last updated dates
-- display current step and current assignee
-- include the `submitted` status filter
+### Phase 2
 
-### Suggested Helpers
+Add workflow acceleration:
 
-Create a small local helper file:
+- bulk select
+- bulk approve
+- bulk reject with per-request validation
+- bulk comment / follow-up only if the business process really needs it
 
-- `src/app/admin/requests/query.ts`
+### Phase 3
 
-Use it for:
+If needed, formalize a persistent auth/session role model for `approver`, `processor`, and `admin`.
 
-- parsing search params
-- clamping `limit`
-- validating status and sort values
-- building pagination metadata
-- formatting MongoDB filters
+## Proposed UX
 
-Keep this helper close to the route until it is reused elsewhere.
+### Route
 
-### Acceptance Criteria
+Use a dedicated top-level requester/approver route:
 
-- `/admin/requests?status=pending` shows only pending requests from MongoDB.
-- `/admin/requests?q=<reference>` can find a request outside the latest 75 records.
-- `/admin/requests?form=reimbursement&status=pending` combines filters correctly.
-- `/admin/requests?from=2026-05-01&to=2026-05-05` filters by submitted date.
-- Pagination works with filters preserved in the URL.
-- Reloading the page preserves the queue state.
-- The metric cards show server-derived counts, not counts from the displayed page only.
+- `/approvals`
 
-### Verification
+Why:
 
-Run:
+- easy to expose in the global navbar
+- does not mix with `/admin`
+- matches the mental model of “things waiting for my action”
 
-```powershell
-npm run typecheck
-npm run lint
-```
+Alternative:
 
-Manual checks:
+- `/requests/approvals`
 
-- Open `/admin/requests`.
-- Try each status tab.
-- Search by a known reference number.
-- Combine search plus status.
-- Change page size.
-- Navigate forward and backward through pages.
-- Open a request and return to the filtered queue.
+This is also valid, but `/approvals` is cleaner for navbar usage.
 
-## Phase 2: Scanning And Workflow Speed
+### Navbar
 
-Target outcome: admins can understand the request before opening the full detail page.
+Add a new top-nav item:
 
-### Scope
+- `Approvals`
 
-Improve table readability and add lightweight in-page context.
+Visibility rule:
 
-### User Experience
+- show only when the signed-in email is approver-capable
+
+Recommended helper:
+
+- `canAccessApprovals(email)` in a shared auth/access helper
+
+### Page Sections
+
+Use a dense but clear operations layout:
+
+1. Header
+- title: `Approvals`
+- short description: `Requests waiting for your review and recently completed decisions.`
+- optional count badges
+
+2. Metrics row
+- `Waiting for me`
+- `Approved today`
+- `Rejected today`
+- `Recently completed`
+
+3. Tabs or segmented filters
+- `Needs action`
+- `Recently approved`
+- `Recently rejected`
+- optional `All activity`
+
+4. Main content
+- card grid on wide screens or compact stacked rows on smaller screens
+- each item should show:
+  - reference number
+  - form name
+  - requester
+  - current step / role
+  - submitted date
+  - current status
+  - action buttons
+
+5. Bulk action bar
+- appears only when rows/cards are selected
+
+## Data Model Reuse
+
+Use the existing `RequestModel` fields:
+
+- `referenceNo`
+- `formType`
+- `formSlug`
+- `formName`
+- `submittedBy`
+- `approvalChain`
+- `currentStep`
+- `status`
+- `history`
+- timestamps
+
+### Needs-action query
+
+Requests currently awaiting the signed-in approver:
+
+- `approvalChain` contains a step where:
+  - `approverEmail === userEmail`
+  - `status === "pending"`
+  - `step === currentStep`
+
+### Recently acted query
+
+Requests where the signed-in approver already acted:
+
+- `approvalChain` contains a step where:
+  - `approverEmail === userEmail`
+  - `status in ["approved", "rejected"]`
+
+Sort:
+
+- recent by `actedAt` if present
+- otherwise fall back to `updatedAt`
+
+## Access Control
+
+### Initial rule
+
+Allow access when:
+
+- user is admin, or
+- user email appears in at least one active `Approver` document, or
+- user email appears in at least one request approval step
+
+This is the safest first implementation because it matches current app behavior.
+
+### Future rule
+
+If auth/session roles become real:
+
+- `admin` can access
+- `approver` can access
+- `processor` can optionally access a processor-specific tab or queue
+
+## Implementation Shape
+
+### 1. Shared access helper
+
+Add a helper such as:
+
+- `src/lib/approval-access.ts`
+
+Responsibilities:
+
+- normalize signed-in email
+- determine `canAccessApprovals`
+- optionally return an access summary:
+  - `isAdmin`
+  - `isApprover`
+  - `isProcessor`
+
+### 2. New page
 
 Add:
 
-- sticky filter toolbar
-- age column
-- current step column
-- current assignee column
-- saved view presets
-- row expansion or side drawer for quick detail
+- `src/app/approvals/page.tsx`
 
-Saved view presets:
+Responsibilities:
 
-- `All open`
-- `Pending approval`
-- `Returned`
-- `Waiting more than 3 days`
-- `Travel Booking`
-- `Reimbursement`
-- `Needs processor`
+- require sign-in
+- reject non-approvers
+- load:
+  - needs-action requests
+  - recently acted requests
+  - counts for header metrics
+- render a new client component
 
-### Quick Detail Drawer
+### 3. New client component
 
-Add a client-side drawer in [src/app/admin/requests/RequestsClient.tsx](/c:/Users/JasonGabrielGuijo/Downloads/vienovo-forms/vienovo-forms/src/app/admin/requests/RequestsClient.tsx).
+Add:
 
-The drawer should show:
+- `src/app/approvals/ApprovalsClient.tsx`
 
-- reference number
-- requester name and email
-- form name
-- status
-- submitted date
-- last updated date
-- current step
-- current assignee
-- compact approval chain
-- link to full request detail
+Responsibilities:
 
-Keep the full request detail page as the source of truth.
+- tabs / filters
+- search by reference, requester, or form
+- select one or many requests
+- launch bulk actions
+- navigate to request detail or request approval page
 
-### Acceptance Criteria
+### 4. Shared query helpers
 
-- Admins can inspect approval position without leaving the queue.
-- Preset views update URL state.
-- Toolbar remains reachable while scanning table rows.
-- Drawer can be opened and closed by keyboard.
-- Full request detail remains one click away.
+Add:
 
-### Verification
+- `src/lib/approval-queue.ts`
 
-Run:
+Responsibilities:
 
-```powershell
-npm run typecheck
-npm run lint
-```
+- `getPendingApprovalsForUser(email, options)`
+- `getRecentlyActedApprovalsForUser(email, options)`
+- `getApprovalQueueMetrics(email)`
 
-Manual checks:
+This keeps dashboard, approvals page, and future notifications aligned.
 
-- Check drawer keyboard focus and close behavior.
-- Check desktop table width.
-- Check mobile behavior for horizontal scroll and filter stacking.
-- Check empty state when filters return no results.
+### 5. Navbar integration
 
-## Phase 3: Scale Hardening
+Update:
 
-Target outcome: the queue remains fast when request history grows.
+- `src/components/navbar.tsx`
 
-### Scope
+Add:
 
-Add derived queue fields and queue-shaped indexes.
+- conditional `Approvals` nav item
 
-### Schema Additions
+### 6. Reuse current action pages
 
-Update [src/models/Request.ts](/c:/Users/JasonGabrielGuijo/Downloads/vienovo-forms/vienovo-forms/src/models/Request.ts) with optional fields:
+Do not duplicate approval mutation logic.
 
-- `currentActorEmail`
-- `currentActorName`
-- `currentRole`
-- `queueBucket`
-- `lastActionAt`
-- `lastActionBy`
+Reuse:
 
-Do not store `ageDays`; calculate age at read time.
-
-### Indexes
-
-Add indexes after derived fields exist:
-
-- `{ status: 1, createdAt: -1, _id: -1 }`
-- `{ formSlug: 1, status: 1, createdAt: -1, _id: -1 }`
-- `{ currentActorEmail: 1, status: 1, createdAt: -1, _id: -1 }`
-- `{ queueBucket: 1, createdAt: -1, _id: -1 }`
-
-### Write Path Updates
-
-Update request creation and approval actions so derived queue fields stay current.
-
-Likely files:
-
-- `src/app/forms/travel-booking/actions.ts`
-- `src/app/forms/cash-advance/actions.ts`
-- `src/app/forms/reimbursement/actions.ts`
-- `src/app/forms/[slug]/actions.ts`
+- `src/app/requests/[ref]/approve/page.tsx`
 - `src/app/requests/[ref]/approve/actions.ts`
-- `src/lib/request-mirror.ts`
 
-### Backfill
+The new queue should link into that flow first.
 
-Add a one-time script to backfill queue fields from existing `approvalChain`, `currentStep`, `status`, and `history`.
+## Bulk Actions
 
-Suggested script:
+### Recommended first bulk action
 
-- `scripts/backfill-request-queue-fields.ts`
+Implement bulk approve first.
 
-Backfill logic:
+Why:
 
-- if status is `pending`, use the approval step matching `currentStep`
-- if no approval chain exists and status is `submitted`, set `queueBucket=submitted`
-- if status is terminal, clear current actor fields and set bucket from status
-- use latest history item for `lastActionAt` and `lastActionBy` when available
+- simplest and least ambiguous
+- easiest to validate against current-step ownership
+- most likely to deliver immediate value
 
-### Acceptance Criteria
+### Validation rules
 
-- Queue filters by current assignee using scalar indexed fields.
-- Existing requests have queue fields after backfill.
-- New requests and approval actions keep queue fields current.
-- Queue query code no longer needs to inspect full `approvalChain` for normal filtering.
+For each selected request:
 
-### Verification
+- request still exists
+- current step is still pending
+- current approver email matches signed-in user
+- request has not already been approved/rejected by someone else
 
-Run:
+### Recommended behavior
 
-```powershell
-npm run typecheck
-npm run lint
-```
+- process each request individually in a loop
+- collect successes and failures
+- show summary toast/result panel:
+  - `8 approved`
+  - `2 skipped because they were no longer assigned to you`
 
-Database checks:
+### Bulk reject
 
-- Run backfill against local/dev data.
-- Compare a sample of request detail pages against queue row fields.
-- Verify pending requests show the correct current actor.
-- Verify approved/rejected requests do not show stale current actors.
+Only add when product behavior is settled.
 
-## Phase 4: Cursor Pagination And Operations Extras
+Questions to settle first:
 
-Target outcome: deep queue navigation does not slow down as data grows.
+- one shared rejection comment for all?
+- separate reason per request?
+- allowed for imported and native forms equally?
 
-### Scope
+### Bulk comment
 
-Replace offset pagination with cursor pagination for the default newest-first queue and add operations conveniences.
+This should likely wait.
 
-### Cursor Pagination
+Comment semantics are less clear than approval/rejection and may overlap with request history and notification flow.
 
-Use:
+## Suggested UI States
 
-- `createdAt desc`
-- `_id desc`
+### Empty states
 
-URL shape:
+- No items needing action
+- No recently approved items
+- No results for current filters
 
-- `?status=pending&limit=50`
-- `?status=pending&limit=50&after=<cursor>`
-- `?status=pending&limit=50&before=<cursor>`
+### Loading states
 
-### Optional Enhancements
+- skeleton metrics
+- skeleton cards/rows
 
-Add only if admins need them:
+### Conflict states
 
-- server-side CSV export for filtered results
-- column visibility settings
-- "copy link to filtered view"
-- bulk status review tools
-- saved custom views per admin
+- request already acted on
+- request reassigned to another approver
+- request no longer pending
 
-### Acceptance Criteria
+## Technical Risks
 
-- Next and previous navigation stays fast for large result sets.
-- Cursor state preserves all active filters.
-- Export uses server-side filtering and does not depend on visible rows.
+### 1. No true approver role in session
 
-## Implementation Order
-
-1. Add `src/app/admin/requests/query.ts`.
-2. Refactor `page.tsx` to use server-side query params.
-3. Refactor `RequestsClient.tsx` controls to update URL state.
-4. Add pagination UI.
-5. Add current step, current assignee, submitted, and updated columns.
-6. Add real status summary counts.
-7. Add sticky toolbar and saved presets.
-8. Add quick-detail drawer.
-9. Add derived queue fields and indexes.
-10. Backfill existing requests.
-11. Switch from offset pagination to cursor pagination.
-
-## Risks And Mitigations
-
-### Risk: search becomes slow
+The screenshot asks for role-based access, but current auth is mostly email-based.
 
 Mitigation:
 
-- Start with exact reference search and case-insensitive regex for small text fields.
-- Add indexed normalized search fields later if request volume grows enough to require it.
+- phase 1 uses email/data-driven access
+- phase 2 can formalize session roles if needed
 
-### Risk: current assignee is expensive to query
+### 2. Approval chain consistency
 
-Mitigation:
-
-- Phase 1 can compute assignee for display.
-- Phase 3 should add `currentActorEmail` for efficient filtering.
-
-### Risk: derived queue fields become stale
+Bulk actions can race with another approver or admin.
 
 Mitigation:
 
-- Centralize queue-field derivation in one helper.
-- Call that helper from create, edit, approve, reject, and backfill paths.
-- Add a small verification script that detects mismatches between `approvalChain` and derived fields.
+- re-check current step at mutation time
+- return per-request success/failure results
 
-### Risk: admins expect reporting from the queue
+### 3. Imported form differences
+
+Some imported forms may have approval chains that differ from native ones.
 
 Mitigation:
 
-- Keep this page focused on operational work.
-- Add export/reporting as a separate server-side action if needed.
+- keep page list/query logic generic
+- keep action execution routed through current request approval logic
 
-## First Sprint Recommendation
+### 4. Navbar clutter
 
-Build Phase 1 first.
+Top nav already includes dashboard, new request, and helpdesk.
 
-This gives the biggest immediate relief because it removes the latest-75 limit, makes search global, and gives admins reliable filters without taking on schema migration risk yet.
+Mitigation:
 
-Suggested first sprint task list:
+- add `Approvals` only for eligible users
+- place it near `Dashboard`
 
-- Implement URL-backed query parsing.
-- Implement server-side `q`, `status`, `form`, date, and limit filters.
-- Add offset pagination with preserved filters.
-- Add real counts.
-- Add `submitted`, `updated`, current step, and current assignee columns.
-- Keep styling consistent with existing admin UI components.
+## Recommended Order
 
-Once Phase 1 is stable, move to Phase 2 for the drawer and saved views.
+1. Add access helper for approver eligibility.
+2. Add query helpers for pending and recently acted approvals.
+3. Add `/approvals` page and client UI.
+4. Add navbar item.
+5. Reuse existing request detail and approve routes from queue cards.
+6. Add bulk approve only.
+7. Add audit/history notes for bulk actions if needed.
+
+## File Targets
+
+- `src/lib/approval-access.ts`
+- `src/lib/approval-queue.ts`
+- `src/app/approvals/page.tsx`
+- `src/app/approvals/ApprovalsClient.tsx`
+- `src/components/navbar.tsx`
+
+Potential later updates:
+
+- `src/app/dashboard/page.tsx`
+  - optionally make `Pending approvals` point to `/approvals`
+- `src/app/requests/[ref]/approve/actions.ts`
+  - optionally extract reusable approve/reject service logic for bulk processing
+
+## Open Questions
+
+1. Should processors appear in the same queue, or should processor work stay separate?
+2. Should recently approved show only the user’s own actions, or all actions from chains they belong to?
+3. Is bulk reject required in v1, or is bulk approve enough?
+4. Should the queue default to cards, or should it default to compact table rows with an optional card mode?
+5. Should the navbar item say `Approvals` or `My Approvals`?
+
+## Recommendation
+
+Build `/approvals` as a dedicated approver workspace using current request data and current approve/reject actions.
+
+Do not introduce a brand-new approval engine.
+Do not merge it into `/admin/requests`.
+Do not block on adding a true auth role first.
+
+That gives the fastest path to a useful, low-risk feature while staying aligned with the current architecture.
