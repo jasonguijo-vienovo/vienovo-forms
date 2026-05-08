@@ -130,46 +130,55 @@ export default function LookupsClient(props: {
                   </summary>
 
                   <div className="mt-4">
-                    <form action={addLookup} className="mb-4">
-                      <PendingFormState className="flex gap-2">
-                        <input type="hidden" name="category" value={cat} />
-                        <input
-                          type="text"
-                          name="value"
-                          placeholder="Add a new value..."
-                          required
-                          className="field-input flex-1"
-                        />
-                        <PendingSubmitButton
-                          type="submit"
-                          idleLabel="Add value"
-                          pendingLabel="Adding..."
-                          className="btn-primary"
-                        />
-                      </PendingFormState>
-                    </form>
-                    <form action={addLookupBulk} className="mb-4">
-                      <PendingFormState className="space-y-2">
-                        <input type="hidden" name="category" value={cat} />
-                        <textarea
-                          name="bulkValues"
-                          rows={5}
-                          placeholder={"Bulk add (one value per line)\nExample:\nOption A\nOption B\nOption C"}
-                          className="field-input font-mono text-xs"
-                        />
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs text-surface-muted">
-                            Existing values are skipped automatically.
-                          </p>
-                          <PendingSubmitButton
-                            type="submit"
-                            idleLabel="Bulk add"
-                            pendingLabel="Adding..."
-                            className="btn-secondary"
-                          />
-                        </div>
-                      </PendingFormState>
-                    </form>
+                    <div className="mb-4 grid gap-3 lg:grid-cols-2">
+                      <details className="rounded border border-surface-border bg-slate-50 p-3" open>
+                        <summary className="text-sm font-semibold text-surface-text">Bulk add</summary>
+                        <form action={addLookupBulk} className="mt-3">
+                          <PendingFormState className="space-y-2">
+                            <input type="hidden" name="category" value={cat} />
+                            <textarea
+                              name="bulkValues"
+                              rows={6}
+                              placeholder={"One value per line\nExample:\nOption A\nOption B\nOption C"}
+                              className="field-input font-mono text-xs"
+                            />
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-surface-muted">Duplicates are auto-skipped.</p>
+                              <PendingSubmitButton
+                                type="submit"
+                                idleLabel="Bulk add"
+                                pendingLabel="Adding..."
+                                className="btn-secondary"
+                              />
+                            </div>
+                          </PendingFormState>
+                        </form>
+                      </details>
+
+                      <details className="rounded border border-surface-border bg-slate-50 p-3" open>
+                        <summary className="text-sm font-semibold text-surface-text">Single add value</summary>
+                        <form action={addLookup} className="mt-3">
+                          <PendingFormState className="space-y-2">
+                            <input type="hidden" name="category" value={cat} />
+                            <input
+                              type="text"
+                              name="value"
+                              placeholder="Add one value..."
+                              required
+                              className="field-input w-full"
+                            />
+                            <div className="flex justify-end">
+                              <PendingSubmitButton
+                                type="submit"
+                                idleLabel="Add value"
+                                pendingLabel="Adding..."
+                                className="btn-primary"
+                              />
+                            </div>
+                          </PendingFormState>
+                        </form>
+                      </details>
+                    </div>
 
                     {!itemsByCategory[cat] || itemsByCategory[cat].length === 0 ? (
                       <AdminEmptyState
