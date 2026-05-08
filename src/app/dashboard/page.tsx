@@ -46,6 +46,8 @@ export default async function DashboardPage({
     page?: string;
     pq?: string;
     ppage?: string;
+    hq?: string;
+    hpage?: string;
   }>;
 }) {
   const session = await safeAuth();
@@ -58,6 +60,8 @@ export default async function DashboardPage({
   const page = Math.max(1, Number.parseInt(String(resolvedSearchParams?.page ?? "1"), 10) || 1);
   const pendingQuery = String(resolvedSearchParams?.pq ?? "").trim();
   const pendingPage = Math.max(1, Number.parseInt(String(resolvedSearchParams?.ppage ?? "1"), 10) || 1);
+  const historyQuery = String(resolvedSearchParams?.hq ?? "").trim();
+  const historyPage = Math.max(1, Number.parseInt(String(resolvedSearchParams?.hpage ?? "1"), 10) || 1);
   const pageSize = 5;
   const forms = await getCatalogForms({
     allowFallback: true,
@@ -76,21 +80,47 @@ export default async function DashboardPage({
       { formSlug: { $regex: q, $options: "i" } },
     ];
   }
-  const pendingFilter: Record<string, unknown> = {
-    status: "pending",
+  const pendingOwnershipFilter = {
     $or: [
       { currentActorEmail: userEmail },
       { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
     ],
   };
+  const pendingFilter: Record<string, unknown> = {
+    status: "pending",
+    ...pendingOwnershipFilter,
+  };
   if (pendingQuery) {
-    pendingFilter.$or = [
-      { referenceNo: { $regex: pendingQuery, $options: "i" } },
-      { formName: { $regex: pendingQuery, $options: "i" } },
-      { formSlug: { $regex: pendingQuery, $options: "i" } },
+    pendingFilter.$and = [
+      pendingOwnershipFilter,
+      {
+        $or: [
+          { referenceNo: { $regex: pendingQuery, $options: "i" } },
+          { formName: { $regex: pendingQuery, $options: "i" } },
+          { formSlug: { $regex: pendingQuery, $options: "i" } },
+        ],
+      },
     ];
   }
-  const [myRequests, pendingApprovals, myRequestCount, pendingApprovalsCount] = await Promise.all([
+
+  const approvalHistoryBase = {
+    status: { $in: ["approved", "rejected", "returned"] },
+    approvalChain: { $elemMatch: { approverEmail: userEmail } },
+  };
+  const approvalHistoryFilter: Record<string, unknown> = { ...approvalHistoryBase };
+  if (historyQuery) {
+    approvalHistoryFilter.$and = [
+      approvalHistoryBase,
+      {
+        $or: [
+          { referenceNo: { $regex: historyQuery, $options: "i" } },
+          { formName: { $regex: historyQuery, $options: "i" } },
+          { formSlug: { $regex: historyQuery, $options: "i" } },
+        ],
+      },
+    ];
+  }
+  const [myRequests, pendingApprovals, historyApprovals, myRequestCount, pendingApprovalsCount, historyApprovalsCount] = await Promise.all([
     RequestModel.find(requestFilter)
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * pageSize)
@@ -125,8 +155,23 @@ export default async function DashboardPage({
         currentActorEmail: 1,
       })
       .lean(),
+    RequestModel.find(approvalHistoryFilter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((historyPage - 1) * pageSize)
+      .limit(pageSize)
+      .select({
+        _id: 1,
+        referenceNo: 1,
+        status: 1,
+        createdAt: 1,
+        formType: 1,
+        formName: 1,
+        formSlug: 1,
+      })
+      .lean(),
     RequestModel.countDocuments({ "submittedBy.email": userEmail }),
     RequestModel.countDocuments(pendingFilter),
+    RequestModel.countDocuments(approvalHistoryFilter),
   ]);
   const visibleRequests = myRequests;
   const totalPages = Math.max(1, Math.ceil(myRequestCount / pageSize));
@@ -136,6 +181,9 @@ export default async function DashboardPage({
   const pendingHasPrevPage = pendingPage > 1;
   const pendingHasNextPage = pendingPage < pendingTotalPages;
   const visiblePendingApprovals = pendingApprovals;
+  const historyTotalPages = Math.max(1, Math.ceil(historyApprovalsCount / pageSize));
+  const historyHasPrevPage = historyPage > 1;
+  const historyHasNextPage = historyPage < historyTotalPages;
 
   return (
     <>
@@ -175,7 +223,7 @@ export default async function DashboardPage({
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <Panel title="Recent requests" description="Latest forms you submitted.">
             <div className="mb-4 flex flex-col gap-2">
               <form className="flex flex-col gap-2 sm:flex-row" method="get">
@@ -279,6 +327,49 @@ export default async function DashboardPage({
             </div>
           </Panel>
           </div>
+          <Panel title="Approval history" description="Requests you handled already.">
+            <div className="mb-4 flex flex-col gap-2">
+              <form className="flex flex-col gap-2 sm:flex-row" method="get">
+                <input type="text" name="hq" defaultValue={historyQuery} placeholder="Search approval history" className="field-input sm:max-w-xs" />
+                <button type="submit" className="btn-secondary">Search</button>
+              </form>
+              <span className="text-xs text-surface-muted">Total history: {historyApprovalsCount}</span>
+            </div>
+            {historyApprovals.length > 0 ? (
+              <div className="divide-y divide-surface-border">
+                {historyApprovals.map((request) => (
+                  <RequestRow key={String(request._id)} request={request} />
+                ))}
+              </div>
+            ) : (
+              <EmptyState message="No approval history yet." />
+            )}
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-xs text-surface-muted">
+                Page {historyPage} of {historyTotalPages}
+              </span>
+              <div className="flex gap-2">
+                <SmoothPageLink
+                  href={`/dashboard?hpage=${Math.max(1, historyPage - 1)}${historyQuery ? `&hq=${encodeURIComponent(historyQuery)}` : ""}`}
+                  disabled={!historyHasPrevPage}
+                  aria-disabled={!historyHasPrevPage}
+                  className={`btn-secondary ${historyHasPrevPage ? "" : "pointer-events-none opacity-50"}`}
+                  direction="previous"
+                >
+                  Previous
+                </SmoothPageLink>
+                <SmoothPageLink
+                  href={`/dashboard?hpage=${Math.min(historyTotalPages, historyPage + 1)}${historyQuery ? `&hq=${encodeURIComponent(historyQuery)}` : ""}`}
+                  disabled={!historyHasNextPage}
+                  aria-disabled={!historyHasNextPage}
+                  className={`btn-secondary ${historyHasNextPage ? "" : "pointer-events-none opacity-50"}`}
+                  direction="next"
+                >
+                  Next
+                </SmoothPageLink>
+              </div>
+            </div>
+          </Panel>
         </section>
       </main>
     </>
