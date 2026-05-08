@@ -26,12 +26,13 @@ export async function Navbar({
 
   let dashboardNotifications: Array<{ referenceNo: string; status: string; updatedAt: string }> = [];
   let systemItems: Array<{ action: string; target: string; createdAt: string }> = [];
+  let pendingApprovalsCount = 0;
   const checkedAt = new Date().toISOString();
 
   if (showAdmin && userEmail) {
     try {
       await connectMongo();
-      const [requests, audits] = await Promise.all([
+      const [requests, audits, pendingCount] = await Promise.all([
         RequestModel.find({ "submittedBy.email": userEmail })
           .sort({ updatedAt: -1 })
           .limit(8)
@@ -42,6 +43,13 @@ export async function Navbar({
           .limit(8)
           .select({ action: 1, targetType: 1, targetId: 1, createdAt: 1 })
           .lean(),
+        RequestModel.countDocuments({
+          status: "pending",
+          $or: [
+            { currentActorEmail: userEmail },
+            { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
+          ],
+        }),
       ]);
 
       dashboardNotifications = requests.map((row: any) => ({
@@ -54,9 +62,11 @@ export async function Navbar({
         target: `${String(row.targetType || "")}:${String(row.targetId || "")}`.replace(/:$/, ""),
         createdAt: new Date(row.createdAt).toISOString(),
       }));
+      pendingApprovalsCount = Number(pendingCount ?? 0);
     } catch {
       dashboardNotifications = [];
       systemItems = [];
+      pendingApprovalsCount = 0;
     }
   }
 
@@ -69,6 +79,17 @@ export async function Navbar({
 
         <nav className="hidden sm:flex h-full items-center gap-6 text-sm">
           <NavLink href="/dashboard">Dashboard</NavLink>
+          <Link
+            href="/dashboard#pending-approvals"
+            className="relative flex h-full items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700"
+          >
+            Pending approvals
+            {pendingApprovalsCount > 0 ? (
+              <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                {pendingApprovalsCount}
+              </span>
+            ) : null}
+          </Link>
           <NewRequestMenu
             options={navbarForms.map((form) => ({
               href: getFormLaunchHref(form),

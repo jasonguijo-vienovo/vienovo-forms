@@ -12,7 +12,6 @@
 } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Types } from "mongoose";
 import { Navbar } from "@/components/navbar";
 import { SmoothPageLink } from "@/components/smooth-page-link";
 import { connectMongo } from "@/lib/db/mongo";
@@ -46,7 +45,7 @@ export default async function DashboardPage({
     status?: string;
     page?: string;
     pq?: string;
-    pcursor?: string;
+    ppage?: string;
   }>;
 }) {
   const session = await safeAuth();
@@ -58,7 +57,7 @@ export default async function DashboardPage({
   const statusFilter = String(resolvedSearchParams?.status ?? "all").trim().toLowerCase();
   const page = Math.max(1, Number.parseInt(String(resolvedSearchParams?.page ?? "1"), 10) || 1);
   const pendingQuery = String(resolvedSearchParams?.pq ?? "").trim();
-  const pendingCursor = String(resolvedSearchParams?.pcursor ?? "").trim();
+  const pendingPage = Math.max(1, Number.parseInt(String(resolvedSearchParams?.ppage ?? "1"), 10) || 1);
   const pageSize = 5;
   const forms = await getCatalogForms({
     allowFallback: true,
@@ -78,7 +77,11 @@ export default async function DashboardPage({
     ];
   }
   const pendingFilter: Record<string, unknown> = {
-    approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
+    status: "pending",
+    $or: [
+      { currentActorEmail: userEmail },
+      { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
+    ],
   };
   if (pendingQuery) {
     pendingFilter.$or = [
@@ -87,18 +90,6 @@ export default async function DashboardPage({
       { formSlug: { $regex: pendingQuery, $options: "i" } },
     ];
   }
-  if (pendingCursor) {
-    const [pendingCursorDateRaw, pendingCursorIdRaw] = pendingCursor.split("|");
-    const pendingCursorDate = new Date(pendingCursorDateRaw || "");
-    if (!Number.isNaN(pendingCursorDate.getTime()) && Types.ObjectId.isValid(pendingCursorIdRaw || "")) {
-      pendingFilter.$or = [
-        ...(Array.isArray(pendingFilter.$or) ? pendingFilter.$or : []),
-        { createdAt: { $lt: pendingCursorDate } },
-        { createdAt: pendingCursorDate, _id: { $lt: new Types.ObjectId(pendingCursorIdRaw) } },
-      ];
-    }
-  }
-
   const [myRequests, pendingApprovals, myRequestCount, pendingApprovalsCount] = await Promise.all([
     RequestModel.find(requestFilter)
       .sort({ createdAt: -1, _id: -1 })
@@ -119,7 +110,8 @@ export default async function DashboardPage({
       .lean(),
     RequestModel.find(pendingFilter)
       .sort({ createdAt: -1, _id: -1 })
-      .limit(pageSize + 1)
+      .skip((pendingPage - 1) * pageSize)
+      .limit(pageSize)
       .select({
         _id: 1,
         referenceNo: 1,
@@ -134,21 +126,16 @@ export default async function DashboardPage({
       })
       .lean(),
     RequestModel.countDocuments({ "submittedBy.email": userEmail }),
-    RequestModel.countDocuments({
-      approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } },
-    }),
+    RequestModel.countDocuments(pendingFilter),
   ]);
   const visibleRequests = myRequests;
   const totalPages = Math.max(1, Math.ceil(myRequestCount / pageSize));
   const hasPrevPage = page > 1;
   const hasNextPage = page < totalPages;
-  const pendingHasMore = pendingApprovals.length > pageSize;
-  const visiblePendingApprovals = pendingHasMore ? pendingApprovals.slice(0, pageSize) : pendingApprovals;
-  const pendingLastVisible = visiblePendingApprovals[visiblePendingApprovals.length - 1];
-  const pendingNextCursor =
-    pendingHasMore && pendingLastVisible?.createdAt && pendingLastVisible?._id
-      ? `${new Date(pendingLastVisible.createdAt).toISOString()}|${String(pendingLastVisible._id)}`
-      : "";
+  const pendingTotalPages = Math.max(1, Math.ceil(pendingApprovalsCount / pageSize));
+  const pendingHasPrevPage = pendingPage > 1;
+  const pendingHasNextPage = pendingPage < pendingTotalPages;
+  const visiblePendingApprovals = pendingApprovals;
 
   return (
     <>
@@ -241,6 +228,7 @@ export default async function DashboardPage({
               </div>
             </div>
           </Panel>
+          <div id="pending-approvals">
           <Panel title="Pending approvals" description="Requests waiting for your action.">
             <div className="mb-4 flex flex-col gap-2">
               <form className="flex flex-col gap-2 sm:flex-row" method="get">
@@ -264,17 +252,33 @@ export default async function DashboardPage({
             ) : (
               <EmptyState message="No pending approvals." />
             )}
-            {pendingHasMore && pendingNextCursor ? (
-              <div className="mt-4">
-                <Link
-                  href={`/dashboard?pcursor=${encodeURIComponent(pendingNextCursor)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
-                  className="btn-secondary"
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-xs text-surface-muted">
+                Page {pendingPage} of {pendingTotalPages}
+              </span>
+              <div className="flex gap-2">
+                <SmoothPageLink
+                  href={`/dashboard?ppage=${Math.max(1, pendingPage - 1)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
+                  disabled={!pendingHasPrevPage}
+                  aria-disabled={!pendingHasPrevPage}
+                  className={`btn-secondary ${pendingHasPrevPage ? "" : "pointer-events-none opacity-50"}`}
+                  direction="previous"
                 >
-                  Load more
-                </Link>
+                  Previous
+                </SmoothPageLink>
+                <SmoothPageLink
+                  href={`/dashboard?ppage=${Math.min(pendingTotalPages, pendingPage + 1)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
+                  disabled={!pendingHasNextPage}
+                  aria-disabled={!pendingHasNextPage}
+                  className={`btn-secondary ${pendingHasNextPage ? "" : "pointer-events-none opacity-50"}`}
+                  direction="next"
+                >
+                  Next
+                </SmoothPageLink>
               </div>
-            ) : null}
+            </div>
           </Panel>
+          </div>
         </section>
       </main>
     </>
