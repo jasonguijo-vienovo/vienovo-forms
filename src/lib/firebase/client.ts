@@ -1,15 +1,18 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 
-function readPublicEnv(name: string): string {
-  return String(process.env[name] ?? "").trim();
-}
+const firebaseWebConfig = {
+  apiKey: String(process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "").trim(),
+  authDomain: String(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "").trim(),
+  projectId: String(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "").trim(),
+  appId: String(process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "").trim(),
+  storageBucket: String(process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "").trim(),
+  messagingSenderId: String(process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "").trim(),
+  measurementId: String(process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID ?? "").trim(),
+};
 
 function getFirebaseWebConfig() {
-  const apiKey = readPublicEnv("NEXT_PUBLIC_FIREBASE_API_KEY");
-  const authDomain = readPublicEnv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN");
-  const projectId = readPublicEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
-  const appId = readPublicEnv("NEXT_PUBLIC_FIREBASE_APP_ID");
+  const { apiKey, authDomain, projectId, appId } = firebaseWebConfig;
 
   if (!apiKey || !authDomain || !projectId || !appId) {
     throw new Error("Firebase web configuration is incomplete.");
@@ -20,18 +23,18 @@ function getFirebaseWebConfig() {
     authDomain,
     projectId,
     appId,
-    storageBucket: readPublicEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET") || undefined,
-    messagingSenderId: readPublicEnv("NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID") || undefined,
-    measurementId: readPublicEnv("NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID") || undefined,
+    storageBucket: firebaseWebConfig.storageBucket || undefined,
+    messagingSenderId: firebaseWebConfig.messagingSenderId || undefined,
+    measurementId: firebaseWebConfig.measurementId || undefined,
   };
 }
 
 export function isFirebaseWebConfigured(): boolean {
   return Boolean(
-    readPublicEnv("NEXT_PUBLIC_FIREBASE_API_KEY") &&
-      readPublicEnv("NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN") &&
-      readPublicEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID") &&
-      readPublicEnv("NEXT_PUBLIC_FIREBASE_APP_ID"),
+    firebaseWebConfig.apiKey &&
+      firebaseWebConfig.authDomain &&
+      firebaseWebConfig.projectId &&
+      firebaseWebConfig.appId,
   );
 }
 
