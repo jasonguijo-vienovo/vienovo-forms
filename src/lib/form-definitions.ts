@@ -227,12 +227,9 @@ export async function syncBuiltInForms() {
           $setOnInsert: {
             slug: form.slug,
             source: form.source,
-          },
-          $set: {
             name: form.name,
             description: form.description,
             routePath: form.routePath,
-            source: form.source,
             status: form.status,
             visibility: form.visibility,
             availability: form.availability,
