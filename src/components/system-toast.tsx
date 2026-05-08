@@ -3,14 +3,62 @@
 import { useEffect, useState } from "react";
 import { FLASH_TOAST_COOKIE, type FlashToast } from "@/lib/flash-shared";
 
+function normalizeToast(input: unknown): FlashToast | null {
+  if (!input || typeof input !== "object") return null;
+  const tone = (input as { tone?: unknown }).tone;
+  const message = (input as { message?: unknown }).message;
+  if ((tone !== "success" && tone !== "error") || typeof message !== "string" || !message.trim()) {
+    return null;
+  }
+  return {
+    tone,
+    message: message.trim().slice(0, 240),
+    persistent: Boolean((input as { persistent?: unknown }).persistent),
+  };
+}
+
+function clearFlashCookie() {
+  document.cookie = `${FLASH_TOAST_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
+function readFlashCookie() {
+  const prefix = `${FLASH_TOAST_COOKIE}=`;
+  const raw = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length);
+
+  if (!raw) return null;
+
+  try {
+    return normalizeToast(JSON.parse(decodeURIComponent(raw)));
+  } catch {
+    return null;
+  }
+}
+
 export function SystemToast({ initialToast }: { initialToast: FlashToast | null }) {
   const [toast, setToast] = useState(initialToast);
   const [secondsLeft, setSecondsLeft] = useState(5);
 
   useEffect(() => {
     if (!initialToast) return;
-    document.cookie = `${FLASH_TOAST_COOKIE}=; path=/; max-age=0; samesite=lax`;
+    clearFlashCookie();
   }, [initialToast]);
+
+  useEffect(() => {
+    function showFlashCookie() {
+      const nextToast = readFlashCookie();
+      if (!nextToast) return;
+      setToast(nextToast);
+      clearFlashCookie();
+    }
+
+    showFlashCookie();
+    const timer = window.setInterval(showFlashCookie, 500);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;

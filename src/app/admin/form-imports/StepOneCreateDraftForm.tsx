@@ -59,8 +59,8 @@ export function StepOneCreateDraftForm({ action }: StepOneCreateDraftFormProps) 
     >
       <PendingFormState className="space-y-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Form name" required><input name="name" required className="field-input" /></Field>
-          <Field label="Suggested form ID"><input name="slug" className="field-input" /></Field>
+          <Field label="Form name"><input name="name" className="field-input" placeholder="Required only when saving one pasted form" /></Field>
+          <Field label="Suggested form ID"><input name="slug" className="field-input" placeholder="Optional for one form; batch uses file names" /></Field>
         </div>
         <Field label="Spreadsheet ID"><input name="spreadsheetId" className="field-input" /></Field>
 
@@ -88,7 +88,12 @@ export function StepOneCreateDraftForm({ action }: StepOneCreateDraftFormProps) 
               />
             </Field>
           </div>
-          <p className="mt-2 text-xs text-surface-muted">Max file size: {MAX_FILE_SIZE_MB} MB per file for fast draft uploads.</p>
+          <div className="mt-3 space-y-1 text-xs text-surface-muted">
+            <p>For multiple forms, upload one HTML file per form. The form ID comes from the HTML file name.</p>
+            <p>Use one shared `code.gs` for all forms, or name scripts to match each HTML file, like `leave-request.html` and `leave-request.gs`.</p>
+            <p>Dropdowns auto-detect when a sheet tab or column header matches the form field name or label, ignoring spaces, dashes, and case.</p>
+            <p>Max file size: {MAX_FILE_SIZE_MB} MB per file for fast draft uploads.</p>
+          </div>
         </details>
 
         <details className="rounded-md border border-surface-border bg-slate-50 p-4">

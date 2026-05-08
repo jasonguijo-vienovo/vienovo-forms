@@ -17,7 +17,7 @@ import {
   updateImportStatus,
 } from "@/lib/forms/import-registry-service";
 import { syncImportedLookupsForImport } from "@/lib/imported-lookups";
-import { parseSpreadsheetBindings } from "@/lib/imported-forms";
+import { parseImportedFormHtml, parseSpreadsheetBindings } from "@/lib/imported-forms";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 
 const FORM_IMPORTS_PATH = "/admin/form-imports";
@@ -56,6 +56,52 @@ async function readMultipleTextInput(
   return readTextInput(formData, fallbackSingleFileKey, textKey);
 }
 
+async function readUploadedTextFiles(formData: FormData, fileKey: string) {
+  const files = formData.getAll(fileKey).filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  return Promise.all(files.map(async (file) => ({ name: file.name, text: await file.text() })));
+}
+
+function baseFileName(fileName: string) {
+  return fileName.replace(/\.[^.]+$/, "").trim();
+}
+
+function normalizeFileKey(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function uniqueSlug(slug: string, used: Set<string>) {
+  const base = slug || "imported-form";
+  let next = base;
+  let suffix = 2;
+  while (used.has(next)) {
+    next = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  used.add(next);
+  return next;
+}
+
+function pickScriptForHtml(
+  htmlFileName: string,
+  gsFiles: Array<{ name: string; text: string }>,
+  fallbackSource: string,
+) {
+  if (gsFiles.length === 0) return fallbackSource;
+  if (gsFiles.length === 1) return gsFiles[0].text;
+
+  const htmlKey = normalizeFileKey(baseFileName(htmlFileName));
+  const exact = gsFiles.find((file) => normalizeFileKey(baseFileName(file.name)) === htmlKey);
+  if (exact) return exact.text;
+
+  const partial = gsFiles.find((file) => {
+    const scriptKey = normalizeFileKey(baseFileName(file.name));
+    return scriptKey.includes(htmlKey) || htmlKey.includes(scriptKey);
+  });
+  if (partial) return partial.text;
+
+  return gsFiles.map((file) => `\n\n/* FILE: ${file.name} */\n${file.text}`).join("\n").trim();
+}
+
 function bindingsFromFormData(formData: FormData) {
   const raw = s(formData, "spreadsheetBindings");
   if (!raw) return {};
@@ -91,57 +137,140 @@ export async function createFormImport(formData: FormData) {
     const { email, session } = await requireAdmin();
     await connectMongo();
 
-    const name = s(formData, "name");
-    if (!name) throw new Error("Form name is required.");
-    const requestedSlug = slugifyFormId(s(formData, "slug")) || slugifyFormId(name);
-    const htmlSource = await readMultipleTextInput(formData, "htmlFiles", "htmlFile", "htmlSource");
-    const appsScriptSource = await readMultipleTextInput(formData, "gsFiles", "gsFile", "appsScriptSource");
+    const htmlFiles = await readUploadedTextFiles(formData, "htmlFiles");
+    const gsFiles = await readUploadedTextFiles(formData, "gsFiles");
+    const pastedAppsScriptSource = s(formData, "appsScriptSource");
 
-    if (!htmlSource) {
-      throw new Error("Provide the form index.html source or upload the file.");
+    if (htmlFiles.length > 1) {
+      const usedSlugs = new Set<string>();
+      let savedCount = 0;
+      let replacedCount = 0;
+      const failures: string[] = [];
+
+      for (const htmlFile of htmlFiles) {
+        try {
+          const parsed = parseImportedFormHtml(htmlFile.text);
+          const derivedName =
+            parsed.title && parsed.title !== "Imported Form" ? parsed.title : baseFileName(htmlFile.name);
+          const slug = uniqueSlug(slugifyFormId(baseFileName(htmlFile.name)) || slugifyFormId(derivedName), usedSlugs);
+          const appsScriptSource = pickScriptForHtml(htmlFile.name, gsFiles, pastedAppsScriptSource);
+
+          if (!appsScriptSource) {
+            throw new Error("No matching code.gs source was provided.");
+          }
+
+          const result = await saveImportDraft({
+            name: derivedName,
+            slug,
+            spreadsheetId: s(formData, "spreadsheetId"),
+            spreadsheetBindings: bindingsFromFormData(formData),
+            writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+            responseSheetName: s(formData, "responseSheetName"),
+            htmlSource: htmlFile.text,
+            appsScriptSource,
+            notes: s(formData, "notes"),
+            createdByEmail: email,
+            createdByName: session.user.name ?? email,
+            ensureRegistryEntry: false,
+          });
+
+          savedCount += 1;
+          if (result.replaced) replacedCount += 1;
+          void writeAuditLog({
+            actorEmail: email,
+            action: "save_form_import",
+            targetType: "form-import",
+            targetId: String(result.importRecord._id),
+            correlationId: randomUUID(),
+            after: {
+              slug: result.importRecord.slug,
+              sourceVersion: result.importRecord.sourceVersion,
+              readinessState: result.diagnostics.readinessState,
+            },
+            details: {
+              batch: true,
+              fileName: htmlFile.name,
+              replaced: result.replaced,
+              blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+              warningCount: result.diagnostics.parseDiagnostics.warningCount,
+            },
+          }).catch((auditError) => {
+            console.error("createFormImport batch audit failed:", auditError);
+          });
+        } catch (error) {
+          failures.push(`${htmlFile.name}: ${messageFromError(error)}`);
+        }
+      }
+
+      if (savedCount === 0) {
+        throw new Error(failures[0] || "No import drafts were saved.");
+      }
+
+      await setFlashToast({
+        tone: failures.length > 0 ? "error" : "success",
+        message:
+          failures.length > 0
+            ? `Saved ${savedCount} draft(s), ${failures.length} failed. First: ${failures[0]}`
+            : `Saved ${savedCount} import draft(s)${replacedCount ? `, replaced ${replacedCount}` : ""}.`,
+      });
+    } else {
+      const name = s(formData, "name");
+      const htmlSource = await readMultipleTextInput(formData, "htmlFiles", "htmlFile", "htmlSource");
+      const appsScriptSource = await readMultipleTextInput(formData, "gsFiles", "gsFile", "appsScriptSource");
+      const parsed = htmlSource ? parseImportedFormHtml(htmlSource) : null;
+      const resolvedName =
+        name ||
+        (parsed?.title && parsed.title !== "Imported Form" ? parsed.title : "") ||
+        (htmlFiles[0]?.name ? baseFileName(htmlFiles[0].name) : "");
+      if (!resolvedName) throw new Error("Form name is required.");
+      const requestedSlug = slugifyFormId(s(formData, "slug")) || slugifyFormId(resolvedName);
+
+      if (!htmlSource) {
+        throw new Error("Provide the form index.html source or upload the file.");
+      }
+      if (!appsScriptSource) {
+        throw new Error("Provide the code.gs source or upload the file.");
+      }
+
+      const result = await saveImportDraft({
+        name: resolvedName,
+        slug: requestedSlug,
+        spreadsheetId: s(formData, "spreadsheetId"),
+        spreadsheetBindings: bindingsFromFormData(formData),
+        writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+        responseSheetName: s(formData, "responseSheetName"),
+        htmlSource,
+        appsScriptSource,
+        notes: s(formData, "notes"),
+        createdByEmail: email,
+        createdByName: session.user.name ?? email,
+        ensureRegistryEntry: false,
+      });
+
+      await setFlashToast({
+        tone: "success",
+        message: result.replaced ? `Import draft replaced for ${resolvedName}.` : `Import draft saved for ${resolvedName}.`,
+      });
+      void writeAuditLog({
+        actorEmail: email,
+        action: "save_form_import",
+        targetType: "form-import",
+        targetId: String(result.importRecord._id),
+        correlationId: randomUUID(),
+        after: {
+          slug: result.importRecord.slug,
+          sourceVersion: result.importRecord.sourceVersion,
+          readinessState: result.diagnostics.readinessState,
+        },
+        details: {
+          replaced: result.replaced,
+          blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+          warningCount: result.diagnostics.parseDiagnostics.warningCount,
+        },
+      }).catch((auditError) => {
+        console.error("createFormImport audit failed:", auditError);
+      });
     }
-    if (!appsScriptSource) {
-      throw new Error("Provide the code.gs source or upload the file.");
-    }
-
-    const result = await saveImportDraft({
-      name,
-      slug: requestedSlug,
-      spreadsheetId: s(formData, "spreadsheetId"),
-      spreadsheetBindings: bindingsFromFormData(formData),
-      writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
-      responseSheetName: s(formData, "responseSheetName"),
-      htmlSource,
-      appsScriptSource,
-      notes: s(formData, "notes"),
-      createdByEmail: email,
-      createdByName: session.user.name ?? email,
-      ensureRegistryEntry: false,
-    });
-
-    await setFlashToast({
-      tone: "success",
-      message: result.replaced ? `Import draft replaced for ${name}.` : `Import draft saved for ${name}.`,
-    });
-    void writeAuditLog({
-      actorEmail: email,
-      action: "save_form_import",
-      targetType: "form-import",
-      targetId: String(result.importRecord._id),
-      correlationId: randomUUID(),
-      after: {
-        slug: result.importRecord.slug,
-        sourceVersion: result.importRecord.sourceVersion,
-        readinessState: result.diagnostics.readinessState,
-      },
-      details: {
-        replaced: result.replaced,
-        blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
-        warningCount: result.diagnostics.parseDiagnostics.warningCount,
-      },
-    }).catch((auditError) => {
-      console.error("createFormImport audit failed:", auditError);
-    });
   } catch (error) {
     console.error("createFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });

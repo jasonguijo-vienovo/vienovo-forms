@@ -8,6 +8,10 @@ import { AdminEmptyState, AdminStatusPill } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { createMissingRegistryEntry, deleteFormImport, publishFormImport, syncImportedDropdowns, updateFormImportConfig, updateFormImportStatus } from "./actions";
 
+function normalizeLookupKey(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlugKey, statuses }: any) {
   const [q, setQ] = useState("");
   const [view, setView] = useState<"all"|"needs_registry"|"needs_sync"|"live">("all");
@@ -17,7 +21,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
 
   const filtered = useMemo(() => imports.filter((item: any) => {
     const definition = definitionBySlug[item.slug];
-    const synced = syncedStatsBySlugKey[item.slug] ?? { valueCount: 0 };
+    const synced = syncedStatsBySlugKey[normalizeLookupKey(item.slug)] ?? { valueCount: 0 };
     const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
     const matches = !q || [item.name, item.slug].join(" ").toLowerCase().includes(q.toLowerCase());
     if (!matches) return false;
@@ -56,7 +60,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
             </div>
               {visible.map((item: any) => {
               const definition = definitionBySlug[item.slug];
-              const synced = syncedStatsBySlugKey[item.slug] ?? { valueCount: 0 };
+              const synced = syncedStatsBySlugKey[normalizeLookupKey(item.slug)] ?? { valueCount: 0 };
               const isLive = definition?.status === "published" && definition?.visibility === "everyone" && definition?.availability === "available" && definition?.isImplemented;
                 return <button key={String(item._id)} type="button" onClick={()=>setSelectedId(String(item._id))} className={`w-full border p-4 text-left ${String(item._id)===selectedId?"border-brand-400 ring-1 ring-brand-200":"border-surface-border"}`}>
                 <div className="flex items-center justify-between gap-2">
