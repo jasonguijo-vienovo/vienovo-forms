@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { writeAuditLog } from "@/lib/audit";
 import { connectMongo } from "@/lib/db/mongo";
@@ -37,6 +38,14 @@ function revalidateFormSurfaces() {
   revalidatePath("/admin/lookups");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
+}
+
+function redirectToRegistry(input?: { slug?: string; openSettings?: boolean }) {
+  const params = new URLSearchParams();
+  if (input?.slug) params.set("form", input.slug);
+  if (input?.openSettings) params.set("settings", "open");
+  const query = params.toString();
+  redirect(query ? `/admin/forms?${query}` : "/admin/forms");
 }
 
 export async function updateFormDefinition(formData: FormData) {
@@ -111,6 +120,7 @@ export async function updateFormDefinition(formData: FormData) {
   });
 
   revalidateFormSurfaces();
+  redirectToRegistry({ slug: requestedSlug, openSettings: true });
 }
 
 export async function hideFormDefinition(formData: FormData) {
@@ -148,6 +158,7 @@ export async function hideFormDefinition(formData: FormData) {
   });
 
   revalidateFormSurfaces();
+  redirectToRegistry({ slug: result.after?.slug ?? slug ?? id, openSettings: true });
 }
 
 export async function deleteFormDefinition(formData: FormData) {
@@ -199,4 +210,5 @@ export async function deleteFormDefinition(formData: FormData) {
   }
 
   revalidateFormSurfaces();
+  redirectToRegistry();
 }
