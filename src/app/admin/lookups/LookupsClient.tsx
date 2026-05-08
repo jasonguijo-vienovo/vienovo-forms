@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminStatusPill } from "@/components/admin-ui";
 import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { addLookup, deleteLookup, toggleLookup, updateLookup } from "./actions";
+import { addLookup, addLookupBulk, deleteLookup, toggleLookup, updateLookup } from "./actions";
 
 export type LookupAdminItem = {
   id: string;
@@ -26,6 +27,8 @@ export default function LookupsClient(props: {
   itemsByCategory: Record<string, LookupAdminItem[]>;
 }) {
   const { categoryLabels, groups, itemsByCategory } = props;
+  const router = useRouter();
+  const [isScanning, startScan] = useTransition();
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
   const selectedGroup = groups.find((g) => g.key === selectedGroupKey) ?? groups[0];
@@ -85,14 +88,24 @@ export default function LookupsClient(props: {
               meta={`${visibleCategories.length} of ${selectedGroup.categories.length} dropdown groups shown`}
             >
               <div className="mb-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-surface-muted">
+                    Tip: imported dropdowns can be updated from the importer, then fine-tuned here.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startScan(() => router.refresh())}
+                    disabled={isScanning}
+                    className="btn-secondary"
+                  >
+                    {isScanning ? "Scanning..." : "Scan dropdowns"}
+                  </button>
+                </div>
                 <AdminSearchField
                   value={categoryQuery}
                   onChange={setCategoryQuery}
                   placeholder="Search dropdown groups in this form"
                 />
-                <div className="text-xs text-surface-muted">
-                  Tip: imported dropdowns can be updated from the importer, then fine-tuned here.
-                </div>
               </div>
 
               {visibleCategories.length === 0 ? (
@@ -106,7 +119,6 @@ export default function LookupsClient(props: {
                 <details
                   key={cat}
                   className="border border-surface-border bg-white p-5"
-                  open={idx === 0}
                 >
                   <summary className="flex items-center justify-between cursor-pointer select-none list-none">
                     <div className="flex items-center gap-2">
@@ -134,6 +146,28 @@ export default function LookupsClient(props: {
                           pendingLabel="Adding..."
                           className="btn-primary"
                         />
+                      </PendingFormState>
+                    </form>
+                    <form action={addLookupBulk} className="mb-4">
+                      <PendingFormState className="space-y-2">
+                        <input type="hidden" name="category" value={cat} />
+                        <textarea
+                          name="bulkValues"
+                          rows={5}
+                          placeholder={"Bulk add (one value per line)\nExample:\nOption A\nOption B\nOption C"}
+                          className="field-input font-mono text-xs"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-surface-muted">
+                            Existing values are skipped automatically.
+                          </p>
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Bulk add"
+                            pendingLabel="Adding..."
+                            className="btn-secondary"
+                          />
+                        </div>
                       </PendingFormState>
                     </form>
 
