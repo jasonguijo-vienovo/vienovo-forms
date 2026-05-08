@@ -40,6 +40,13 @@ function revalidateFormSurfaces() {
   revalidatePath("/forms");
 }
 
+function messageFromError(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return "The form registry action could not be completed. Please try again.";
+}
+
 function redirectToRegistry(input?: { slug?: string; openSettings?: boolean }) {
   const params = new URLSearchParams();
   if (input?.slug) params.set("form", input.slug);
@@ -49,166 +56,192 @@ function redirectToRegistry(input?: { slug?: string; openSettings?: boolean }) {
 }
 
 export async function updateFormDefinition(formData: FormData) {
-  const { email } = await requireAdmin();
-  await connectMongo();
-
   const id = s(formData, "id");
   const slug = s(formData, "slug");
-  if (!id && !slug) return;
-
   const status = s(formData, "status") as FormDefinitionStatus;
   const visibility = s(formData, "visibility") as FormDefinitionVisibility;
   const availability = s(formData, "availability") as FormDefinitionAvailability;
   const requestedSlug = slugifyFormId(s(formData, "newSlug")) || slug;
 
-  if (!FORM_DEFINITION_STATUSES.includes(status)) {
-    throw new Error(`Invalid status: ${status}`);
-  }
-  if (!FORM_DEFINITION_VISIBILITIES.includes(visibility)) {
-    throw new Error(`Invalid visibility: ${visibility}`);
-  }
-  if (!FORM_DEFINITION_AVAILABILITIES.includes(availability)) {
-    throw new Error(`Invalid availability: ${availability}`);
-  }
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
 
-  const result = await updateFormDefinitionSettings({
-    id,
-    slug,
-    name: s(formData, "name"),
-    description: s(formData, "description"),
-    requestedSlug,
-    routePath: s(formData, "routePath"),
-    notes: s(formData, "notes"),
-    status,
-    visibility,
-    availability,
-    showInNavbar: bool(formData, "showInNavbar"),
-    isImplemented: bool(formData, "isImplemented"),
-    writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
-    responseSpreadsheetId: s(formData, "responseSpreadsheetId"),
-    responseSheetName: s(formData, "responseSheetName"),
-  });
+    if (!id && !slug) {
+      throw new Error("Form definition is missing its identity.");
+    }
+    if (!FORM_DEFINITION_STATUSES.includes(status)) {
+      throw new Error(`Invalid status: ${status}`);
+    }
+    if (!FORM_DEFINITION_VISIBILITIES.includes(visibility)) {
+      throw new Error(`Invalid visibility: ${visibility}`);
+    }
+    if (!FORM_DEFINITION_AVAILABILITIES.includes(availability)) {
+      throw new Error(`Invalid availability: ${availability}`);
+    }
 
-  await setFlashToast({ tone: "success", message: "Form settings saved." });
-  await writeAuditLog({
-    actorEmail: email,
-    action: "update_form_definition",
-    targetType: "form-definition",
-    targetId: id || slug || requestedSlug,
-    correlationId: randomUUID(),
-    before: result.before
-      ? {
-          slug: result.before.slug,
-          status: result.before.status,
-          visibility: result.before.visibility,
-          availability: result.before.availability,
-          routePath: result.before.routePath,
-        }
-      : null,
-    after: result.after
-      ? {
-          slug: result.after.slug,
-          status: result.after.status,
-          visibility: result.after.visibility,
-          availability: result.after.availability,
-          routePath: result.after.routePath,
-        }
-      : null,
-    details: {
-      nextRoutePath: result.nextRoutePath,
-    },
-  });
+    const result = await updateFormDefinitionSettings({
+      id,
+      slug,
+      name: s(formData, "name"),
+      description: s(formData, "description"),
+      requestedSlug,
+      routePath: s(formData, "routePath"),
+      notes: s(formData, "notes"),
+      status,
+      visibility,
+      availability,
+      showInNavbar: bool(formData, "showInNavbar"),
+      isImplemented: bool(formData, "isImplemented"),
+      writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+      responseSpreadsheetId: s(formData, "responseSpreadsheetId"),
+      responseSheetName: s(formData, "responseSheetName"),
+    });
 
-  revalidateFormSurfaces();
-  redirectToRegistry({ slug: requestedSlug, openSettings: true });
-}
-
-export async function hideFormDefinition(formData: FormData) {
-  const { email } = await requireAdmin();
-  await connectMongo();
-
-  const id = s(formData, "id");
-  const slug = s(formData, "slug");
-  if (!id && !slug) return;
-
-  const result = await hideFormDefinitionEntry({ id, slug });
-  await setFlashToast({ tone: "success", message: "Form hidden from users." });
-  await writeAuditLog({
-    actorEmail: email,
-    action: "hide_form_definition",
-    targetType: "form-definition",
-    targetId: id || slug,
-    correlationId: randomUUID(),
-    before: result.before
-      ? {
-          slug: result.before.slug,
-          status: result.before.status,
-          visibility: result.before.visibility,
-          availability: result.before.availability,
-        }
-      : null,
-    after: result.after
-      ? {
-          slug: result.after.slug,
-          status: result.after.status,
-          visibility: result.after.visibility,
-          availability: result.after.availability,
-        }
-      : null,
-  });
-
-  revalidateFormSurfaces();
-  redirectToRegistry({ slug: result.after?.slug ?? slug ?? id, openSettings: true });
-}
-
-export async function deleteFormDefinition(formData: FormData) {
-  const { email } = await requireAdmin();
-  await connectMongo();
-
-  const id = s(formData, "id");
-  const slug = s(formData, "slug");
-  if (!id && !slug) return;
-
-  const result = await deleteFormDefinitionEntry({ id, slug });
-
-  if (result.mode === "archive-native") {
-    await setFlashToast({ tone: "success", message: "Native form deleted from the system." });
+    await setFlashToast({ tone: "success", message: "Form settings saved." });
     await writeAuditLog({
       actorEmail: email,
-      action: "delete_native_form_definition",
+      action: "update_form_definition",
       targetType: "form-definition",
-      targetId: result.before.slug,
+      targetId: id || slug || requestedSlug,
       correlationId: randomUUID(),
-      before: {
-        slug: result.before.slug,
-        source: result.before.source,
-        status: result.before.status,
-      },
+      before: result.before
+        ? {
+            slug: result.before.slug,
+            status: result.before.status,
+            visibility: result.before.visibility,
+            availability: result.before.availability,
+            routePath: result.before.routePath,
+          }
+        : null,
       after: result.after
         ? {
             slug: result.after.slug,
-            source: result.after.source,
             status: result.after.status,
-            isDeleted: result.after.isDeleted,
+            visibility: result.after.visibility,
+            availability: result.after.availability,
+            routePath: result.after.routePath,
+          }
+        : null,
+      details: {
+        nextRoutePath: result.nextRoutePath,
+      },
+    });
+
+    revalidateFormSurfaces();
+  } catch (error) {
+    console.error("updateFormDefinition failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
+  redirectToRegistry({ slug: requestedSlug || slug || id, openSettings: true });
+}
+
+export async function hideFormDefinition(formData: FormData) {
+  const id = s(formData, "id");
+  const slug = s(formData, "slug");
+  let redirectSlug = slug || id;
+
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    if (!id && !slug) {
+      throw new Error("Form definition is missing its identity.");
+    }
+
+    const result = await hideFormDefinitionEntry({ id, slug });
+    redirectSlug = result.after?.slug ?? redirectSlug;
+    await setFlashToast({ tone: "success", message: "Form hidden from users." });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "hide_form_definition",
+      targetType: "form-definition",
+      targetId: id || slug,
+      correlationId: randomUUID(),
+      before: result.before
+        ? {
+            slug: result.before.slug,
+            status: result.before.status,
+            visibility: result.before.visibility,
+            availability: result.before.availability,
+          }
+        : null,
+      after: result.after
+        ? {
+            slug: result.after.slug,
+            status: result.after.status,
+            visibility: result.after.visibility,
+            availability: result.after.availability,
           }
         : null,
     });
-  } else {
-    await setFlashToast({ tone: "success", message: "Registry entry deleted." });
-    await writeAuditLog({
-      actorEmail: email,
-      action: "delete_form_definition",
-      targetType: "form-definition",
-      targetId: result.before.slug,
-      correlationId: randomUUID(),
-      before: {
-        slug: result.before.slug,
-        source: result.before.source,
-        importSourceId: result.before.importSourceId ? String(result.before.importSourceId) : "",
-      },
-    });
+
+    revalidateFormSurfaces();
+  } catch (error) {
+    console.error("hideFormDefinition failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
   }
 
-  revalidateFormSurfaces();
+  redirectToRegistry({ slug: redirectSlug, openSettings: true });
+}
+
+export async function deleteFormDefinition(formData: FormData) {
+  const id = s(formData, "id");
+  const slug = s(formData, "slug");
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    if (!id && !slug) {
+      throw new Error("Form definition is missing its identity.");
+    }
+
+    const result = await deleteFormDefinitionEntry({ id, slug });
+
+    if (result.mode === "archive-native") {
+      await setFlashToast({ tone: "success", message: "Native form deleted from the system." });
+      await writeAuditLog({
+        actorEmail: email,
+        action: "delete_native_form_definition",
+        targetType: "form-definition",
+        targetId: result.before.slug,
+        correlationId: randomUUID(),
+        before: {
+          slug: result.before.slug,
+          source: result.before.source,
+          status: result.before.status,
+        },
+        after: result.after
+          ? {
+              slug: result.after.slug,
+              source: result.after.source,
+              status: result.after.status,
+              isDeleted: result.after.isDeleted,
+            }
+          : null,
+      });
+    } else {
+      await setFlashToast({ tone: "success", message: "Registry entry deleted." });
+      await writeAuditLog({
+        actorEmail: email,
+        action: "delete_form_definition",
+        targetType: "form-definition",
+        targetId: result.before.slug,
+        correlationId: randomUUID(),
+        before: {
+          slug: result.before.slug,
+          source: result.before.source,
+          importSourceId: result.before.importSourceId ? String(result.before.importSourceId) : "",
+        },
+      });
+    }
+
+    revalidateFormSurfaces();
+  } catch (error) {
+    console.error("deleteFormDefinition failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
   redirectToRegistry();
 }

@@ -5,6 +5,7 @@ import { FLASH_TOAST_COOKIE, type FlashToast } from "@/lib/flash-shared";
 
 export function SystemToast({ initialToast }: { initialToast: FlashToast | null }) {
   const [toast, setToast] = useState(initialToast);
+  const [secondsLeft, setSecondsLeft] = useState(5);
 
   useEffect(() => {
     if (!initialToast) return;
@@ -14,8 +15,15 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
   useEffect(() => {
     if (!toast) return;
     if (toast.persistent) return;
-    const timer = window.setTimeout(() => setToast(null), 5000);
-    return () => window.clearTimeout(timer);
+    setSecondsLeft(5);
+    const dismissTimer = window.setTimeout(() => setToast(null), 5000);
+    const countdownTimer = window.setInterval(() => {
+      setSecondsLeft((current) => (current > 1 ? current - 1 : 1));
+    }, 1000);
+    return () => {
+      window.clearTimeout(dismissTimer);
+      window.clearInterval(countdownTimer);
+    };
   }, [toast]);
 
   if (!toast) return null;
@@ -42,7 +50,7 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
             <p className="mt-1 text-sm leading-relaxed">{toast.message}</p>
             {!toast.persistent ? (
               <p className="mt-3 text-xs opacity-70">
-                This closes automatically in 5 seconds.
+                Closing automatically in {secondsLeft} second{secondsLeft === 1 ? "" : "s"}.
               </p>
             ) : null}
           </div>
