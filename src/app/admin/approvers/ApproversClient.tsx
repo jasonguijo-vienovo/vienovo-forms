@@ -26,6 +26,18 @@ type ApproverRow = {
 
 type ViewFilter = "all" | "review" | "active" | "inactive" | "hr_missing_email";
 
+function roleLabel(role: string) {
+  if (role === "sla") return "SLA Approver";
+  if (role === "cashAdvanceApprover") return "CA Approver";
+  return role;
+}
+
+function roleChipLabel(role: string) {
+  if (role === "sla") return "SLA";
+  if (role === "cashAdvanceApprover") return "CA";
+  return role;
+}
+
 const ROLE_TONE: Record<string, string> = {
   supervisor: "border-blue-200 bg-blue-50 text-blue-700",
   departmenthead: "border-indigo-200 bg-indigo-50 text-indigo-700",
@@ -150,7 +162,7 @@ export function ApproversClient({
             onChange={setRoleFilter}
             options={[
               { value: "all", label: "All roles" },
-              ...roles.map((role) => ({ value: role, label: role === "sla" ? "SLA role" : role })),
+              ...roles.map((role) => ({ value: role, label: roleLabel(role) })),
             ]}
           />
         </div>
@@ -222,7 +234,7 @@ export function ApproversClient({
                                   ROLE_TONE[role.toLowerCase()] ?? "border-slate-200 bg-slate-50 text-slate-700"
                                 }`}
                               >
-                                {role}
+                                {roleChipLabel(role)}
                               </span>
                             ))
                           ) : (
