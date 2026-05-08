@@ -133,7 +133,9 @@ export default function LookupsClient(props: {
                   <div className="mt-4">
                     <div className="mb-4 grid gap-3 lg:grid-cols-2">
                       <details
-                        className="rounded border border-surface-border bg-slate-50 p-3"
+                        className={`rounded border border-surface-border p-3 ${
+                          (openAddPanelByCategory[cat] ?? "bulk") === "bulk" ? "bg-slate-50" : "bg-white"
+                        }`}
                         open={(openAddPanelByCategory[cat] ?? "bulk") === "bulk"}
                         onToggle={(event) => {
                           if ((event.currentTarget as HTMLDetailsElement).open) {
@@ -165,7 +167,9 @@ export default function LookupsClient(props: {
                       </details>
 
                       <details
-                        className="rounded border border-surface-border bg-slate-50 p-3"
+                        className={`rounded border border-surface-border p-3 ${
+                          (openAddPanelByCategory[cat] ?? "bulk") === "single" ? "bg-slate-50" : "bg-white"
+                        }`}
                         open={(openAddPanelByCategory[cat] ?? "bulk") === "single"}
                         onToggle={(event) => {
                           if ((event.currentTarget as HTMLDetailsElement).open) {
