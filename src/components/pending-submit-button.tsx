@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { cn } from "@/lib/utils";
@@ -21,30 +20,18 @@ export function PendingSubmitButton({
   ...props
 }: PendingSubmitButtonProps) {
   const { pending } = useFormStatus();
-  const [clicked, setClicked] = useState(false);
-  const isBusy = pending || clicked;
-  const isDisabled = Boolean(disabled) || isBusy;
+  const isBusy = pending;
+  const isDisabled = Boolean(disabled) || pending;
   const resolvedPendingLabel = pendingLabel ?? "Processing...";
-
-  useEffect(() => {
-    if (!pending) setClicked(false);
-  }, [pending]);
 
   return (
     <button
       {...props}
-      onPointerDown={(event) => {
-        if (isDisabled) return;
-        // Immediate visual feedback before server roundtrip starts.
-        setClicked(true);
-        props.onPointerDown?.(event);
-      }}
       onClick={(event) => {
         if (isBusy) {
           event.preventDefault();
           return;
         }
-        if (!clicked) setClicked(true);
         props.onClick?.(event);
       }}
       disabled={isDisabled}
