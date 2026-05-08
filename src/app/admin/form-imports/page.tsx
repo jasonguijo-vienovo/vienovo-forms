@@ -1,16 +1,12 @@
-import {
-  FileInput,
-} from "lucide-react";
 import Link from "next/link";
 import { AdminHelpPanel, AdminMetricCard, AdminPageHeader, AdminSection } from "@/components/admin-ui";
-import { PendingFormState } from "@/components/pending-form-state";
-import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { connectMongo } from "@/lib/db/mongo";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
 import { createFormImport } from "./actions";
 import { FormImportsClient } from "./FormImportsClient";
+import { StepOneCreateDraftForm } from "./StepOneCreateDraftForm";
 
 function normalizeLookupKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -72,57 +68,7 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
       </div>
 
       {tab === "create" ? <AdminSection title="Step 1: Create or replace an import draft" description="Use the same form ID if you are re-importing.">
-        <form action={createFormImport} className="space-y-4">
-          <PendingFormState className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label="Form name" required><input name="name" required className="field-input" /></Field>
-              <Field label="Suggested form ID"><input name="slug" className="field-input" /></Field>
-            </div>
-            <Field label="Spreadsheet ID"><input name="spreadsheetId" className="field-input" /></Field>
-
-            <details className="rounded-md border border-surface-border bg-slate-50 p-4" open>
-              <summary className="cursor-pointer text-sm font-semibold text-surface-text">
-                Option A: Upload source files
-              </summary>
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Field label="index.html file(s)">
-                  <input type="file" name="htmlFiles" accept=".html,.htm,text/html" multiple className="field-input" />
-                </Field>
-                <Field label="code.gs file(s)">
-                  <input type="file" name="gsFiles" accept=".gs,.js,text/plain" multiple className="field-input" />
-                </Field>
-              </div>
-            </details>
-
-            <details className="rounded-md border border-surface-border bg-slate-50 p-4">
-              <summary className="cursor-pointer text-sm font-semibold text-surface-text">
-                Option B: Copy-paste source text
-              </summary>
-              <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Field label="index.html source">
-                  <textarea
-                    name="htmlSource"
-                    rows={12}
-                    placeholder="Paste the full index.html source here..."
-                    className="field-input font-mono text-xs"
-                  />
-                </Field>
-                <Field label="code.gs source">
-                  <textarea
-                    name="appsScriptSource"
-                    rows={12}
-                    placeholder="Paste the full code.gs source here..."
-                    className="field-input font-mono text-xs"
-                  />
-                </Field>
-              </div>
-              <p className="mt-2 text-xs text-surface-muted">
-                Use either Option A (upload) or Option B (paste). If both are provided, the latest values are used by the importer.
-              </p>
-            </details>
-            <div className="flex justify-end"><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><FileInput className="h-4 w-4" /><span>Save draft & open Step 2</span></span>} pendingLabel="Saving draft..." className="btn-primary" /></div>
-          </PendingFormState>
-        </form>
+        <StepOneCreateDraftForm action={createFormImport} />
       </AdminSection> : null}
 
       {tab === "manage" ? <AdminSection title="Step 2: Review, sync, preview, publish" description="Two-column efficient workflow" meta={`${imports.length} drafts`}>
@@ -135,8 +81,4 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
       </AdminSection> : null}
     </div>
   );
-}
-
-function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
-  return <div><label className="block text-sm font-semibold text-gray-700 mb-1.5">{label}{required ? <span className="text-red-500"> *</span> : null}</label>{children}</div>;
 }
