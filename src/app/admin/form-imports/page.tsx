@@ -30,11 +30,19 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
   for (const item of definitions) definitionBySlug[item.slug] = item;
 
   const syncedStatsBySlugKey: Record<string, { categoryCount: number; valueCount: number }> = {};
+  const seenCategoryBySlugKey = new Map<string, Set<string>>();
   for (const row of syncedLookupRows) {
-    const [, slugKeyRaw] = String(row.category).split(":");
+    const [prefix, slugKeyRaw, fieldKeyRaw] = String(row.category).split(":");
+    if (prefix !== "imported" || !fieldKeyRaw) continue;
     if (!slugKeyRaw) continue;
     const slugKey = normalizeLookupKey(slugKeyRaw);
     if (!syncedStatsBySlugKey[slugKey]) syncedStatsBySlugKey[slugKey] = { categoryCount: 0, valueCount: 0 };
+    if (!seenCategoryBySlugKey.has(slugKey)) seenCategoryBySlugKey.set(slugKey, new Set());
+    const seenCategories = seenCategoryBySlugKey.get(slugKey)!;
+    if (!seenCategories.has(fieldKeyRaw)) {
+      seenCategories.add(fieldKeyRaw);
+      syncedStatsBySlugKey[slugKey].categoryCount += 1;
+    }
     syncedStatsBySlugKey[slugKey].valueCount += 1;
   }
 
