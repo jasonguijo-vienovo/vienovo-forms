@@ -610,6 +610,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
       const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
       const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
+      const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
       const hrRecipients = isEmployeeInformation
         ? (
             await Approver.find({
@@ -705,6 +706,48 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             html: hrHtml,
           })
         );
+      }
+      if (isSalaryLoan) {
+        const salaryLoanRow = buildSalaryLoanApplicationRow({ referenceNo, values, labels });
+        const slaApproverRecipients = (
+          await Approver.find({
+            isActive: true,
+            roles: "sla",
+            email: { $exists: true, $ne: "" },
+          })
+            .select({ email: 1 })
+            .lean()
+        )
+          .map((item) => String(item.email ?? "").trim().toLowerCase())
+          .filter(Boolean);
+
+        if (slaApproverRecipients.length > 0) {
+          const approverSubject = `Salary Loan Application needs review (${referenceNo})`;
+          const approverText =
+            `A new Salary Loan Application request was submitted and requires approval.\n\n` +
+            `Request details:\n` +
+            `- Reference No: ${referenceNo}\n` +
+            `- Employee: ${salaryLoanRow["Last Name"]}, ${salaryLoanRow["First Name"]} ${salaryLoanRow["Middle Name"]}\n` +
+            `- Email: ${salaryLoanRow.Email}\n` +
+            `- ID Number: ${salaryLoanRow["ID Number"]}\n` +
+            `- Department: ${salaryLoanRow.Department}\n` +
+            `- Job Designation: ${salaryLoanRow["Job Designation"]}\n` +
+            `- Months Tenure: ${salaryLoanRow["Months Tenure"]}\n` +
+            `- Manager / Supervisor: ${salaryLoanRow["Manager / Supervisor"]}\n` +
+            `- Status: pending\n` +
+            (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
+
+          notificationJobs.push(
+            sendFlowNotification({
+              formSlug: slug,
+              formName: imported.name,
+              event: "next-approver",
+              to: slaApproverRecipients,
+              subject: approverSubject,
+              text: approverText,
+            }),
+          );
+        }
       }
       void Promise.allSettled(notificationJobs).then((results) => {
         const rejectedCount = results.filter((result) => result.status === "rejected").length;
