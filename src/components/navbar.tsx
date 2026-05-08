@@ -3,6 +3,7 @@ import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { isAdminEmail } from "@/lib/admin";
+import { canAccessApprovals } from "@/lib/approval-access";
 import { getNavbarForms } from "@/lib/form-definitions";
 import { safeAuth } from "@/lib/safe-auth";
 
@@ -15,6 +16,7 @@ export async function Navbar({
 } = {}) {
   const session = await safeAuth();
   const showAdmin = isAdminEmail(session?.user?.email);
+  const showApprovals = await canAccessApprovals(session?.user?.email);
   const navbarForms = await getNavbarForms();
 
   return (
@@ -26,6 +28,7 @@ export async function Navbar({
 
         <nav className="hidden sm:flex h-full items-center gap-6 text-sm">
           <NavLink href="/dashboard">Dashboard</NavLink>
+          {showApprovals ? <NavLink href="/approvals">Approvals</NavLink> : null}
           <NewRequestMenu
             options={navbarForms.map((form) => ({
               href: form.routePath || `/forms/${form.slug}`,
