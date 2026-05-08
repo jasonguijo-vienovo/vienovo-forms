@@ -31,6 +31,7 @@ export default function LookupsClient(props: {
   const [isScanning, startScan] = useTransition();
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
+  const [openAddPanelByCategory, setOpenAddPanelByCategory] = useState<Record<string, "bulk" | "single">>({});
   const selectedGroup = groups.find((g) => g.key === selectedGroupKey) ?? groups[0];
   const visibleCategories =
     selectedGroup?.categories.filter((category) =>
@@ -131,7 +132,15 @@ export default function LookupsClient(props: {
 
                   <div className="mt-4">
                     <div className="mb-4 grid gap-3 lg:grid-cols-2">
-                      <details className="rounded border border-surface-border bg-slate-50 p-3" open>
+                      <details
+                        className="rounded border border-surface-border bg-slate-50 p-3"
+                        open={(openAddPanelByCategory[cat] ?? "bulk") === "bulk"}
+                        onToggle={(event) => {
+                          if ((event.currentTarget as HTMLDetailsElement).open) {
+                            setOpenAddPanelByCategory((prev) => ({ ...prev, [cat]: "bulk" }));
+                          }
+                        }}
+                      >
                         <summary className="text-sm font-semibold text-surface-text">Bulk add</summary>
                         <form action={addLookupBulk} className="mt-3">
                           <PendingFormState className="space-y-2">
@@ -155,7 +164,15 @@ export default function LookupsClient(props: {
                         </form>
                       </details>
 
-                      <details className="rounded border border-surface-border bg-slate-50 p-3" open>
+                      <details
+                        className="rounded border border-surface-border bg-slate-50 p-3"
+                        open={(openAddPanelByCategory[cat] ?? "bulk") === "single"}
+                        onToggle={(event) => {
+                          if ((event.currentTarget as HTMLDetailsElement).open) {
+                            setOpenAddPanelByCategory((prev) => ({ ...prev, [cat]: "single" }));
+                          }
+                        }}
+                      >
                         <summary className="text-sm font-semibold text-surface-text">Single add value</summary>
                         <form action={addLookup} className="mt-3">
                           <PendingFormState className="space-y-2">
