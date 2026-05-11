@@ -22,6 +22,10 @@ function normalizeHeader(value: string) {
   return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function normalizeReference(value: string) {
+  return String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
 function titleCaseFromKey(value: string) {
   return value
     .replace(/[_-]+/g, " ")
@@ -144,6 +148,7 @@ export async function updateResponseSheetStatusByReference(opts: {
   const spreadsheetId = opts.spreadsheetId.trim();
   const sheetTitle = opts.sheetTitle.trim();
   const referenceNo = opts.referenceNo.trim();
+  const normalizedReference = normalizeReference(referenceNo);
   if (!spreadsheetId || !sheetTitle || !referenceNo) return false;
 
   const rows = await readSpreadsheetMatrix(spreadsheetId, `${sheetTitle}!A1:ZZ5000`);
@@ -170,7 +175,8 @@ export async function updateResponseSheetStatusByReference(opts: {
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const rowRef = String(rows[rowIndex]?.[refCol] ?? "").trim();
-    if (rowRef !== referenceNo) continue;
+    const normalizedRowRef = normalizeReference(rowRef);
+    if (rowRef !== referenceNo && normalizedRowRef !== normalizedReference) continue;
     const rowNumber = rowIndex + 1;
     const colLetters = toColumnLetters(statusCol + 1);
     await writeSpreadsheetRow({
