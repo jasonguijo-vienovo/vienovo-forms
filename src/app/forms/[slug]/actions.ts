@@ -678,6 +678,12 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
       const requestUrl = appUrl ? `${appUrl}/requests/${encodeURIComponent(referenceNo)}` : "";
       const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+      const approveActionUrl = appUrl
+        ? `${appUrl}/approvals?ref=${encodeURIComponent(referenceNo)}&action=approve`
+        : "";
+      const rejectActionUrl = appUrl
+        ? `${appUrl}/approvals?ref=${encodeURIComponent(referenceNo)}&action=reject`
+        : "";
       const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
       const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
       const hrRecipients = isEmployeeInformation
@@ -803,7 +809,10 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               subject: approverSubject,
               text: approverText,
               ctaUrl: approvalsUrl || requestUrl,
-              ctaLabel: "Review / Approve Request",
+              ctaLabel: "View all approval views",
+              approveUrl: approveActionUrl || `${requestUrl}/approve`,
+              rejectUrl: rejectActionUrl || `${requestUrl}/approve`,
+              viewAllUrl: approvalsUrl || requestUrl,
             }),
           );
         }
