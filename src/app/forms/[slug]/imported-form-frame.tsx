@@ -122,7 +122,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     padding: 18px 12px 28px;
   }
   body.vf-salary-loan form {
-    max-width: 960px;
+    max-width: 820px;
     margin: 0 auto;
     border: 1px solid #d6e3ef;
     border-radius: 16px;
