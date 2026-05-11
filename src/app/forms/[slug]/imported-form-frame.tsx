@@ -42,8 +42,6 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   html, body {
     max-width: 100%;
     overflow: hidden;
-    height: auto !important;
-    min-height: 0 !important;
   }
   *, *::before, *::after {
     box-sizing: border-box;
@@ -121,7 +119,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }
   body.vf-salary-loan {
     background: #f8fafc;
-    padding: 14px 10px 8px;
+    padding: 18px 12px 28px;
   }
   body.vf-salary-loan form {
     max-width: 820px;
@@ -129,7 +127,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     border: 1px solid #d6e3ef;
     border-radius: 16px;
     background: #ffffff;
-    padding: 20px 18px 14px;
+    padding: 24px 20px;
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
   }
   body.vf-salary-loan h1,
@@ -391,30 +389,12 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   function postHeight() {
     var body = document.body;
     var root = document.documentElement;
-    var docHeight = Math.max(
+    var height = Math.max(
       body ? body.scrollHeight : 0,
       root ? root.scrollHeight : 0,
       body ? body.offsetHeight : 0,
       root ? root.offsetHeight : 0
     );
-    var contentBottom = 0;
-    var contentNodes = Array.prototype.slice.call(
-      document.querySelectorAll("body *:not(script):not(style)")
-    );
-    if (body) {
-      var bodyRect = body.getBoundingClientRect();
-      contentNodes.forEach(function (node) {
-        if (!node || !node.getBoundingClientRect) return;
-        var rect = node.getBoundingClientRect();
-        if (rect.height <= 0 && rect.width <= 0) return;
-        var styles = window.getComputedStyle(node);
-        if (styles.display === "none" || styles.visibility === "hidden") return;
-        var marginBottom = parseFloat(styles.marginBottom || "0") || 0;
-        var bottom = rect.bottom - bodyRect.top + marginBottom;
-        if (bottom > contentBottom) contentBottom = bottom;
-      });
-    }
-    var height = Math.ceil(Math.max(docHeight, contentBottom));
     window.parent.postMessage({ type: "vienovo-imported-height", height: height }, "*");
   }
 
@@ -638,7 +618,8 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 }
 
 export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
-  const [height, setHeight] = useState(320);
+  const isSalaryLoan = String(slug).trim().toLowerCase() === "salary-loan-application";
+  const [height, setHeight] = useState(640);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -651,9 +632,11 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
       if (!message || typeof message !== "object") return;
 
       if (message.type === "vienovo-imported-height") {
-        const measured = Number(message.height) || 320;
-        const withPadding = measured + 2;
-        setHeight(Math.min(Math.max(withPadding, 160), 1800));
+        const measured = Number(message.height) || 640;
+        const withPadding = measured + (isSalaryLoan ? 2 : 8);
+        const minHeight = isSalaryLoan ? 160 : 360;
+        const maxHeight = isSalaryLoan ? 1400 : 2200;
+        setHeight(Math.min(Math.max(withPadding, minHeight), maxHeight));
         return;
       }
 
@@ -672,7 +655,7 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [isSalaryLoan]);
 
   return (
     <>
