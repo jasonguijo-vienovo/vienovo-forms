@@ -28,7 +28,7 @@ import {
 } from "@/components/admin-ui";
 import { humanizeQueueRole } from "@/lib/request-queue";
 import type { ParsedAdminRequestsQuery } from "./query";
-import { rejectRequestFromQueue } from "./actions";
+import { rejectRequestFromQueue, syncRequestStatusToSheetNow } from "./actions";
 
 const ADMIN_REQUEST_STATUSES = ["all", "pending", "submitted", "approved", "returned", "rejected"] as const;
 const ADMIN_REQUEST_SORTS = ["createdAt", "updatedAt", "age"] as const;
@@ -648,6 +648,17 @@ function RequestDrawer({
             <button type="button" onClick={onClose} className="btn-secondary">
               Close
             </button>
+            <form
+              action={async (formData) => {
+                await syncRequestStatusToSheetNow(formData);
+                router.refresh();
+              }}
+            >
+              <input type="hidden" name="referenceNo" value={row.referenceNo} />
+              <button type="submit" className="btn-secondary">
+                Sync status to sheet
+              </button>
+            </form>
             {row.status !== "approved" && row.status !== "rejected" ? (
               <form
                 action={async (formData) => {

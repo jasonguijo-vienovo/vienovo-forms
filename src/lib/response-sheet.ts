@@ -18,6 +18,10 @@ function toColumnLetters(columnNumber: number) {
   return letters;
 }
 
+function normalizeHeader(value: string) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 function titleCaseFromKey(value: string) {
   return value
     .replace(/[_-]+/g, " ")
@@ -146,8 +150,11 @@ export async function updateResponseSheetStatusByReference(opts: {
   if (!rows.length) return false;
 
   const headers = rows[0].map((value) => String(value ?? "").trim());
-  const refCol = headers.findIndex((header) => header === "Ref #");
-  const statusCol = headers.findIndex((header) => header === "Status");
+  const normalizedHeaders = headers.map(normalizeHeader);
+  const refCol = normalizedHeaders.findIndex((header) =>
+    ["ref", "refno", "refnumber", "referenceno", "reference", "referenceid"].includes(header),
+  );
+  const statusCol = normalizedHeaders.findIndex((header) => header === "status");
   if (refCol < 0 || statusCol < 0) return false;
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {

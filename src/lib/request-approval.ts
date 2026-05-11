@@ -102,11 +102,14 @@ export async function applyApprovalDecision({
     const definition = formSlug ? await getFormDefinitionBySlug(formSlug) : null;
     const writeResponsesToSheet = Boolean(definition?.writeResponsesToSheet);
     const spreadsheetId =
+      String((doc as any)?.responseSpreadsheetId ?? "").trim() ||
       String(definition?.responseSpreadsheetId ?? "").trim() ||
       String((doc as any)?.formData?.spreadsheetId ?? "").trim() ||
       String(process.env.GOOGLE_SHEETS_RESPONSES_ID ?? "").trim() ||
       String(process.env.GOOGLE_SHEETS_MASTER_ID ?? "").trim();
-    const configuredSheetTitle = String(definition?.responseSheetName ?? "").trim();
+    const configuredSheetTitle =
+      String((doc as any)?.responseSheetName ?? "").trim() ||
+      String(definition?.responseSheetName ?? "").trim();
     const importedFormName = String((doc as any)?.formData?.importedFormName ?? "").trim();
     const sheetTitle = configuredSheetTitle || (importedFormName ? `${importedFormName} Responses` : "");
 
@@ -126,9 +129,28 @@ export async function applyApprovalDecision({
           await new Promise((resolve) => setTimeout(resolve, attempts * 150));
         }
       }
+      await RequestModel.updateOne(
+        { _id: (doc as any)._id },
+        {
+          $set: {
+            sheetStatusSyncedAt: synced ? new Date() : null,
+            sheetStatusSyncError: synced ? "" : `Status sync failed after ${attempts} attempts.`,
+          },
+        },
+      );
     }
   } catch (sheetSyncError) {
     console.error("Response sheet status sync failed:", sheetSyncError);
+    await RequestModel.updateOne(
+      { _id: (doc as any)._id },
+      {
+        $set: {
+          sheetStatusSyncedAt: null,
+          sheetStatusSyncError:
+            sheetSyncError instanceof Error ? sheetSyncError.message : "Unknown sheet status sync error",
+        },
+      },
+    );
   }
 
   const formSlug = doc.formSlug || doc.formType;
