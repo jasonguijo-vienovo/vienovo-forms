@@ -29,6 +29,9 @@ const DEFAULT_SETTINGS: Omit<NotificationFlowSettings, "formSlug" | "formName"> 
   notes: "",
 };
 
+const APPROVER_CACHE_TTL_MS = 60_000;
+const approverCache = new Map<string, { at: number; value: any }>();
+
 function normalizeSettings(input: Partial<NotificationFlowSettings> & Pick<NotificationFlowSettings, "formSlug" | "formName">) {
   return {
     ...DEFAULT_SETTINGS,
@@ -64,6 +67,10 @@ function normalizeRecipients(recipients: string | string[]) {
   );
 }
 
+function cacheKeyForRecipients(recipients: string[]) {
+  return recipients.slice().sort().join("|");
+}
+
 function isValidEmail(input: string) {
   if (!input || input.length > 254) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
@@ -91,9 +98,64 @@ function prependGreeting(opts: {
   return `${greeting}\n\nForm: ${opts.formName} (${opts.formSlug})\n\n${opts.body}`;
 }
 
-function extractFirstUrl(text: string) {
-  const match = String(text || "").match(/https?:\/\/[^\s]+/i);
-  return match?.[0] ?? "";
+function escapeHtml(input: string) {
+  return String(input ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function wrapBrandedEmail(opts: {
+  appUrl: string;
+  title: string;
+  bodyHtml: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
+  accent?: "brand" | "success" | "warn";
+}) {
+  const logoUrl = opts.appUrl ? `${opts.appUrl}/icon` : "";
+  const accentColor = opts.accent === "success" ? "#0f5f35" : opts.accent === "warn" ? "#b45309" : "#1e293b";
+  const ctaHtml =
+    opts.ctaUrl
+      ? `<p style="margin:20px 0 0;">
+          <a href="${opts.ctaUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;background:${accentColor};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
+            ${escapeHtml(opts.ctaLabel || "Open")}
+          </a>
+        </p>`
+      : "";
+
+  return `
+    <div style="margin:0;padding:24px;background:#f3f6fb;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:14px;overflow:hidden;">
+        <tr>
+          <td style="padding:16px 20px;background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="vertical-align:middle;">
+                  <div style="font-size:16px;font-weight:700;letter-spacing:.2px;">Vienovo Forms</div>
+                  <div style="font-size:12px;opacity:.86;">Workflow Notification</div>
+                </td>
+                <td style="text-align:right;vertical-align:middle;">
+                  ${logoUrl ? `<img src="${logoUrl}" alt="Vienovo" width="38" height="38" style="border-radius:10px;background:#fff;padding:4px;" />` : ""}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px;">
+            <h2 style="margin:0 0 10px;font-size:18px;line-height:1.35;color:#0f172a;">${escapeHtml(opts.title)}</h2>
+            <div style="font-size:14px;line-height:1.65;color:#334155;">
+              ${opts.bodyHtml}
+            </div>
+            ${ctaHtml}
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
 }
 
 export async function listNotificationFlowSettings() {
@@ -132,7 +194,10 @@ export async function sendFlowNotification(opts: {
   subject: string;
   text?: string;
   html?: string;
+  ctaUrl?: string;
+  ctaLabel?: string;
 }) {
+  const startedAt = Date.now();
   const flow = await getNotificationFlowSettings(opts.formSlug, opts.formName);
   if (!eventEnabled(flow, opts.event)) {
     await NotificationDeliveryLog.create({
@@ -163,7 +228,13 @@ export async function sendFlowNotification(opts: {
     return false;
   }
 
-  const approvers = await Approver.find({ email: { $in: recipients } }).select({ email: 1, name: 1, roles: 1 }).lean();
+  const key = cacheKeyForRecipients(recipients);
+  const cached = approverCache.get(key);
+  const isFresh = cached && Date.now() - cached.at < APPROVER_CACHE_TTL_MS;
+  const approvers = isFresh
+    ? cached.value
+    : await Approver.find({ email: { $in: recipients } }).select({ email: 1, name: 1, roles: 1 }).lean();
+  if (!isFresh) approverCache.set(key, { at: Date.now(), value: approvers });
   const approverByEmail = new Map(approvers.map((item) => [String(item.email || "").toLowerCase(), item]));
 
   for (const recipient of recipients) {
@@ -171,7 +242,6 @@ export async function sendFlowNotification(opts: {
     const roleHint = profile?.roles?.includes("hr") ? "hr" : profile?.roles?.[0] || "";
     const lastName = extractLastName(String(profile?.name || ""));
     const baseText = opts.text || "";
-    const detectedUrl = extractFirstUrl(baseText);
     const finalText = prependGreeting({
       body: baseText,
       roleHint,
@@ -179,14 +249,16 @@ export async function sendFlowNotification(opts: {
       formName: opts.formName,
       formSlug: opts.formSlug,
     });
-    const resolvedHtml =
-      opts.html ||
-      (opts.event === "next-approver" && detectedUrl
-        ? `<p>${finalText.replace(/\n/g, "<br />")}</p>
-           <p style="margin-top:14px;">
-             <a href="${detectedUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Review / Approve Request</a>
-           </p>`
-        : undefined);
+    const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
+    const bodyHtml = opts.html || `<p style="margin:0;">${escapeHtml(finalText).replace(/\n/g, "<br />")}</p>`;
+    const resolvedHtml = wrapBrandedEmail({
+      appUrl,
+      title: opts.subject,
+      bodyHtml,
+      ctaUrl: opts.ctaUrl,
+      ctaLabel: opts.ctaLabel,
+      accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
+    });
     try {
       await sendNotificationEmail({
         to: recipient,
@@ -215,6 +287,13 @@ export async function sendFlowNotification(opts: {
       throw error;
     }
   }
+
+  console.log("sendFlowNotification timing", {
+    formSlug: opts.formSlug,
+    event: opts.event,
+    recipients: recipients.length,
+    elapsedMs: Date.now() - startedAt,
+  });
 
   return true;
 }
