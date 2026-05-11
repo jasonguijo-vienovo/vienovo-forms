@@ -225,8 +225,14 @@ export default function LookupsClient(props: {
                             <input type="hidden" name="category" value={cat} />
                             <input
                               type="text"
-                              name="value"
-                              placeholder="Add one value..."
+                              name="name"
+                              placeholder="Name (e.g. Juan Dela Cruz)"
+                              className="field-input w-full"
+                            />
+                            <input
+                              type="email"
+                              name="email"
+                              placeholder="Email (e.g. juan@vienovo.ph)"
                               required
                               className="field-input w-full"
                             />

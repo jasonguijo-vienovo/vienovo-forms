@@ -47,7 +47,11 @@ export async function addLookup(formData: FormData) {
   await connectMongo();
   const rawCategory = parseCategory(formData.get("category"));
   const category = await resolveImportedCategoryAlias(rawCategory);
-  const value = String(formData.get("value") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const rawValue = String(formData.get("value") ?? "").trim();
+  const value = email || rawValue;
+  const label = name;
   if (!value) return;
 
   const valueKey = normalizeKey(value);
@@ -63,13 +67,16 @@ export async function addLookup(formData: FormData) {
   await Lookup.create({
     category,
     value,
-    label: "",
+    label,
     sortOrder: (last?.sortOrder ?? -1) + 1,
     isActive: true,
   });
 
   await resequenceCategoryAlphabetically(String(category));
-  await setFlashToast({ tone: "success", message: `Added dropdown value: ${value}` });
+  await setFlashToast({
+    tone: "success",
+    message: label ? `Added dropdown value: ${label} <${value}>` : `Added dropdown value: ${value}`,
+  });
   revalidatePath("/admin/lookups");
 }
 
