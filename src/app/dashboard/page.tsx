@@ -104,14 +104,33 @@ export default async function DashboardPage({
       { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
     ],
   };
+  const requesterApprovalTrackingFilter = {
+    "submittedBy.email": userEmail,
+    formSlug: { $ne: "employee-information" },
+    status: { $in: ["pending", "approved", "rejected"] },
+  };
   const pendingFilter: Record<string, unknown> = {
-    status: { $in: ["pending", "submitted"] },
-    "approvalChain.0": { $exists: true },
-    ...pendingOwnershipFilter,
+    $or: [
+      {
+        status: { $in: ["pending", "submitted"] },
+        "approvalChain.0": { $exists: true },
+        ...pendingOwnershipFilter,
+      },
+      requesterApprovalTrackingFilter,
+    ],
   };
   if (pendingQuery) {
     pendingFilter.$and = [
-      pendingOwnershipFilter,
+      {
+        $or: [
+          {
+            status: { $in: ["pending", "submitted"] },
+            "approvalChain.0": { $exists: true },
+            ...pendingOwnershipFilter,
+          },
+          requesterApprovalTrackingFilter,
+        ],
+      },
       {
         $or: [
           { referenceNo: { $regex: pendingQuery, $options: "i" } },
@@ -141,7 +160,7 @@ export default async function DashboardPage({
       })
       .lean(),
     RequestModel.find(pendingFilter)
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ status: 1, createdAt: -1, _id: -1 })
       .skip((pendingPage - 1) * pageSize)
       .limit(pageSize)
       .select({
@@ -261,7 +280,7 @@ export default async function DashboardPage({
             </div>
           </Panel>
           <div id="pending-approvals">
-          <Panel title="Pending approvals" description="Requests waiting for your action.">
+          <Panel title="Pending approvals" description="Approval items and tracked approval statuses (except Employee Information).">
             <div className="mb-4 flex flex-col gap-2">
               <form className="flex flex-col gap-2 sm:flex-row" method="get">
                 <input

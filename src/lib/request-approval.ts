@@ -99,6 +99,7 @@ export async function applyApprovalDecision({
   const nextApprover = approvalChain.find((step) => step.step === nextStep) ?? null;
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${normalizedReference}` : "";
+  const approveUrl = appUrl ? `${appUrl}/requests/${normalizedReference}/approve` : "";
 
   try {
     if (isApprove) {
@@ -111,6 +112,7 @@ export async function applyApprovalDecision({
           subject: `${formName} request needs your approval (${normalizedReference})`,
           text:
             `${formName} request ${normalizedReference} moved to your approval step.\n\n` +
+            (approveUrl ? `Approve Link: ${approveUrl}\n` : "") +
             (requestUrl ? `Link: ${requestUrl}\n` : ""),
         });
       } else if (submittedByEmail) {

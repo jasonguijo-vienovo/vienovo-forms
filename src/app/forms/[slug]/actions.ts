@@ -633,6 +633,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     try {
       const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
       const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+      const approveUrl = appUrl ? `${appUrl}/requests/${referenceNo}/approve` : "";
       const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
       const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
       const hrRecipients = isEmployeeInformation
@@ -750,6 +751,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             `- Months Tenure: ${salaryLoanRow["Months Tenure"]}\n` +
             `- Manager / Supervisor: ${salaryLoanRow["Manager / Supervisor"]}\n` +
             `- Status: pending\n` +
+            (approveUrl ? `- Approve Link: ${approveUrl}\n` : "") +
             (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
 
           notificationJobs.push(
