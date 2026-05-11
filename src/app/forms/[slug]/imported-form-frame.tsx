@@ -42,6 +42,8 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   html, body {
     max-width: 100%;
     overflow: hidden;
+    height: auto !important;
+    min-height: 0 !important;
   }
   *, *::before, *::after {
     box-sizing: border-box;
@@ -400,10 +402,12 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     if (form && body) {
       var formRect = form.getBoundingClientRect();
       var bodyRect = body.getBoundingClientRect();
-      // Measure from top of document body to the form bottom for tighter fitting.
-      formBottom = Math.ceil(formRect.bottom - bodyRect.top);
+      var formStyles = window.getComputedStyle(form);
+      var formMarginBottom = parseFloat(formStyles.marginBottom || "0") || 0;
+      // Measure exact bottom of the form including margin to avoid extra canvas below.
+      formBottom = Math.ceil(formRect.bottom - bodyRect.top + formMarginBottom);
     }
-    var height = Math.max(docHeight, formBottom);
+    var height = formBottom || docHeight;
     window.parent.postMessage({ type: "vienovo-imported-height", height: height }, "*");
   }
 
@@ -641,8 +645,8 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
 
       if (message.type === "vienovo-imported-height") {
         const measured = Number(message.height) || 320;
-        const withPadding = measured + 4;
-        setHeight(Math.min(Math.max(withPadding, 120), 1400));
+        const withPadding = measured + 1;
+        setHeight(Math.min(Math.max(withPadding, 100), 1400));
         return;
       }
 
