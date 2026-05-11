@@ -14,10 +14,11 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
-import { deleteFormDefinition, hideFormDefinition, updateFormDefinition } from "./actions";
+import { deleteFormDefinition, deleteFormEverywhere, hideFormDefinition, updateFormDefinition } from "./actions";
 
 type RegistryForm = {
   _id?: string;
+  importSourceId?: string;
   slug: string;
   name: string;
   description: string;
@@ -351,6 +352,13 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
   const liveReason = liveForUsers
     ? "Published, visible to everyone, available, and ready."
     : "Blocked until published + everyone visibility + available + ready.";
+  const scopedDeleteLabel = form.source === "native" ? "Delete native form" : "Delete registry entry";
+  const scopedDeleteMessage =
+    form.source === "native"
+      ? `Delete ${form.name} from the registry? This hides the native form from the system, but it does not purge requests or imported data.`
+      : `Delete the ${form.name} registry entry only? This keeps the import draft and request data.`;
+  const globalDeleteMessage =
+    `Delete ${form.name} everywhere?\n\nThis will remove registry and import records, request data, imported lookups, notification flows, notification delivery logs, and mirror collections for ${form.slug}. Native code files are not deleted from the repo.`;
 
   return (
     <div className="space-y-4">
@@ -429,7 +437,17 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
           <input type="hidden" name="availability" value="coming-soon" />
           <PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Undo2 className="h-4 w-4" /><span>Hide from users</span></span>} pendingLabel="Hiding..." className="border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50" />
         </form>
-        <form action={deleteFormDefinition}><input type="hidden" name="id" value={form._id ?? ""} /><input type="hidden" name="slug" value={form.slug} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" /><span>{form.source === "native" ? "Delete native form" : "Delete registry entry"}</span></span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50" /></form>
+        <form action={deleteFormDefinition} onSubmit={(event) => { if (!confirm(scopedDeleteMessage)) event.preventDefault(); }}>
+          <input type="hidden" name="id" value={form._id ?? ""} />
+          <input type="hidden" name="slug" value={form.slug} />
+          <PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" /><span>{scopedDeleteLabel}</span></span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50" />
+        </form>
+        <form action={deleteFormEverywhere} onSubmit={(event) => { if (!confirm(globalDeleteMessage)) event.preventDefault(); }}>
+          <input type="hidden" name="id" value={form._id ?? ""} />
+          <input type="hidden" name="slug" value={form.slug} />
+          <input type="hidden" name="importId" value={form.source === "imported" ? form.importSourceId ?? "" : ""} />
+          <PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" /><span>Delete everywhere</span></span>} pendingLabel="Deleting..." className="border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 transition hover:bg-red-100" />
+        </form>
       </div>
     </div>
   );

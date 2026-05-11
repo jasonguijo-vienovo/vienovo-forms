@@ -8,6 +8,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import {
+  deleteFormEverywhere as deleteFormEverywhereEntry,
   deleteFormDefinitionEntry,
   hideFormDefinitionEntry,
   slugifyFormId,
@@ -32,9 +33,12 @@ function bool(formData: FormData, key: string) {
 }
 
 function revalidateFormSurfaces() {
+  revalidatePath("/admin");
   revalidatePath("/admin/forms");
   revalidatePath("/admin/form-imports");
   revalidatePath("/admin/notifications");
+  revalidatePath("/admin/requests");
+  revalidatePath("/approvals");
   revalidatePath("/admin/lookups");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
@@ -241,6 +245,53 @@ export async function deleteFormDefinition(formData: FormData) {
     revalidateFormSurfaces();
   } catch (error) {
     console.error("deleteFormDefinition failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
+  redirectToRegistry();
+}
+
+export async function deleteFormEverywhere(formData: FormData) {
+  const id = s(formData, "id");
+  const slug = s(formData, "slug");
+  const importId = s(formData, "importId");
+
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    if (!id && !slug && !importId) {
+      throw new Error("Form definition is missing its identity.");
+    }
+
+    const result = await deleteFormEverywhereEntry({ id, slug, importId });
+    await setFlashToast({
+      tone: "success",
+      message: `${result.targetName} was deleted globally. Removed ${result.deletedRequestCount} requests, ${result.deletedLookupCount} lookups, and ${result.deletedImportCount} import records.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "delete_form_everywhere",
+      targetType: "form-definition",
+      targetId: result.targetSlug,
+      correlationId: randomUUID(),
+      before: result.before,
+      details: {
+        slugs: result.slugs,
+        archivedRegistryCount: result.archivedRegistryCount,
+        deletedRegistryCount: result.deletedRegistryCount,
+        deletedImportCount: result.deletedImportCount,
+        deletedRequestCount: result.deletedRequestCount,
+        deletedNotificationFlowCount: result.deletedNotificationFlowCount,
+        deletedNotificationLogCount: result.deletedNotificationLogCount,
+        deletedLookupCount: result.deletedLookupCount,
+        droppedMirrorCollectionCount: result.droppedMirrorCollectionCount,
+      },
+    });
+
+    revalidateFormSurfaces();
+  } catch (error) {
+    console.error("deleteFormEverywhere failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
   }
 
