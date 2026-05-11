@@ -97,6 +97,10 @@ function normalizeCompare(input: string) {
   return String(input ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function compactName(input: string) {
+  return normalizeCompare(input).replace(/[^a-z0-9]+/g, "");
+}
+
 function buildEmployeeFingerprint(row: Record<string, string>) {
   const employeeId = normalizeCompare(String(row["Employee ID"] ?? ""));
   const email = normalizeCompare(String(row.Email ?? row["Email Address"] ?? ""));
@@ -462,7 +466,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     }
 
     const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
-    const selectedSalaryLoanApproverRaw = isSalaryLoan
+    const requiresApproval = !isEmployeeInformation;
+    const selectedApproverRaw = requiresApproval
       ? findValue(
           values,
           labels,
@@ -473,33 +478,46 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           "approver",
           "slaapprover",
           "sla approver",
+          "head",
+          "processor",
         )
       : "";
-    const selectedSalaryLoanApprover = isSalaryLoan
-      ? await Approver.findOne({
-          isActive: true,
-          roles: "sla",
-          $or: [
-            { email: String(selectedSalaryLoanApproverRaw || "").trim().toLowerCase() },
-            { name: String(selectedSalaryLoanApproverRaw || "").trim() },
-          ],
-        })
-          .select({ name: 1, email: 1 })
-          .lean()
+    const selectedApprover = requiresApproval
+      ? (() => {
+          const selectedRaw = String(selectedApproverRaw || "").trim();
+          const selectedEmail = selectedRaw.toLowerCase();
+          const selectedNameCompact = compactName(selectedRaw);
+          return Approver.find({
+            isActive: true,
+            email: { $exists: true, $ne: "" },
+            ...(isSalaryLoan ? { roles: "sla" } : {}),
+          })
+            .select({ name: 1, email: 1, roles: 1 })
+            .lean()
+            .then((rows) => {
+              const exactEmail = rows.find((row) => String(row.email || "").trim().toLowerCase() === selectedEmail);
+              if (exactEmail) return exactEmail;
+              const exactName = rows.find((row) => compactName(String(row.name || "")) === selectedNameCompact);
+              return exactName ?? null;
+            });
+        })()
       : null;
+    if (requiresApproval && !selectedApprover) {
+      throw new Error("No valid selected approver found. Please select a valid approver name or email in the form.");
+    }
     const referenceNo = isSalaryLoan
       ? await generateSalaryLoanReferenceNo()
       : await generateReferenceNo("imported");
-    const importedApprovalChain = isSalaryLoan
-      ? selectedSalaryLoanApprover
-        ? [{
-          step: 1,
-          role: "sla",
-          approverEmail: String(selectedSalaryLoanApprover.email ?? "").trim().toLowerCase(),
-          approverName: String(selectedSalaryLoanApprover.name ?? "").trim(),
-          status: "pending",
-        }]
-        : []
+    const importedApprovalChain = requiresApproval
+      ? [
+          {
+            step: 1,
+            role: isSalaryLoan ? "sla" : String(selectedApprover?.roles?.[0] || "approver"),
+            approverEmail: String(selectedApprover?.email ?? "").trim().toLowerCase(),
+            approverName: String(selectedApprover?.name ?? "").trim(),
+            status: "pending",
+          },
+        ]
       : [];
     const importedStatus = importedApprovalChain.length > 0 ? "pending" : "submitted";
 
@@ -747,24 +765,22 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           })
         );
       }
-      if (isSalaryLoan) {
-        const salaryLoanRow = buildSalaryLoanApplicationRow({ referenceNo, values, labels });
+      if (requiresApproval) {
         const firstSlaApprover = importedApprovalChain.find((step) => step.step === 1) ?? null;
-        const slaApproverRecipients = firstSlaApprover?.approverEmail ? [firstSlaApprover.approverEmail] : [];
+        const approverRecipients = firstSlaApprover?.approverEmail ? [firstSlaApprover.approverEmail] : [];
 
-        if (slaApproverRecipients.length > 0) {
-          const approverSubject = `Salary Loan Application needs review (${referenceNo})`;
+        if (approverRecipients.length > 0) {
+          const detailsName = isSalaryLoan
+            ? `${findValue(values, labels, "lastname", "last name")}, ${findValue(values, labels, "firstname", "first name")} ${findValue(values, labels, "middlename", "middle name")}`.trim()
+            : (name || email);
+          const detailsEmail = findValue(values, labels, "email", "emailaddress", "email address") || email;
+          const approverSubject = `${imported.name} needs review (${referenceNo})`;
           const approverText =
-            `A new Salary Loan Application request was submitted and requires approval.\n\n` +
+            `A new ${imported.name} request was submitted and requires approval.\n\n` +
             `Request details:\n` +
             `- Reference No: ${referenceNo}\n` +
-            `- Employee: ${salaryLoanRow["Last Name"]}, ${salaryLoanRow["First Name"]} ${salaryLoanRow["Middle Name"]}\n` +
-            `- Email: ${salaryLoanRow.Email}\n` +
-            `- ID Number: ${salaryLoanRow["ID Number"]}\n` +
-            `- Department: ${salaryLoanRow.Department}\n` +
-            `- Job Designation: ${salaryLoanRow["Job Designation"]}\n` +
-            `- Months Tenure: ${salaryLoanRow["Months Tenure"]}\n` +
-            `- Manager / Supervisor: ${salaryLoanRow["Manager / Supervisor"]}\n` +
+            `- Requester: ${detailsName}\n` +
+            `- Email: ${detailsEmail}\n` +
             `- Status: pending\n` +
             (approveUrl ? `- Approve Link: ${approveUrl}\n` : "") +
             (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
@@ -774,7 +790,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               formSlug: slug,
               formName: imported.name,
               event: "next-approver",
-              to: slaApproverRecipients,
+              to: approverRecipients,
               subject: approverSubject,
               text: approverText,
             }),
