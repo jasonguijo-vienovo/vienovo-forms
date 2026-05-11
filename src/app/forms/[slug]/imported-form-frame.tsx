@@ -36,9 +36,79 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   const bridgeData = safeScriptJson({ optionsByName, labelsByName });
 
   const bridgeScript = `
+<style>
+  html, body {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .vf-search-shell {
+    position: relative;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .vf-search-input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 10px 40px 10px 12px;
+    font-size: 14px;
+    line-height: 1.2;
+    background: #fff;
+    color: #0f172a;
+  }
+  .vf-search-menu {
+    position: absolute;
+    z-index: 40;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    max-height: 260px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    display: none;
+  }
+  .vf-search-menu[data-open="1"] {
+    display: block;
+  }
+  .vf-search-item {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.25;
+    cursor: pointer;
+    color: #0f172a;
+  }
+  .vf-search-item:hover {
+    background: #eff6ff;
+  }
+  .vf-search-clear {
+    position: absolute;
+    right: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .vf-search-clear[data-show="1"] {
+    display: inline-flex;
+  }
+</style>
 <script>
 (function () {
   var bridge = ${bridgeData};
+  var heightFrame = null;
 
   function normalize(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -63,6 +133,88 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     return typeof option === "string" ? option : option.value || option.label || "";
   }
 
+  function isSearchableField(name) {
+    var key = normalize(name || "");
+    return key.indexOf("manager") >= 0 || key.indexOf("supervisor") >= 0 || key.indexOf("department") >= 0;
+  }
+
+  function attachSearchableSelect(select) {
+    if (!select || select.dataset.vfSearchInit === "1") return;
+    var name = select.getAttribute("name") || select.id || "";
+    if (!isSearchableField(name)) return;
+    select.dataset.vfSearchInit = "1";
+
+    var shell = document.createElement("div");
+    shell.className = "vf-search-shell";
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "vf-search-input";
+    input.autocomplete = "off";
+    input.placeholder = "Search " + (bridge.labelsByName[name] || name || "option");
+
+    var menu = document.createElement("div");
+    menu.className = "vf-search-menu";
+    menu.setAttribute("data-open", "0");
+    var clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "vf-search-clear";
+    clear.textContent = "x";
+    clear.setAttribute("aria-label", "Clear search");
+    clear.setAttribute("data-show", "0");
+    shell.appendChild(input);
+    shell.appendChild(clear);
+    shell.appendChild(menu);
+
+    select.style.display = "none";
+    select.parentNode && select.parentNode.insertBefore(shell, select.nextSibling);
+
+    function allOptions() {
+      return Array.prototype.slice.call(select.options || []).filter(function (opt) {
+        return String(opt.value || "").trim() !== "";
+      });
+    }
+
+    function render(query) {
+      var q = normalize(String(query || ""));
+      var options = allOptions().filter(function (opt) {
+        return q ? normalize(opt.textContent || opt.value || "").indexOf(q) >= 0 : true;
+      }).slice(0, 120);
+      menu.innerHTML = "";
+      options.forEach(function (opt) {
+        var item = document.createElement("div");
+        item.className = "vf-search-item";
+        item.textContent = String(opt.textContent || opt.value || "");
+        item.addEventListener("mousedown", function (event) {
+          event.preventDefault();
+          select.value = opt.value;
+          input.value = item.textContent || "";
+          menu.setAttribute("data-open", "0");
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        menu.appendChild(item);
+      });
+      menu.setAttribute("data-open", options.length ? "1" : "0");
+      clear.setAttribute("data-show", q ? "1" : "0");
+    }
+
+    var current = allOptions().find(function (opt) { return opt.value === select.value; });
+    if (current) input.value = String(current.textContent || current.value || "");
+
+    input.addEventListener("focus", function () { render(input.value); });
+    input.addEventListener("input", function () { render(input.value); });
+    input.addEventListener("blur", function () {
+      setTimeout(function () { menu.setAttribute("data-open", "0"); }, 120);
+    });
+    clear.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+      input.value = "";
+      select.value = "";
+      render("");
+      input.focus();
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
   function populateNativeSelects() {
     Array.prototype.forEach.call(document.querySelectorAll("select[name], select[id]"), function (select) {
       var name = select.getAttribute("name") || select.id;
@@ -77,6 +229,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       });
       select.disabled = false;
       select.removeAttribute("readonly");
+      attachSearchableSelect(select);
     });
   }
 
@@ -129,6 +282,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }
 
   function postHeight() {
+    heightFrame = null;
     var body = document.body;
     var root = document.documentElement;
     var height = Math.max(
@@ -138,6 +292,15 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       root ? root.offsetHeight : 0
     );
     window.parent.postMessage({ type: "vienovo-imported-height", height: height }, "*");
+  }
+
+  function queueHeightPost() {
+    if (heightFrame != null) return;
+    if (window.requestAnimationFrame) {
+      heightFrame = window.requestAnimationFrame(postHeight);
+      return;
+    }
+    heightFrame = window.setTimeout(postHeight, 16);
   }
 
   function submitToParent() {
@@ -189,9 +352,9 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
   window.addEventListener("load", function () {
     populateNativeSelects();
-    postHeight();
-    setTimeout(postHeight, 300);
-    setTimeout(postHeight, 1000);
+    queueHeightPost();
+    setTimeout(queueHeightPost, 300);
+    setTimeout(queueHeightPost, 1000);
   });
 
   document.addEventListener("submit", function (event) {
@@ -211,7 +374,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }, true);
 
   if (window.ResizeObserver) {
-    new ResizeObserver(postHeight).observe(document.documentElement);
+    new ResizeObserver(queueHeightPost).observe(document.documentElement);
   }
 })();
 </script>`;
@@ -225,6 +388,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
 export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
   const [height, setHeight] = useState(900);
+  const heightRef = useRef(900);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields), [fields, htmlSource]);
@@ -235,7 +399,11 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
       if (!message || typeof message !== "object") return;
 
       if (message.type === "vienovo-imported-height") {
-        setHeight(Math.min(Math.max(Number(message.height) || 900, 500), 3000));
+        const nextHeight = Math.min(Math.max(Number(message.height) || 900, 500), 3000);
+        if (nextHeight !== heightRef.current) {
+          heightRef.current = nextHeight;
+          setHeight(nextHeight);
+        }
         return;
       }
 
@@ -260,7 +428,8 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
         sandbox="allow-scripts allow-forms"
         srcDoc={srcDoc}
         className="w-full rounded-xl border border-brand-100 bg-white"
-        style={{ height }}
+        scrolling="no"
+        style={{ height, overflow: "hidden" }}
       />
       <form ref={formRef} action={submitAction} className="hidden">
         <input ref={payloadRef} type="hidden" name="__payload" />
