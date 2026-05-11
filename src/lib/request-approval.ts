@@ -5,6 +5,22 @@ import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
 import { RequestModel } from "@/models/Request";
+const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
+
+function normalizeKey(input: string) {
+  return String(input ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function isSalaryLoanRequest(formSlug: string, formName: string, referenceNo: string) {
+  const slugKey = normalizeKey(formSlug);
+  const nameKey = normalizeKey(formName);
+  const refKey = normalizeKey(referenceNo);
+  return (
+    refKey.startsWith("sla") ||
+    slugKey.includes("salaryloan") ||
+    nameKey.includes("salaryloan")
+  );
+}
 
 export type ApprovalDecision = "approve" | "reject";
 
@@ -111,7 +127,14 @@ export async function applyApprovalDecision({
       String((doc as any)?.responseSheetName ?? "").trim() ||
       String(definition?.responseSheetName ?? "").trim();
     const importedFormName = String((doc as any)?.formData?.importedFormName ?? "").trim();
-    const sheetTitle = configuredSheetTitle || (importedFormName ? `${importedFormName} Responses` : "");
+    const forceSalaryLoanSheet = isSalaryLoanRequest(
+      String(doc.formSlug || doc.formType || ""),
+      String(doc.formName || ""),
+      normalizedReference,
+    );
+    const sheetTitle = forceSalaryLoanSheet
+      ? SALARY_LOAN_SHEET_NAME
+      : configuredSheetTitle || (importedFormName ? `${importedFormName} Responses` : "");
 
     const nextSheetStatus = isApprove ? (isFinal ? "approved" : "pending") : "rejected";
     if (writeResponsesToSheet && spreadsheetId && sheetTitle) {

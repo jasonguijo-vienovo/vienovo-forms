@@ -149,13 +149,24 @@ export async function updateResponseSheetStatusByReference(opts: {
   const rows = await readSpreadsheetMatrix(spreadsheetId, `${sheetTitle}!A1:ZZ5000`);
   if (!rows.length) return false;
 
-  const headers = rows[0].map((value) => String(value ?? "").trim());
-  const normalizedHeaders = headers.map(normalizeHeader);
+  let headers = rows[0].map((value) => String(value ?? "").trim());
+  let normalizedHeaders = headers.map(normalizeHeader);
   const refCol = normalizedHeaders.findIndex((header) =>
     ["ref", "refno", "refnumber", "referenceno", "reference", "referenceid"].includes(header),
   );
-  const statusCol = normalizedHeaders.findIndex((header) => header === "status");
-  if (refCol < 0 || statusCol < 0) return false;
+  let statusCol = normalizedHeaders.findIndex((header) => header === "status");
+  if (refCol < 0) return false;
+  if (statusCol < 0) {
+    headers = [...headers, "Status"];
+    await writeSpreadsheetRow({
+      spreadsheetId,
+      range: `${sheetTitle}!A1`,
+      values: headers,
+    });
+    normalizedHeaders = headers.map(normalizeHeader);
+    statusCol = normalizedHeaders.findIndex((header) => header === "status");
+    if (statusCol < 0) return false;
+  }
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const rowRef = String(rows[rowIndex]?.[refCol] ?? "").trim();
