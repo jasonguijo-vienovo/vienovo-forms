@@ -28,7 +28,7 @@ import {
 } from "@/components/admin-ui";
 import { humanizeQueueRole } from "@/lib/request-queue";
 import type { ParsedAdminRequestsQuery } from "./query";
-import { rejectRequestFromQueue, syncRequestStatusToSheetNow } from "./actions";
+import { backfillSalaryLoanStatusesToSheet, rejectRequestFromQueue, syncRequestStatusToSheetNow } from "./actions";
 
 const ADMIN_REQUEST_STATUSES = ["all", "pending", "submitted", "approved", "returned", "rejected"] as const;
 const ADMIN_REQUEST_SORTS = ["createdAt", "updatedAt", "age"] as const;
@@ -657,6 +657,16 @@ function RequestDrawer({
               <input type="hidden" name="referenceNo" value={row.referenceNo} />
               <button type="submit" className="btn-secondary">
                 Sync status to sheet
+              </button>
+            </form>
+            <form
+              action={async () => {
+                await backfillSalaryLoanStatusesToSheet();
+                router.refresh();
+              }}
+            >
+              <button type="submit" className="btn-secondary">
+                Backfill SLA statuses
               </button>
             </form>
             {row.status !== "approved" && row.status !== "rejected" ? (

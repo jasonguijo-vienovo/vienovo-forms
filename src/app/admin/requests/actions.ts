@@ -178,3 +178,45 @@ export async function syncRequestStatusToSheetNow(formData: FormData) {
   revalidatePath("/admin/requests");
   revalidatePath(`/requests/${encodeURIComponent(referenceNo)}`);
 }
+
+export async function backfillSalaryLoanStatusesToSheet() {
+  const session = await safeAuth();
+  const userEmail = session?.user?.email?.toLowerCase();
+  if (!userEmail || !(await isAdminUser(userEmail))) throw new Error("Forbidden");
+
+  await connectMongo();
+  const docs = await RequestModel.find({
+    $or: [
+      { referenceNo: { $regex: /^SLA\s*-\s*/i } },
+      { formSlug: { $regex: /salary-?loan/i } },
+      { formName: { $regex: /salary\s*loan/i } },
+    ],
+  })
+    .select({ referenceNo: 1, status: 1, responseSpreadsheetId: 1 })
+    .lean();
+
+  const spreadsheetId =
+    String(docs.find((d: any) => String(d.responseSpreadsheetId || "").trim())?.responseSpreadsheetId ?? "").trim() ||
+    String(process.env.GOOGLE_SHEETS_RESPONSES_ID ?? "").trim() ||
+    String(process.env.GOOGLE_SHEETS_MASTER_ID ?? "").trim();
+  if (!spreadsheetId) throw new Error("Missing spreadsheet id for backfill.");
+
+  let ok = 0;
+  let fail = 0;
+  for (const doc of docs) {
+    const status = String((doc as any).status ?? "").toLowerCase();
+    const mapped: "pending" | "approved" | "rejected" =
+      status === "approved" ? "approved" : status === "rejected" ? "rejected" : "pending";
+    const synced = await updateResponseSheetStatusByReference({
+      spreadsheetId,
+      sheetTitle: "Salary Loan Application",
+      referenceNo: String((doc as any).referenceNo ?? ""),
+      status: mapped,
+    });
+    if (synced) ok += 1;
+    else fail += 1;
+  }
+
+  console.log("Salary loan status backfill complete", { ok, fail, total: docs.length });
+  revalidatePath("/admin/requests");
+}
