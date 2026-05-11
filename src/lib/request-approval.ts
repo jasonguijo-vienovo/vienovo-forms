@@ -25,6 +25,7 @@ export async function applyApprovalDecision({
   decision: ApprovalDecision;
   comment?: string | null;
 }) {
+  const startedAt = Date.now();
   await connectMongo();
 
   const normalizedEmail = String(userEmail).trim().toLowerCase();
@@ -111,12 +112,20 @@ export async function applyApprovalDecision({
 
     const nextSheetStatus = isApprove ? (isFinal ? "approved" : "pending") : "rejected";
     if (writeResponsesToSheet && spreadsheetId && sheetTitle) {
-      await updateResponseSheetStatusByReference({
-        spreadsheetId,
-        sheetTitle,
-        referenceNo: normalizedReference,
-        status: nextSheetStatus,
-      });
+      let synced = false;
+      let attempts = 0;
+      while (!synced && attempts < 3) {
+        attempts += 1;
+        synced = await updateResponseSheetStatusByReference({
+          spreadsheetId,
+          sheetTitle,
+          referenceNo: normalizedReference,
+          status: nextSheetStatus,
+        });
+        if (!synced) {
+          await new Promise((resolve) => setTimeout(resolve, attempts * 150));
+        }
+      }
     }
   } catch (sheetSyncError) {
     console.error("Response sheet status sync failed:", sheetSyncError);
@@ -174,6 +183,12 @@ export async function applyApprovalDecision({
   } catch (error) {
     console.error(`${isApprove ? "Approval" : "Rejection"} notification failed:`, error);
   }
+
+  console.log("applyApprovalDecision timing", {
+    referenceNo: normalizedReference,
+    decision,
+    elapsedMs: Date.now() - startedAt,
+  });
 
   return {
     referenceNo: normalizedReference,
