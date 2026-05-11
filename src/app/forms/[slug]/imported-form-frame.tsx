@@ -397,17 +397,24 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       body ? body.offsetHeight : 0,
       root ? root.offsetHeight : 0
     );
-    var form = document.querySelector("form");
-    var formBottom = 0;
-    if (form && body) {
-      var formRect = form.getBoundingClientRect();
+    var contentBottom = 0;
+    var contentNodes = Array.prototype.slice.call(
+      document.querySelectorAll("body *:not(script):not(style)")
+    );
+    if (body) {
       var bodyRect = body.getBoundingClientRect();
-      var formStyles = window.getComputedStyle(form);
-      var formMarginBottom = parseFloat(formStyles.marginBottom || "0") || 0;
-      // Measure exact bottom of the form including margin to avoid extra canvas below.
-      formBottom = Math.ceil(formRect.bottom - bodyRect.top + formMarginBottom);
+      contentNodes.forEach(function (node) {
+        if (!node || !node.getBoundingClientRect) return;
+        var rect = node.getBoundingClientRect();
+        if (rect.height <= 0 && rect.width <= 0) return;
+        var styles = window.getComputedStyle(node);
+        if (styles.display === "none" || styles.visibility === "hidden") return;
+        var marginBottom = parseFloat(styles.marginBottom || "0") || 0;
+        var bottom = rect.bottom - bodyRect.top + marginBottom;
+        if (bottom > contentBottom) contentBottom = bottom;
+      });
     }
-    var height = formBottom || docHeight;
+    var height = Math.ceil(Math.max(docHeight, contentBottom));
     window.parent.postMessage({ type: "vienovo-imported-height", height: height }, "*");
   }
 
@@ -645,8 +652,8 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
 
       if (message.type === "vienovo-imported-height") {
         const measured = Number(message.height) || 320;
-        const withPadding = measured - 24;
-        setHeight(Math.min(Math.max(withPadding, 100), 1400));
+        const withPadding = measured + 2;
+        setHeight(Math.min(Math.max(withPadding, 160), 1800));
         return;
       }
 
