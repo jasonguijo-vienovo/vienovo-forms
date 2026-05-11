@@ -19,7 +19,7 @@ import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-s
 import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { RequestModel } from "@/models/Request";
-import { cashAdvanceFieldMap, diffFields } from "@/lib/request-fields";
+import { buildNotificationDetailsFromFieldMap, cashAdvanceFieldMap, diffFields } from "@/lib/request-fields";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -206,6 +206,10 @@ export async function submitCashAdvance(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
+      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
+      maxRows: 8,
+    });
     await setFlashToast({ tone: "success", message: `Cash Advance submitted: ${referenceNo}` });
 
     try {
@@ -215,6 +219,12 @@ export async function submitCashAdvance(
         event: "submitted",
         to: [approver.email, processor.email, submitterEmail],
         subject: `Cash Advance request submitted (${referenceNo})`,
+        summary: "A Cash Advance request has been submitted and is now in the workflow queue.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          ...notificationDetails,
+        ],
         text:
           `A Cash Advance request has been submitted.\n\n` +
           `Reference: ${referenceNo}\n` +

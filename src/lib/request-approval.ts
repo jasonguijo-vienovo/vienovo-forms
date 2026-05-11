@@ -199,6 +199,13 @@ export async function applyApprovalDecision({
           event: "next-approver",
           to: nextApprover.approverEmail,
           subject: `${formName} request needs your approval (${normalizedReference})`,
+          summary: `A ${formName} request has advanced to your approval step.`,
+          details: [
+            { label: "Reference No.", value: normalizedReference },
+            { label: "Requester", value: doc.submittedBy?.name || doc.submittedBy?.email || "" },
+            { label: "Current role", value: nextApprover.role || "" },
+            { label: "Status", value: "Pending approval" },
+          ].filter((detail) => detail.value),
           text:
             `${formName} request ${normalizedReference} moved to your approval step.\n\n`,
           ctaUrl: approvalsUrl || requestUrl,
@@ -214,6 +221,11 @@ export async function applyApprovalDecision({
           event: "approved",
           to: submittedByEmail,
           subject: `${formName} request approved (${normalizedReference})`,
+          summary: `Your ${formName} request has been fully approved.`,
+          details: [
+            { label: "Reference No.", value: normalizedReference },
+            { label: "Status", value: "Approved" },
+          ],
           text:
             `Your ${formName} request has been fully approved.\n\n` +
             `Reference: ${normalizedReference}\n` +
@@ -227,6 +239,12 @@ export async function applyApprovalDecision({
         event: "rejected",
         to: submittedByEmail,
         subject: `${formName} request rejected (${normalizedReference})`,
+        summary: `Your ${formName} request was rejected.`,
+        details: [
+          { label: "Reference No.", value: normalizedReference },
+          { label: "Status", value: "Rejected" },
+          ...(note ? [{ label: "Comment", value: note }] : []),
+        ],
         text:
           `Your ${formName} request was rejected.\n\n` +
           `Reference: ${normalizedReference}\n` +

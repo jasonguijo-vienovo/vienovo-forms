@@ -20,7 +20,7 @@ import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
-import { diffFields, reimbursementFieldMap } from "@/lib/request-fields";
+import { buildNotificationDetailsFromFieldMap, diffFields, reimbursementFieldMap } from "@/lib/request-fields";
 import {
   REIMBURSEMENT_EXPENSE_ACCOUNTS,
   reimbursementExpenseFieldName,
@@ -306,6 +306,20 @@ export async function submitReimbursement(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const notificationDetails = buildNotificationDetailsFromFieldMap(reimbursementFieldMap(formDataObj), {
+      preferredKeys: [
+        "firstName",
+        "lastName",
+        "department",
+        "costCenter",
+        "location",
+        "totalExpenses",
+        "formType",
+        "cashAdvanceReferenceNo",
+        "reason",
+      ],
+      maxRows: 10,
+    });
     await setFlashToast({ tone: "success", message: `Reimbursement submitted: ${referenceNo}` });
 
     try {
@@ -315,6 +329,12 @@ export async function submitReimbursement(
         event: "submitted",
         to: [supervisor.email, processor.email, submitterEmail],
         subject: `Reimbursement request submitted (${referenceNo})`,
+        summary: "A Reimbursement request has been submitted and is waiting in the approval workflow.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          ...notificationDetails,
+        ],
         text:
           `A Reimbursement request has been submitted.\n\n` +
           `Reference: ${referenceNo}\n` +
