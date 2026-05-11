@@ -177,6 +177,12 @@ export default async function AdminOverviewPage() {
             description={`${processorCount} processors currently loaded for final handling steps.`}
           />
           <AdminCard
+            href="/admin/users"
+            icon={<Users className="h-5 w-5" />}
+            title="User info"
+            description="Browse employee profiles, recent requests, and Graph sync coverage in one admin page."
+          />
+          <AdminCard
             href="/admin/user-roles"
             icon={<KeyRound className="h-5 w-5" />}
             title="User roles"

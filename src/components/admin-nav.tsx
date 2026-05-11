@@ -13,6 +13,7 @@ import {
   ListChecks,
   ShieldCheck,
   UserCircle,
+  Users,
   UsersRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const primaryLinks = [
   { href: "/admin/lookups", label: "Dropdowns", icon: ListChecks },
   { href: "/admin/approvers", label: "Approvers", icon: ShieldCheck },
   { href: "/admin/processors", label: "Processors", icon: UsersRound },
+  { href: "/admin/users", label: "User info", icon: Users },
   { href: "/admin/user-roles", label: "User roles", icon: KeyRound },
   { href: "/admin/notifications", label: "Notification flow", icon: BellRing },
   { href: "/admin/reimbursement-routing", label: "Reimbursement routing", icon: GitBranch },
