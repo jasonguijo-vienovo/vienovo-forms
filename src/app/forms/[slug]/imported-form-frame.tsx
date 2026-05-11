@@ -618,7 +618,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 }
 
 export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
-  const [height, setHeight] = useState(380);
+  const [height, setHeight] = useState(320);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -631,9 +631,9 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
       if (!message || typeof message !== "object") return;
 
       if (message.type === "vienovo-imported-height") {
-        const measured = Number(message.height) || 380;
-        const withPadding = measured + 12;
-        setHeight(Math.min(Math.max(withPadding, 220), 1400));
+        const measured = Number(message.height) || 320;
+        const withPadding = measured + 2;
+        setHeight(Math.min(Math.max(withPadding, 120), 1400));
         return;
       }
 
