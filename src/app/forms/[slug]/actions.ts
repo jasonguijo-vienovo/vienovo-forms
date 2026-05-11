@@ -462,29 +462,44 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     }
 
     const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
-    const salaryLoanApprovers = isSalaryLoan
-      ? (
-          await Approver.find({
-            isActive: true,
-            roles: "sla",
-            email: { $exists: true, $ne: "" },
-          })
-            .sort({ name: 1 })
-            .select({ name: 1, email: 1 })
-            .lean()
+    const selectedSalaryLoanApproverRaw = isSalaryLoan
+      ? findValue(
+          values,
+          labels,
+          "manager",
+          "supervisor",
+          "manager/supervisor",
+          "manager / supervisor",
+          "approver",
+          "slaapprover",
+          "sla approver",
         )
-      : [];
+      : "";
+    const selectedSalaryLoanApprover = isSalaryLoan
+      ? await Approver.findOne({
+          isActive: true,
+          roles: "sla",
+          $or: [
+            { email: String(selectedSalaryLoanApproverRaw || "").trim().toLowerCase() },
+            { name: String(selectedSalaryLoanApproverRaw || "").trim() },
+          ],
+        })
+          .select({ name: 1, email: 1 })
+          .lean()
+      : null;
     const referenceNo = isSalaryLoan
       ? await generateSalaryLoanReferenceNo()
       : await generateReferenceNo("imported");
     const importedApprovalChain = isSalaryLoan
-      ? salaryLoanApprovers.map((approver, index) => ({
-          step: index + 1,
+      ? selectedSalaryLoanApprover
+        ? [{
+          step: 1,
           role: "sla",
-          approverEmail: String(approver.email ?? "").trim().toLowerCase(),
-          approverName: String(approver.name ?? "").trim(),
-          status: index === 0 ? "pending" : "waiting",
-        }))
+          approverEmail: String(selectedSalaryLoanApprover.email ?? "").trim().toLowerCase(),
+          approverName: String(selectedSalaryLoanApprover.name ?? "").trim(),
+          status: "pending",
+        }]
+        : []
       : [];
     const importedStatus = importedApprovalChain.length > 0 ? "pending" : "submitted";
 
