@@ -6,7 +6,7 @@ import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { AdminEmptyState, AdminStatusPill } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
-import { createMissingRegistryEntry, deleteFormImport, publishFormImport, syncImportedDropdowns, updateFormImportConfig, updateFormImportStatus } from "./actions";
+import { createMissingRegistryEntry, deleteFormEverywhere, deleteFormImport, publishFormImport, syncImportedDropdowns, updateFormImportConfig, updateFormImportStatus } from "./actions";
 
 function normalizeLookupKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -124,6 +124,9 @@ function DraftPanel({ item, definition, statuses }: any) {
   const nextAction = !definition ? "registry" : (syncedNeeded ? "sync" : (!isLive ? "publish" : "preview"));
   const previewHref = definitionLaunchHref(item, definition);
   const previewLabel = definition?.externalFormUrl ? "Open external" : "Preview";
+  const localDeleteMessage = `Delete the import draft for ${item.name} only? This keeps request data and may leave the registry record behind if it was created separately.`;
+  const globalDeleteMessage =
+    `Delete ${item.name} everywhere?\n\nThis will remove the import record, registry record, request data, imported lookups, notification flows, notification delivery logs, and mirror collections for ${item.slug}.`;
   return <div className="space-y-3">
     <div className="flex items-center justify-between">
       <h3 className="text-sm font-semibold text-surface-text">Edit import settings</h3>
@@ -160,7 +163,8 @@ function DraftPanel({ item, definition, statuses }: any) {
       {!definition ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Layers3 className="h-4 w-4" />Add registry</span>} pendingLabel="Working..." className="btn-secondary" /></form> : null}
       <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><DatabaseZap className="h-4 w-4" />Sync</span>} pendingLabel="Syncing..." className="btn-secondary" /></form>
       <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Publish</span>} pendingLabel="Publishing..." className="btn-primary" /></form>
-      <form action={deleteFormImport} onSubmit={(e)=>{ if (!confirm("Delete this import draft?")) e.preventDefault(); }}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete</span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700" /></form>
+      <form action={deleteFormImport} onSubmit={(e)=>{ if (!confirm(localDeleteMessage)) e.preventDefault(); }}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete draft only</span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700" /></form>
+      <form action={deleteFormEverywhere} onSubmit={(e)=>{ if (!confirm(globalDeleteMessage)) e.preventDefault(); }}><input type="hidden" name="id" value={String(item._id)} /><input type="hidden" name="slug" value={String(item.slug)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete everywhere</span>} pendingLabel="Deleting..." className="border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800" /></form>
     </div>
   </div>;
 }

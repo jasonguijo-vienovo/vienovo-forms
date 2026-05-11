@@ -9,6 +9,7 @@ import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import {
   createImportedRegistryEntry,
+  deleteFormEverywhere as deleteFormEverywhereEntry,
   deleteImportedForm,
   publishImportedForm,
   saveImportDraft,
@@ -124,8 +125,11 @@ function messageFromError(error: unknown) {
 }
 
 function revalidateImportSurfaces(scope: "all" | "importer" = "all") {
+  revalidatePath("/admin");
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  revalidatePath("/admin/requests");
+  revalidatePath("/approvals");
   if (scope === "importer") return;
   revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
@@ -466,6 +470,43 @@ export async function deleteFormImport(formData: FormData) {
       slug: result.importRecord.slug,
       name: result.importRecord.name,
       status: result.importRecord.status,
+    },
+  });
+
+  revalidateImportSurfaces();
+  redirect(FORM_IMPORTS_PATH);
+}
+
+export async function deleteFormEverywhere(formData: FormData) {
+  const { email } = await requireAdmin();
+  await connectMongo();
+
+  const id = s(formData, "id");
+  const slug = s(formData, "slug");
+  if (!id && !slug) return;
+
+  const result = await deleteFormEverywhereEntry({ importId: id, slug });
+  await setFlashToast({
+    tone: "success",
+    message: `${result.targetName} was deleted globally. Removed ${result.deletedRequestCount} requests, ${result.deletedLookupCount} lookups, and ${result.deletedRegistryCount + result.archivedRegistryCount} registry records.`,
+  });
+  await writeAuditLog({
+    actorEmail: email,
+    action: "delete_form_everywhere",
+    targetType: "form-import",
+    targetId: id || result.targetSlug,
+    correlationId: randomUUID(),
+    before: result.before,
+    details: {
+      slugs: result.slugs,
+      archivedRegistryCount: result.archivedRegistryCount,
+      deletedRegistryCount: result.deletedRegistryCount,
+      deletedImportCount: result.deletedImportCount,
+      deletedRequestCount: result.deletedRequestCount,
+      deletedNotificationFlowCount: result.deletedNotificationFlowCount,
+      deletedNotificationLogCount: result.deletedNotificationLogCount,
+      deletedLookupCount: result.deletedLookupCount,
+      droppedMirrorCollectionCount: result.droppedMirrorCollectionCount,
     },
   });
 

@@ -14,6 +14,7 @@ import {
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 import { Lookup, normalizeLookupKey } from "@/models/Lookup";
 import { NotificationFlow } from "@/models/NotificationFlow";
+import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { RequestModel } from "@/models/Request";
 
 const DEFAULT_RESPONSE_SPREADSHEET_ID =
@@ -25,7 +26,7 @@ function sessionOptions(session: mongoose.ClientSession | null) {
   return session ? { session } : {};
 }
 
-function requestMirrorCollectionName(slug: string) {
+export function requestMirrorCollectionName(slug: string) {
   const normalized = String(slug || "requests")
     .trim()
     .toLowerCase()
@@ -74,6 +75,16 @@ async function updateMirrorCollectionSlug(collectionName: string, nextSlug: stri
   const collections = await db.listCollections({ name: collectionName }, { nameOnly: true }).toArray();
   if (collections.length === 0) return;
   await db.collection(collectionName).updateMany({}, { $set: { formSlug: nextSlug } });
+}
+
+async function dropMirrorCollectionIfExists(slug: string) {
+  const db = mongoose.connection.db;
+  if (!db) return false;
+  const collectionName = requestMirrorCollectionName(slug);
+  const collections = await db.listCollections({ name: collectionName }, { nameOnly: true }).toArray();
+  if (collections.length === 0) return false;
+  await db.collection(collectionName).drop();
+  return true;
 }
 
 async function validateImportedSlugRename(currentSlug: string, nextSlug: string) {
@@ -744,4 +755,154 @@ export async function deleteFormDefinitionEntry(input: { id?: string; slug?: str
       before: form,
     };
   });
+}
+
+export async function deleteFormEverywhere(input: { id?: string; slug?: string; importId?: string }) {
+  const requestedSlug = slugifyFormId(input.slug || "");
+  const baseForm = input.id
+    ? await FormDefinition.findById(input.id).lean()
+    : requestedSlug
+      ? await FormDefinition.findOne({ slug: requestedSlug }).lean()
+      : null;
+  const baseImport = input.importId
+    ? await FormImport.findById(input.importId).lean()
+    : requestedSlug
+      ? await FormImport.findOne({ slug: requestedSlug }).lean()
+      : null;
+
+  const targetSlug = baseForm?.slug || baseImport?.slug || requestedSlug;
+  if (!targetSlug) {
+    throw new Error("Form definition is missing its identity.");
+  }
+
+  const relatedForms = await FormDefinition.find({
+    $or: [
+      { slug: targetSlug },
+      ...(baseImport?._id ? [{ importSourceId: baseImport._id }] : []),
+      ...(baseForm?.importSourceId ? [{ importSourceId: baseForm.importSourceId }] : []),
+    ],
+  }).lean();
+
+  const importIds = new Set<string>();
+  if (baseImport?._id) importIds.add(String(baseImport._id));
+  if (baseForm?.importSourceId) importIds.add(String(baseForm.importSourceId));
+  for (const form of relatedForms) {
+    if (form.importSourceId) importIds.add(String(form.importSourceId));
+  }
+
+  const relatedImports = importIds.size
+    ? await FormImport.find({
+        $or: [{ slug: targetSlug }, { _id: { $in: [...importIds] } }],
+      }).lean()
+    : await FormImport.find({ slug: targetSlug }).lean();
+
+  const slugs = [...new Set([targetSlug, ...relatedForms.map((form) => form.slug), ...relatedImports.map((item) => item.slug)])];
+  const formsToArchive = relatedForms.filter((form) => form.source === "native" || RESERVED_NATIVE_SLUGS.has(form.slug));
+  const formsToDelete = relatedForms.filter((form) => !formsToArchive.some((entry) => String(entry._id) === String(form._id)));
+
+  const summary = await runWithOptionalTransaction(async (session) => {
+    let archivedRegistryCount = 0;
+    if (formsToArchive.length > 0) {
+      const archivedIds = formsToArchive.map((form) => form._id);
+      const archiveResult = await FormDefinition.updateMany(
+        { _id: { $in: archivedIds } },
+        {
+          $set: {
+            isDeleted: true,
+            status: "archived",
+            visibility: "admin",
+            availability: "coming-soon",
+            showInNavbar: false,
+            writeResponsesToSheet: false,
+            importSourceId: null,
+          },
+        },
+        sessionOptions(session),
+      );
+      archivedRegistryCount = Number(archiveResult.modifiedCount ?? 0);
+    }
+
+    let deletedRegistryCount = 0;
+    if (formsToDelete.length > 0) {
+      const deleteResult = await FormDefinition.deleteMany(
+        { _id: { $in: formsToDelete.map((form) => form._id) } },
+        sessionOptions(session),
+      );
+      deletedRegistryCount = Number(deleteResult.deletedCount ?? 0);
+    }
+
+    let deletedImportCount = 0;
+    if (relatedImports.length > 0) {
+      const deleteResult = await FormImport.deleteMany(
+        { _id: { $in: relatedImports.map((item) => item._id) } },
+        sessionOptions(session),
+      );
+      deletedImportCount = Number(deleteResult.deletedCount ?? 0);
+    }
+
+    const requestResult = await RequestModel.deleteMany(
+      { formSlug: { $in: slugs } },
+      sessionOptions(session),
+    );
+    const notificationFlowResult = await NotificationFlow.deleteMany(
+      { formSlug: { $in: slugs } },
+      sessionOptions(session),
+    );
+    const notificationLogResult = await NotificationDeliveryLog.deleteMany(
+      { formSlug: { $in: slugs } },
+      sessionOptions(session),
+    );
+    const lookupResult =
+      slugs.length > 0
+        ? await Lookup.deleteMany(
+            {
+              $or: slugs.map((slug) => ({
+                category: new RegExp(`^imported:${normalizeLookupKey(slug)}:`, "i"),
+              })),
+            },
+            sessionOptions(session),
+          )
+        : { deletedCount: 0 };
+
+    return {
+      targetSlug,
+      targetName:
+        baseForm?.name ||
+        baseImport?.name ||
+        relatedForms[0]?.name ||
+        relatedImports[0]?.name ||
+        targetSlug,
+      slugs,
+      before: {
+        forms: relatedForms.map((form) => ({
+          id: String(form._id),
+          slug: form.slug,
+          source: form.source,
+          importSourceId: form.importSourceId ? String(form.importSourceId) : "",
+        })),
+        imports: relatedImports.map((item) => ({
+          id: String(item._id),
+          slug: item.slug,
+          status: item.status,
+        })),
+      },
+      archivedRegistryCount,
+      deletedRegistryCount,
+      deletedImportCount,
+      deletedRequestCount: Number(requestResult.deletedCount ?? 0),
+      deletedNotificationFlowCount: Number(notificationFlowResult.deletedCount ?? 0),
+      deletedNotificationLogCount: Number(notificationLogResult.deletedCount ?? 0),
+      deletedLookupCount: Number(lookupResult.deletedCount ?? 0),
+    };
+  });
+
+  let droppedMirrorCollectionCount = 0;
+  for (const slug of slugs) {
+    if (await dropMirrorCollectionIfExists(slug)) droppedMirrorCollectionCount += 1;
+  }
+
+  return {
+    ...summary,
+    droppedMirrorCollectionCount,
+  };
 }
