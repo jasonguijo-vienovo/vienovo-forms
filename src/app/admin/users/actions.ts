@@ -31,7 +31,9 @@ export async function syncEmployeesDirectory() {
       message:
         `Employee sync completed. ${result.processed} employees synced` +
         `${result.skipped > 0 ? `, ${result.skipped} skipped` : ""}` +
-        `${result.deviceEnriched > 0 ? `, ${result.deviceEnriched} device summaries updated` : ""}.`,
+        `${result.deviceEnriched > 0 ? `, ${result.deviceEnriched} device summaries updated` : ""}` +
+        `${result.employeeIdFallbackCount > 0 ? `, ${result.employeeIdFallbackCount} employee IDs found in fallback fields` : ""}` +
+        `${result.employeeIdMissingCount > 0 ? `, ${result.employeeIdMissingCount} still missing an employee ID` : ""}.`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Employee sync failed.";
