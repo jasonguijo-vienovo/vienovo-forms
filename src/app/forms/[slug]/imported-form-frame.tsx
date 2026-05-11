@@ -47,6 +47,52 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   img, svg, canvas, video, iframe, table, input, select, textarea {
     max-width: 100%;
   }
+  .vf-search-shell {
+    position: relative;
+    width: 100%;
+  }
+  .vf-search-input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.2;
+    background: #fff;
+    color: #0f172a;
+  }
+  .vf-search-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
+  .vf-search-menu {
+    position: absolute;
+    z-index: 40;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    max-height: 220px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    display: none;
+  }
+  .vf-search-menu[data-open="1"] {
+    display: block;
+  }
+  .vf-search-item {
+    padding: 9px 12px;
+    font-size: 13px;
+    line-height: 1.25;
+    cursor: pointer;
+    color: #0f172a;
+  }
+  .vf-search-item:hover {
+    background: #eff6ff;
+  }
 </style>
 <script>
 (function () {
@@ -85,6 +131,72 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     return typeof option === "string" ? option : option.value || option.label || "";
   }
 
+  function isSearchableField(name) {
+    var key = normalize(name || "");
+    return key.indexOf("manager") >= 0 || key.indexOf("supervisor") >= 0 || key.indexOf("department") >= 0;
+  }
+
+  function attachSearchableSelect(select) {
+    if (!select || select.dataset.vfSearchInit === "1") return;
+    var name = select.getAttribute("name") || select.id || "";
+    if (!isSearchableField(name)) return;
+    select.dataset.vfSearchInit = "1";
+
+    var shell = document.createElement("div");
+    shell.className = "vf-search-shell";
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "vf-search-input";
+    input.autocomplete = "off";
+    input.placeholder = "Search " + (bridge.labelsByName[name] || name || "option");
+
+    var menu = document.createElement("div");
+    menu.className = "vf-search-menu";
+    menu.setAttribute("data-open", "0");
+    shell.appendChild(input);
+    shell.appendChild(menu);
+
+    select.style.display = "none";
+    select.parentNode && select.parentNode.insertBefore(shell, select.nextSibling);
+
+    function allOptions() {
+      return Array.prototype.slice.call(select.options || []).filter(function (opt) {
+        return String(opt.value || "").trim() !== "";
+      });
+    }
+
+    function render(query) {
+      var q = normalize(String(query || ""));
+      var options = allOptions().filter(function (opt) {
+        return q ? normalize(opt.textContent || opt.value || "").indexOf(q) >= 0 : true;
+      }).slice(0, 120);
+      menu.innerHTML = "";
+      options.forEach(function (opt) {
+        var item = document.createElement("div");
+        item.className = "vf-search-item";
+        item.textContent = String(opt.textContent || opt.value || "");
+        item.addEventListener("mousedown", function (event) {
+          event.preventDefault();
+          select.value = opt.value;
+          input.value = item.textContent || "";
+          menu.setAttribute("data-open", "0");
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        menu.appendChild(item);
+      });
+      menu.setAttribute("data-open", options.length ? "1" : "0");
+    }
+
+    var current = allOptions().find(function (opt) { return opt.value === select.value; });
+    if (current) input.value = String(current.textContent || current.value || "");
+
+    input.addEventListener("focus", function () { render(input.value); });
+    input.addEventListener("input", function () { render(input.value); });
+    input.addEventListener("blur", function () {
+      setTimeout(function () { menu.setAttribute("data-open", "0"); }, 120);
+    });
+  }
+
   function populateNativeSelects() {
     Array.prototype.forEach.call(document.querySelectorAll("select[name], select[id]"), function (select) {
       var name = select.getAttribute("name") || select.id;
@@ -99,6 +211,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       });
       select.disabled = false;
       select.removeAttribute("readonly");
+      attachSearchableSelect(select);
     });
   }
 
