@@ -57,11 +57,10 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     color: #0f172a;
   }
   .vf-search-menu {
-    position: absolute;
-    z-index: 40;
+    position: fixed;
+    z-index: 9999;
     left: 0;
-    right: 0;
-    top: calc(100% + 4px);
+    width: 280px;
     max-height: 260px;
     overflow: auto;
     background: #fff;
@@ -72,6 +71,9 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }
   .vf-search-menu[data-open="1"] {
     display: block;
+  }
+  .vf-search-menu[data-direction="down"] {
+    transform-origin: top center;
   }
   .vf-search-item {
     padding: 10px 12px;
@@ -155,6 +157,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     var menu = document.createElement("div");
     menu.className = "vf-search-menu";
     menu.setAttribute("data-open", "0");
+    menu.setAttribute("data-direction", "down");
     var clear = document.createElement("button");
     clear.type = "button";
     clear.className = "vf-search-clear";
@@ -163,7 +166,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     clear.setAttribute("data-show", "0");
     shell.appendChild(input);
     shell.appendChild(clear);
-    shell.appendChild(menu);
+    document.body.appendChild(menu);
 
     select.style.display = "none";
     select.parentNode && select.parentNode.insertBefore(shell, select.nextSibling);
@@ -172,6 +175,21 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       return Array.prototype.slice.call(select.options || []).filter(function (opt) {
         return String(opt.value || "").trim() !== "";
       });
+    }
+
+    function positionMenu(direction) {
+      var inputRect = input.getBoundingClientRect();
+      var menuHeight = Math.min(menu.scrollHeight || 260, 260);
+      var top = direction === "up"
+        ? Math.max(8, inputRect.top - menuHeight - 4)
+        : Math.min((window.innerHeight || 0) - menuHeight - 8, inputRect.bottom + 4);
+      menu.style.left = Math.round(inputRect.left) + "px";
+      menu.style.top = Math.round(top) + "px";
+      menu.style.width = Math.round(inputRect.width) + "px";
+    }
+
+    function closeMenu() {
+      menu.setAttribute("data-open", "0");
     }
 
     function render(query) {
@@ -193,6 +211,13 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
         });
         menu.appendChild(item);
       });
+      var inputRect = input.getBoundingClientRect();
+      var estimatedMenuHeight = Math.min(options.length * 36, 260);
+      var spaceAbove = inputRect.top;
+      var spaceBelow = (window.innerHeight || 0) - inputRect.bottom;
+      var direction = (spaceBelow >= estimatedMenuHeight || spaceBelow >= spaceAbove) ? "down" : "up";
+      menu.setAttribute("data-direction", direction);
+      positionMenu(direction);
       menu.setAttribute("data-open", options.length ? "1" : "0");
       clear.setAttribute("data-show", q ? "1" : "0");
     }
@@ -203,7 +228,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     input.addEventListener("focus", function () { render(input.value); });
     input.addEventListener("input", function () { render(input.value); });
     input.addEventListener("blur", function () {
-      setTimeout(function () { menu.setAttribute("data-open", "0"); }, 120);
+      setTimeout(closeMenu, 120);
     });
     clear.addEventListener("mousedown", function (event) {
       event.preventDefault();
@@ -213,6 +238,19 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       input.focus();
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
+    document.addEventListener("mousedown", function (event) {
+      var target = event.target;
+      if (shell.contains(target) || menu.contains(target)) return;
+      closeMenu();
+    });
+    window.addEventListener("resize", function () {
+      if (menu.getAttribute("data-open") !== "1") return;
+      positionMenu(menu.getAttribute("data-direction") === "up" ? "up" : "down");
+    });
+    window.addEventListener("scroll", function () {
+      if (menu.getAttribute("data-open") !== "1") return;
+      positionMenu(menu.getAttribute("data-direction") === "up" ? "up" : "down");
+    }, true);
   }
 
   function populateNativeSelects() {
