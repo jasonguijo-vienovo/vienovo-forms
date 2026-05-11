@@ -112,6 +112,41 @@ function escapeHtml(input: string) {
     .replace(/'/g, "&#39;");
 }
 
+function messageTextToHtml(text: string) {
+  const lines = String(text || "").split("\n");
+  const html: string[] = [];
+  let listBuffer: string[] = [];
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return;
+    html.push(
+      `<ul style="margin:8px 0 14px 18px;padding:0;color:#334155;">${listBuffer.join("")}</ul>`,
+    );
+    listBuffer = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushList();
+      continue;
+    }
+    if (line.startsWith("- ")) {
+      listBuffer.push(`<li style="margin:4px 0;">${escapeHtml(line.slice(2))}</li>`);
+      continue;
+    }
+    flushList();
+    html.push(`<p style="margin:0 0 12px;">${escapeHtml(line)}</p>`);
+  }
+  flushList();
+  return html.join("");
+}
+
+function looksLikeFullHtmlDocument(html: string) {
+  const v = String(html || "").toLowerCase();
+  return v.includes("<table") || v.includes("<html") || v.includes("<body") || v.includes("vienovo forms");
+}
+
 function wrapBrandedEmail(opts: {
   appUrl: string;
   title: string;
@@ -281,18 +316,19 @@ export async function sendFlowNotification(opts: {
       formSlug: opts.formSlug,
     });
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
-    const bodyHtml = opts.html || `<p style="margin:0;">${escapeHtml(finalText).replace(/\n/g, "<br />")}</p>`;
-    const resolvedHtml = wrapBrandedEmail({
-      appUrl,
-      title: opts.subject,
-      bodyHtml,
-      ctaUrl: opts.ctaUrl,
-      ctaLabel: opts.ctaLabel,
-      approveUrl: opts.approveUrl,
-      rejectUrl: opts.rejectUrl,
-      viewAllUrl: opts.viewAllUrl,
-      accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
-    });
+    const resolvedHtml = opts.html && looksLikeFullHtmlDocument(opts.html)
+      ? opts.html
+      : wrapBrandedEmail({
+          appUrl,
+          title: opts.subject,
+          bodyHtml: opts.html || messageTextToHtml(baseText),
+          ctaUrl: opts.ctaUrl,
+          ctaLabel: opts.ctaLabel,
+          approveUrl: opts.approveUrl,
+          rejectUrl: opts.rejectUrl,
+          viewAllUrl: opts.viewAllUrl,
+          accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
+        });
     try {
       await sendNotificationEmail({
         to: recipient,
