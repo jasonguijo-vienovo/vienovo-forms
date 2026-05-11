@@ -10,6 +10,23 @@ type GraphUserRow = {
   employeeId?: string;
   jobTitle?: string;
   accountEnabled?: boolean;
+  onPremisesExtensionAttributes?: {
+    extensionAttribute1?: string;
+    extensionAttribute2?: string;
+    extensionAttribute3?: string;
+    extensionAttribute4?: string;
+    extensionAttribute5?: string;
+    extensionAttribute6?: string;
+    extensionAttribute7?: string;
+    extensionAttribute8?: string;
+    extensionAttribute9?: string;
+    extensionAttribute10?: string;
+    extensionAttribute11?: string;
+    extensionAttribute12?: string;
+    extensionAttribute13?: string;
+    extensionAttribute14?: string;
+    extensionAttribute15?: string;
+  };
 };
 
 type GraphManagedDeviceRow = {
@@ -35,7 +52,33 @@ export type EmployeeSyncResult = {
   skipped: number;
   inactive: number;
   deviceEnriched: number;
+  employeeIdFallbackCount: number;
+  employeeIdMissingCount: number;
 };
+
+type EmployeeIdResolution = {
+  value: string;
+  source: string;
+};
+
+const DEFAULT_EMPLOYEE_ID_FIELDS = [
+  "employeeId",
+  "onPremisesExtensionAttributes.extensionAttribute1",
+  "onPremisesExtensionAttributes.extensionAttribute2",
+  "onPremisesExtensionAttributes.extensionAttribute3",
+  "onPremisesExtensionAttributes.extensionAttribute4",
+  "onPremisesExtensionAttributes.extensionAttribute5",
+  "onPremisesExtensionAttributes.extensionAttribute6",
+  "onPremisesExtensionAttributes.extensionAttribute7",
+  "onPremisesExtensionAttributes.extensionAttribute8",
+  "onPremisesExtensionAttributes.extensionAttribute9",
+  "onPremisesExtensionAttributes.extensionAttribute10",
+  "onPremisesExtensionAttributes.extensionAttribute11",
+  "onPremisesExtensionAttributes.extensionAttribute12",
+  "onPremisesExtensionAttributes.extensionAttribute13",
+  "onPremisesExtensionAttributes.extensionAttribute14",
+  "onPremisesExtensionAttributes.extensionAttribute15",
+] as const;
 
 function hasValue(value: string | undefined) {
   return Boolean(String(value ?? "").trim());
@@ -66,6 +109,16 @@ function getPageSize() {
   const raw = Number(process.env.INTUNE_SYNC_PAGE_SIZE ?? "100");
   if (!Number.isFinite(raw)) return 100;
   return Math.max(1, Math.min(999, Math.trunc(raw)));
+}
+
+function getEmployeeIdFieldOrder() {
+  const configured = String(process.env.GRAPH_EMPLOYEE_ID_FIELDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (configured.length > 0) return configured;
+  return [...DEFAULT_EMPLOYEE_ID_FIELDS];
 }
 
 export function isEmployeeDirectorySyncEnabled() {
@@ -146,6 +199,37 @@ function getGraphUserEmail(user: GraphUserRow) {
   return normalizeEmail(user.mail || user.userPrincipalName);
 }
 
+function getNestedStringValue(source: unknown, path: string) {
+  let current: unknown = source;
+  for (const segment of path.split(".").filter(Boolean)) {
+    if (!current || typeof current !== "object") return "";
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return String(current ?? "").trim();
+}
+
+function looksLikeEmployeeId(value: string) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) return false;
+  if (normalized.includes("@")) return false;
+  if (/https?:\/\//i.test(normalized)) return false;
+  if (/\s/.test(normalized)) return false;
+  if (normalized.length < 3 || normalized.length > 32) return false;
+  if (/^\d{4,16}$/.test(normalized)) return true;
+  if (/^[a-z0-9][a-z0-9._/-]*\d[a-z0-9._/-]*$/i.test(normalized)) return true;
+  return /^[a-z]{1,4}-?\d{3,16}$/i.test(normalized);
+}
+
+function resolveEmployeeId(user: GraphUserRow): EmployeeIdResolution {
+  for (const fieldPath of getEmployeeIdFieldOrder()) {
+    const value = getNestedStringValue(user, fieldPath);
+    if (!looksLikeEmployeeId(value)) continue;
+    return { value, source: fieldPath };
+  }
+
+  return { value: "", source: "" };
+}
+
 function shouldKeepEmployee(email: string) {
   if (!email) return false;
   const allowedDomain = getAllowedDomain();
@@ -164,6 +248,7 @@ async function fetchUsers(accessToken: string) {
     "employeeId",
     "jobTitle",
     "accountEnabled",
+    "onPremisesExtensionAttributes",
   ].join(",");
 
   const url = `https://graph.microsoft.com/v1.0/users?$select=${encodeURIComponent(select)}&$top=${pageSize}`;
@@ -229,6 +314,8 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
   let skipped = 0;
   let inactive = 0;
   let deviceEnriched = 0;
+  let employeeIdFallbackCount = 0;
+  let employeeIdMissingCount = 0;
   const now = new Date();
 
   for (const user of users) {
@@ -246,8 +333,11 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
 
     const deviceSummary = deviceSummaryByEmail.get(email);
     const isActive = user.accountEnabled !== false;
+    const employeeId = resolveEmployeeId(user);
     if (!isActive) inactive += 1;
     if (deviceSummary) deviceEnriched += 1;
+    if (!employeeId.value) employeeIdMissingCount += 1;
+    else if (employeeId.source !== "employeeId") employeeIdFallbackCount += 1;
 
     await Employee.updateOne(
       { email },
@@ -256,7 +346,7 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
           email,
           entraUserId: String(user.id ?? "").trim(),
           fullName,
-          employeeId: String(user.employeeId ?? "").trim(),
+          employeeId: employeeId.value,
           department: String(user.department ?? "").trim(),
           jobTitle: String(user.jobTitle ?? "").trim(),
           isActive,
@@ -289,5 +379,7 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
     skipped,
     inactive,
     deviceEnriched,
+    employeeIdFallbackCount,
+    employeeIdMissingCount,
   };
 }
