@@ -38,7 +38,9 @@ export default async function ImportedFormPage({
   const imported = definition.importSourceId
     ? await FormImport.findById(definition.importSourceId).lean()
     : await FormImport.findOne({ slug }).lean();
-  if (!imported) notFound();
+  if (!imported) {
+    redirect("/forms");
+  }
 
   const runtime = await hydrateImportedFormRuntime({
     slug,
