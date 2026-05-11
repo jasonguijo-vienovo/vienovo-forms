@@ -6,7 +6,7 @@ import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
 import { RequestModel } from "@/models/Request";
-import { approveCurrentStep, rejectCurrentStep } from "./actions";
+import { approveCurrentStep, rejectCurrentStep, returnCurrentStep } from "./actions";
 
 export default async function ApproveRequestPage({
   params,
@@ -29,6 +29,7 @@ export default async function ApproveRequestPage({
 
   const approveAction = approveCurrentStep.bind(null, decodedRef);
   const rejectAction = rejectCurrentStep.bind(null, decodedRef);
+  const returnAction = returnCurrentStep.bind(null, decodedRef);
 
   return (
     <>
@@ -50,7 +51,7 @@ export default async function ApproveRequestPage({
             <p className="text-xs text-gray-500 mt-1">{current.approverEmail}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
             <form action={approveAction} className="space-y-2">
               <PendingFormState className="space-y-2">
                 <textarea
@@ -79,6 +80,22 @@ export default async function ApproveRequestPage({
                   idleLabel="Reject"
                   pendingLabel="Rejecting..."
                   className="w-full bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 active:scale-[0.99] transition"
+                />
+              </PendingFormState>
+            </form>
+
+            <form action={returnAction} className="space-y-2">
+              <PendingFormState className="space-y-2">
+                <textarea
+                  name="comment"
+                  placeholder="Correction note required"
+                  className="w-full field-input min-h-[88px]"
+                />
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel="Return for correction"
+                  pendingLabel="Returning..."
+                  className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700 active:scale-[0.99] transition"
                 />
               </PendingFormState>
             </form>

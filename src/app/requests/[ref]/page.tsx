@@ -82,7 +82,9 @@ export default async function RequestDetailPage({
       ? (doc as any).formData?.importedFormName || FORM_LABELS[doc.formType]
       : FORM_LABELS[doc.formType] ?? doc.formType;
   const headerSubtitle =
-    doc.status === "submitted" && doc.approvalChain.length === 0
+    doc.status === "returned"
+      ? "This request was returned for correction."
+      : doc.status === "submitted" && doc.approvalChain.length === 0
       ? "This imported form was received and saved in the system."
       : currentStep?.approverName
         ? `Pending approval from ${currentStep.approverName}`
@@ -226,7 +228,7 @@ export default async function RequestDetailPage({
             )}
 
             <div className="flex gap-2">
-              {isOwner && doc.status === "pending" && hasEditableRuntime && (
+              {isOwner && (doc.status === "pending" || doc.status === "returned") && hasEditableRuntime && (
                 <Link
                   href={`/requests/${encodeURIComponent(doc.referenceNo)}/edit`}
                   className="flex-1 text-center bg-white border border-brand-200 text-brand-700 font-semibold py-2.5 rounded-lg hover:bg-brand-50 transition"

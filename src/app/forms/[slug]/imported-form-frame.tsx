@@ -16,6 +16,12 @@ type ImportedFrameMessage =
       values: Record<string, unknown>;
       labels: Record<string, string>;
     }
+  | {
+      type: "vienovo-imported-draft";
+      values: Record<string, unknown>;
+      labels: Record<string, string>;
+    }
+  | { type: "vienovo-imported-ready" }
   | { type: "vienovo-imported-height"; height: number };
 
 function safeScriptJson(value: unknown) {
@@ -111,6 +117,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 (function () {
   var bridge = ${bridgeData};
   var heightFrame = null;
+  var draftTimer = null;
 
   function normalize(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -319,6 +326,45 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     return { values: values, labels: labels };
   }
 
+  function applyValues(values) {
+    values = values || {};
+    Array.prototype.forEach.call(document.querySelectorAll("input[name], select[name], textarea[name]"), function (control) {
+      var name = control.name;
+      if (!name || !(name in values)) return;
+      var value = values[name];
+      var type = (control.type || "").toLowerCase();
+
+      if (type === "checkbox") {
+        if (Array.isArray(value)) control.checked = value.indexOf(control.value) >= 0;
+        else control.checked = value === "Yes" || value === true || value === control.value;
+        return;
+      }
+      if (type === "radio") {
+        control.checked = String(control.value) === String(value);
+        return;
+      }
+      if (type === "file") return;
+      control.value = Array.isArray(value) ? value.join(", ") : String(value == null ? "" : value);
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    queueHeightPost();
+  }
+
+  function postDraft() {
+    draftTimer = null;
+    var payload = collectValues();
+    window.parent.postMessage({
+      type: "vienovo-imported-draft",
+      values: payload.values,
+      labels: payload.labels
+    }, "*");
+  }
+
+  function queueDraftPost() {
+    if (draftTimer) window.clearTimeout(draftTimer);
+    draftTimer = window.setTimeout(postDraft, 450);
+  }
+
   function postHeight() {
     heightFrame = null;
     var body = document.body;
@@ -390,10 +436,22 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
   window.addEventListener("load", function () {
     populateNativeSelects();
+    window.parent.postMessage({ type: "vienovo-imported-ready" }, "*");
     queueHeightPost();
     setTimeout(queueHeightPost, 300);
     setTimeout(queueHeightPost, 1000);
   });
+
+  window.addEventListener("message", function (event) {
+    var message = event.data;
+    if (!message || typeof message !== "object") return;
+    if (message.type === "vienovo-imported-restore") {
+      applyValues(message.values || {});
+    }
+  });
+
+  document.addEventListener("input", queueDraftPost, true);
+  document.addEventListener("change", queueDraftPost, true);
 
   document.addEventListener("submit", function (event) {
     event.preventDefault();
@@ -426,10 +484,13 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
 export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
   const [height, setHeight] = useState(900);
+  const [draftSavedAt, setDraftSavedAt] = useState<string>("");
   const heightRef = useRef(900);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields), [fields, htmlSource]);
+  const draftKey = `vienovo:imported-draft:${_slug || "unknown"}`;
 
   useEffect(() => {
     function onMessage(event: MessageEvent<ImportedFrameMessage>) {
@@ -445,12 +506,49 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
         return;
       }
 
+      if (message.type === "vienovo-imported-ready") {
+        try {
+          const saved = window.localStorage.getItem(draftKey);
+          if (saved && iframeRef.current?.contentWindow) {
+            const parsed = JSON.parse(saved) as { values?: Record<string, unknown> };
+            iframeRef.current.contentWindow.postMessage({
+              type: "vienovo-imported-restore",
+              values: parsed.values ?? {},
+            }, "*");
+            setDraftSavedAt(parsed ? "Restored local draft" : "");
+          }
+        } catch {
+          // Ignore damaged local drafts; the form remains usable.
+        }
+        return;
+      }
+
+      if (message.type === "vienovo-imported-draft") {
+        try {
+          window.localStorage.setItem(
+            draftKey,
+            JSON.stringify({
+              values: message.values ?? {},
+              labels: message.labels ?? {},
+              savedAt: new Date().toISOString(),
+            }),
+          );
+          setDraftSavedAt("Draft saved locally");
+        } catch {
+          setDraftSavedAt("");
+        }
+        return;
+      }
+
       if (message.type === "vienovo-imported-submit") {
         if (!payloadRef.current || !formRef.current) return;
         payloadRef.current.value = JSON.stringify({
           values: message.values ?? {},
           labels: message.labels ?? {},
         });
+        try {
+          window.localStorage.removeItem(draftKey);
+        } catch {}
         formRef.current.requestSubmit();
       }
     }
@@ -462,6 +560,7 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
   return (
     <>
       <iframe
+        ref={iframeRef}
         title="Imported legacy form"
         sandbox="allow-scripts allow-forms"
         srcDoc={srcDoc}
@@ -472,6 +571,7 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
       <form ref={formRef} action={submitAction} className="hidden">
         <input ref={payloadRef} type="hidden" name="__payload" />
       </form>
+      {draftSavedAt ? <p className="mt-2 text-xs text-surface-muted">{draftSavedAt}</p> : null}
     </>
   );
 }

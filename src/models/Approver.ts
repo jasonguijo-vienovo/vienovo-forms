@@ -14,11 +14,13 @@ const approverSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, default: "", lowercase: true, trim: true, index: true },
+    employeeId: { type: String, default: "", trim: true, index: true },
     roles: {
       type: [{ type: String, enum: APPROVER_ROLES }],
       default: [],
     },
     department: { type: String, default: "" },
+    jobTitle: { type: String, default: "" },
     emailNeedsReview: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },

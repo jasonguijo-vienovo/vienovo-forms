@@ -11,6 +11,7 @@ import {
   Grid2X2,
   KeyRound,
   ListChecks,
+  RefreshCcw,
   ShieldCheck,
   UserCircle,
   Users,
@@ -28,6 +29,7 @@ const primaryLinks = [
   { href: "/admin/users", label: "User info", icon: Users },
   { href: "/admin/user-roles", label: "User roles", icon: KeyRound },
   { href: "/admin/notifications", label: "Notification flow", icon: BellRing },
+  { href: "/admin/jobs", label: "Admin jobs", icon: RefreshCcw },
   { href: "/admin/reimbursement-routing", label: "Reimbursement routing", icon: GitBranch },
   { href: "/admin/requests", label: "Admin queue", icon: ClipboardList },
 ] as const;

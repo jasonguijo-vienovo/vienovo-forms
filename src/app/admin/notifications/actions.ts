@@ -7,6 +7,7 @@ import { setFlashToast } from "@/lib/flash";
 import { writeAuditLog } from "@/lib/audit";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 import { NotificationFlow } from "@/models/NotificationFlow";
+import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { Approver } from "@/models/Approver";
 
 function s(formData: FormData, key: string) {
@@ -222,5 +223,80 @@ export async function enableEmployeeInformationDefaults() {
     details: { hrRecipientCount: recipients.length },
   });
   await setFlashToast({ tone: "success", message: `Employee Information defaults enabled (${recipients.length} HR recipients).` });
+  redirect(NOTIFICATIONS_PATH);
+}
+
+export async function resendFailedNotification(formData: FormData) {
+  const { email: adminEmail } = await requireAdmin();
+  const id = s(formData, "id");
+  await connectMongo();
+
+  const log = id
+    ? await NotificationDeliveryLog.findOne({ _id: id, status: "failed", replayable: true }).lean()
+    : null;
+  if (!log) {
+    await setFlashToast({
+      tone: "error",
+      message: "That failed notification is no longer available for resend.",
+    });
+    redirect(NOTIFICATIONS_PATH);
+  }
+
+  try {
+    await sendNotificationEmail({
+      to: log.recipient,
+      subject: log.subject,
+      text: log.text || "",
+      html: log.html || "",
+    });
+
+    await NotificationDeliveryLog.create({
+      formSlug: log.formSlug,
+      formName: log.formName,
+      event: log.event,
+      recipient: log.recipient,
+      subject: log.subject,
+      status: "sent",
+      text: log.text || "",
+      html: log.html || "",
+      replayable: true,
+      retryOfLogId: log._id,
+      resentAt: new Date(),
+      resentByEmail: adminEmail,
+    });
+
+    await NotificationDeliveryLog.updateOne(
+      { _id: log._id },
+      {
+        $set: {
+          resentAt: new Date(),
+          resentByEmail: adminEmail,
+        },
+      },
+    );
+
+    await writeAuditLog({
+      actorEmail: adminEmail,
+      action: "resend_failed_notification",
+      targetType: "notification-delivery",
+      targetId: String(log._id),
+      details: {
+        recipient: log.recipient,
+        subject: log.subject,
+        formSlug: log.formSlug,
+      },
+    });
+    await setFlashToast({ tone: "success", message: `Notification resent to ${log.recipient}.` });
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message:
+        error instanceof Error && error.message.trim()
+          ? `Resend failed: ${error.message.trim()}`
+          : "Resend failed.",
+      persistent: true,
+    });
+  }
+
   redirect(NOTIFICATIONS_PATH);
 }

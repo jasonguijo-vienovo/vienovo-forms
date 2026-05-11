@@ -14,7 +14,13 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import type { SystemReadinessSnapshot } from "@/lib/system-readiness";
-import { enableEmployeeInformationDefaults, resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
+import {
+  enableEmployeeInformationDefaults,
+  resendFailedNotification,
+  resetNotificationFlow,
+  saveNotificationFlow,
+  sendNotificationTestEmail,
+} from "./actions";
 
 type Flow = {
   formSlug: string;
@@ -33,9 +39,31 @@ type ViewFilter = "all" | "active" | "off";
 export function NotificationsClient({
   flows,
   readiness,
+  previews,
+  recentFailures,
 }: {
   flows: Flow[];
   readiness: SystemReadinessSnapshot;
+  previews: Record<
+    string,
+    {
+      subject: string;
+      summary: string;
+      html: string;
+      details: Array<{ label: string; value: string }>;
+    }
+  >;
+  recentFailures: Array<{
+    id: string;
+    formName: string;
+    formSlug: string;
+    recipient: string;
+    subject: string;
+    error: string;
+    replayable: boolean;
+    resentAt: string;
+    sentAt: string;
+  }>;
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -77,10 +105,16 @@ export function NotificationsClient({
           <CompactMetricCard label="Notifications off" value={offCount} tone="warn" />
           <CompactMetricCard label="Visible now" value={filtered.length} />
           <CompactMetricCard label="Flow health" value={healthy ? "Healthy" : "Needs attention"} tone={healthy ? "ok" : "warn"} />
+          <CompactMetricCard
+            label="Recent failures"
+            value={recentFailures.length}
+            tone={recentFailures.length > 0 ? "warn" : "ok"}
+          />
         </div>
         <AdminHelpPanel title="What this page does">
           Default recipients still come from the form logic. This page only turns those emails on or off
-          and lets you add extra recipients for each form.
+          and lets you add extra recipients for each form. Recent delivery failures below help us spot
+          broken recipient or SMTP issues before users report them.
         </AdminHelpPanel>
       </div>
 
@@ -119,6 +153,55 @@ export function NotificationsClient({
             </PendingFormState>
           </form>
         </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Recent delivery failures"
+        description="The latest failed notification attempts so we can diagnose recipient or SMTP issues quickly."
+        meta={`${recentFailures.length} recent failure${recentFailures.length === 1 ? "" : "s"}`}
+      >
+        {recentFailures.length === 0 ? (
+          <AdminEmptyState
+            title="No failed deliveries recently"
+            description="Notification delivery looks healthy from the latest recorded attempts."
+          />
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {recentFailures.map((failure) => (
+              <div key={failure.id} className="rounded border border-surface-border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-surface-text">{failure.formName}</p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      {failure.recipient || "Unknown recipient"} · {formatRelativeDate(failure.sentAt)}
+                    </p>
+                  </div>
+                  <AdminStatusPill tone="danger">failed</AdminStatusPill>
+                </div>
+                <p className="mt-3 text-xs text-surface-muted">{failure.subject || "No subject recorded"}</p>
+                  <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                    {failure.error || "Unknown notification failure"}
+                  </p>
+                  {failure.resentAt ? (
+                    <p className="mt-2 text-xs text-surface-muted">
+                      Resent {formatRelativeDate(failure.resentAt)}
+                    </p>
+                  ) : null}
+                  {failure.replayable ? (
+                    <form action={resendFailedNotification} className="mt-3">
+                      <input type="hidden" name="id" value={failure.id} />
+                      <PendingSubmitButton
+                        type="submit"
+                        idleLabel="Resend"
+                        pendingLabel="Resending..."
+                        className="btn-secondary"
+                      />
+                    </form>
+                  ) : null}
+                </div>
+              ))}
+          </div>
+        )}
       </AdminSection>
 
       <AdminSection
@@ -205,6 +288,26 @@ export function NotificationsClient({
                     )}
                   </div>
                 </div>
+
+                <details className="mt-4 rounded border border-surface-border bg-slate-50/70 p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-surface-text">
+                    Preview sample email
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded border border-surface-border bg-white px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                        Subject
+                      </p>
+                      <p className="mt-1 text-sm text-surface-text">
+                        {previews[flow.formSlug]?.subject || "Sample notification"}
+                      </p>
+                    </div>
+                    <div
+                      className="overflow-hidden rounded border border-surface-border bg-white"
+                      dangerouslySetInnerHTML={{ __html: previews[flow.formSlug]?.html || "" }}
+                    />
+                  </div>
+                </details>
 
                 <form action={saveNotificationFlow} className="mt-4">
                   <PendingFormState className="space-y-4">
@@ -329,4 +432,15 @@ function CompactMetricCard({
       <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
     </div>
   );
+}
+
+function formatRelativeDate(value: string) {
+  if (!value) return "Not recorded";
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }

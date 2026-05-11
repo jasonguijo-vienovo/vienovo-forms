@@ -12,6 +12,7 @@ import {
   type FormDefinitionVisibility,
 } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
+import { FormImportVersion, type FormImportVersionEvent } from "@/models/FormImportVersion";
 import { Lookup, normalizeLookupKey } from "@/models/Lookup";
 import { NotificationFlow } from "@/models/NotificationFlow";
 import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
@@ -85,6 +86,37 @@ async function dropMirrorCollectionIfExists(slug: string) {
   if (collections.length === 0) return false;
   await db.collection(collectionName).drop();
   return true;
+}
+
+async function recordImportVersionSnapshot(
+  imported: any,
+  event: FormImportVersionEvent,
+  actorEmail = "",
+  session: mongoose.ClientSession | null = null,
+) {
+  if (!imported?._id) return;
+
+  await FormImportVersion.create(
+    [
+      {
+        importId: imported._id,
+        slug: imported.slug,
+        name: imported.name,
+        sourceVersion: Number(imported.sourceVersion ?? 1),
+        event,
+        sourceChecksum: imported.sourceChecksum ?? "",
+        readinessState: imported.readinessState ?? "",
+        parseDiagnostics: imported.parseDiagnostics ?? {},
+        summary: imported.summary ?? {},
+        htmlSource: imported.htmlSource ?? "",
+        appsScriptSource: imported.appsScriptSource ?? "",
+        spreadsheetBindings: imported.spreadsheetBindings ?? {},
+        externalFormUrl: imported.externalFormUrl ?? "",
+        createdByEmail: actorEmail || imported.createdByEmail || "",
+      },
+    ],
+    sessionOptions(session),
+  );
 }
 
 async function validateImportedSlugRename(currentSlug: string, nextSlug: string) {
@@ -298,6 +330,7 @@ export async function saveImportDraft(input: {
     if (input.ensureRegistryEntry ?? true) {
       await ensureImportedRegistryEntry(created, session);
     }
+    await recordImportVersionSnapshot(created, "draft-saved", input.createdByEmail, session);
 
     return {
       importRecord: created,
@@ -374,6 +407,7 @@ export async function updateImportConfig(input: {
     );
 
     const updated = await FormImport.findById(existing._id).session(session).lean();
+    await recordImportVersionSnapshot(updated, "draft-saved", "", session);
     return {
       before: existing,
       after: updated,
@@ -436,6 +470,8 @@ export async function publishImportedForm(input: { id: string; actorEmail?: stri
     );
 
     await ensureImportedRegistryEntry(imported, session);
+    const updatedImport = await FormImport.findById(imported._id).session(session).lean();
+    await recordImportVersionSnapshot(updatedImport ?? imported, "published", input.actorEmail ?? "", session);
     const definition = await FormDefinition.findOne({ slug: imported.slug }).session(session).lean();
     if (!definition) {
       throw new Error("Failed to create a registry entry for this import.");
@@ -474,7 +510,7 @@ export async function publishImportedForm(input: { id: string; actorEmail?: stri
 
     const after = await FormDefinition.findById(definition._id).session(session).lean();
     return {
-      importRecord: imported,
+      importRecord: updatedImport ?? imported,
       definitionBefore: definition,
       definitionAfter: after,
       diagnostics,
@@ -753,6 +789,114 @@ export async function deleteFormDefinitionEntry(input: { id?: string; slug?: str
     return {
       mode: "delete-imported" as const,
       before: form,
+    };
+  });
+}
+
+export async function repairImportedFormLinkage(input: { id: string }) {
+  return runWithOptionalTransaction(async (session) => {
+    const imported = await FormImport.findById(input.id).session(session).lean();
+    if (!imported) {
+      throw new Error("Import draft not found.");
+    }
+
+    const normalizedExternalFormUrl = normalizeExternalFormUrl(imported.externalFormUrl ?? "");
+    const diagnostics = analyzeImportedSource({
+      name: imported.name,
+      slug: imported.slug,
+      htmlSource: imported.htmlSource ?? "",
+      appsScriptSource: imported.appsScriptSource ?? "",
+      spreadsheetBindings: imported.spreadsheetBindings ?? {},
+      writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
+      responseSheetName: imported.responseSheetName ?? "",
+      spreadsheetId: imported.spreadsheetId ?? "",
+      externalFormUrl: normalizedExternalFormUrl,
+      defaultResponseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    });
+
+    const definitionBefore =
+      (await FormDefinition.findOne({
+        $or: [{ importSourceId: imported._id }, { slug: imported.slug }],
+      })
+        .session(session)
+        .lean()) ?? null;
+
+    await FormImport.updateOne(
+      { _id: imported._id },
+      {
+        $set: {
+          externalFormUrl: normalizedExternalFormUrl,
+          spreadsheetBindings: diagnostics.bindings,
+          sourceType:
+            normalizedExternalFormUrl &&
+            !String(imported.htmlSource ?? "").trim() &&
+            !String(imported.appsScriptSource ?? "").trim()
+              ? "external-link"
+              : "google-apps-script",
+          sourceChecksum: diagnostics.sourceChecksum,
+          readinessState: diagnostics.readinessState,
+          lastParsedAt: new Date(),
+          parseDiagnostics: diagnostics.parseDiagnostics,
+          summary: diagnostics.summary,
+        },
+      },
+      sessionOptions(session),
+    );
+
+    await ensureImportedRegistryEntry(
+      {
+        ...imported,
+        externalFormUrl: normalizedExternalFormUrl,
+      },
+      session,
+    );
+
+    const definitionCurrent = await FormDefinition.findOne({ slug: imported.slug }).session(session).lean();
+    if (!definitionCurrent) {
+      throw new Error("Failed to rebuild a registry entry for this import.");
+    }
+
+    await FormDefinition.updateOne(
+      { _id: definitionCurrent._id },
+      {
+        $set: {
+          slug: imported.slug,
+          routePath: `/forms/${imported.slug}`,
+          source: "imported",
+          importSourceId: imported._id,
+          externalFormUrl: normalizedExternalFormUrl,
+          writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
+          responseSpreadsheetId:
+            String(definitionCurrent.responseSpreadsheetId ?? "").trim() ||
+            DEFAULT_RESPONSE_SPREADSHEET_ID ||
+            imported.spreadsheetId ||
+            "",
+          responseSheetName:
+            String(definitionCurrent.responseSheetName ?? "").trim() ||
+            imported.responseSheetName ||
+            `${imported.name} Responses`,
+        },
+      },
+      sessionOptions(session),
+    );
+
+    const definitionAfter = await FormDefinition.findById(definitionCurrent._id).session(session).lean();
+    const updatedImport = await FormImport.findById(imported._id).session(session).lean();
+    await recordImportVersionSnapshot(updatedImport ?? imported, "repaired", "", session);
+
+    return {
+      importRecord: updatedImport,
+      definitionBefore,
+      definitionAfter,
+      diagnostics,
+      repaired: {
+        registryWasMissing: !definitionBefore,
+        importSourceLinked:
+          String(definitionAfter?.importSourceId ?? "") === String(imported._id),
+        routeAligned: String(definitionAfter?.routePath ?? "") === `/forms/${imported.slug}`,
+        externalUrlAligned:
+          String(definitionAfter?.externalFormUrl ?? "") === normalizedExternalFormUrl,
+      },
     };
   });
 }

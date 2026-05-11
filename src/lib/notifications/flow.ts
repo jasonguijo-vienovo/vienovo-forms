@@ -5,7 +5,7 @@ import { Approver } from "@/models/Approver";
 import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 
-export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected";
+export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected" | "returned";
 export type NotificationDetail = {
   label: string;
   value: string;
@@ -21,6 +21,12 @@ export type NotificationFlowSettings = {
   notifySubmitterOnRejected: boolean;
   extraRecipients: string[];
   notes: string;
+};
+export type NotificationPreview = {
+  subject: string;
+  summary: string;
+  html: string;
+  details: NotificationDetail[];
 };
 
 const DEFAULT_SETTINGS: Omit<NotificationFlowSettings, "formSlug" | "formName"> = {
@@ -62,7 +68,7 @@ function eventEnabled(flow: NotificationFlowSettings, event: NotificationEvent) 
   if (event === "submitted" || event === "resubmitted") return flow.notifyOnSubmit;
   if (event === "next-approver") return flow.notifyNextApprover;
   if (event === "approved") return flow.notifySubmitterOnApproved;
-  if (event === "rejected") return flow.notifySubmitterOnRejected;
+  if (event === "rejected" || event === "returned") return flow.notifySubmitterOnRejected;
   return true;
 }
 
@@ -236,6 +242,30 @@ function buildNotificationBodyHtml(opts: {
   `;
 }
 
+export function buildNotificationPreview(formSlug: string, formName: string): NotificationPreview {
+  const subject = `${formName} request submitted (SAMPLE-20260511-0001)`;
+  const summary = `A sample ${formName} request has been submitted. This preview shows how the current email layout will look when real request data is plugged in.`;
+  const details = [
+    { label: "Reference", value: "SAMPLE-20260511-0001" },
+    { label: "Requester", value: "Juan Dela Cruz" },
+    { label: "Department", value: "Finance" },
+    { label: "Current step", value: "Manager approval" },
+  ];
+  const html = buildNotificationBodyHtml({
+    title: subject,
+    summary,
+    bodyHtml: messageTextToHtml(
+      "This is a sample notification preview for admins.\n\nUse it to verify spacing, labels, and the request summary before testing live emails.",
+    ),
+    details,
+    ctaUrl: "https://vienovo-forms.vercel.app/requests/SAMPLE-20260511-0001",
+    ctaLabel: "Open sample request",
+    accent: "brand",
+  });
+
+  return { subject, summary, html, details };
+}
+
 export async function listNotificationFlowSettings() {
   await connectMongo();
   const [forms, docs] = await Promise.all([
@@ -352,12 +382,15 @@ export async function sendFlowNotification(opts: {
           viewAllUrl: opts.viewAllUrl,
           accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
         });
+    const replayPayload = {
+      text: finalText,
+      html: resolvedHtml,
+    };
     try {
       await sendNotificationEmail({
         to: recipient,
         subject: opts.subject,
-        text: finalText,
-        html: resolvedHtml,
+        ...replayPayload,
       });
       await NotificationDeliveryLog.create({
         formSlug: opts.formSlug,
@@ -366,6 +399,8 @@ export async function sendFlowNotification(opts: {
         recipient,
         subject: opts.subject,
         status: "sent",
+        ...replayPayload,
+        replayable: true,
       });
     } catch (error) {
       await NotificationDeliveryLog.create({
@@ -376,6 +411,8 @@ export async function sendFlowNotification(opts: {
         subject: opts.subject,
         status: "failed",
         error: error instanceof Error ? error.message : "Unknown notification failure",
+        ...replayPayload,
+        replayable: true,
       });
       throw error;
     }
