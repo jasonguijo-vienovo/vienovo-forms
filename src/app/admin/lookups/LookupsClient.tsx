@@ -225,15 +225,20 @@ export default function LookupsClient(props: {
                             <input type="hidden" name="category" value={cat} />
                             <input
                               type="text"
+                              name="value"
+                              placeholder="Value (required if no email)"
+                              className="field-input w-full"
+                            />
+                            <input
+                              type="text"
                               name="name"
-                              placeholder="Name (e.g. Juan Dela Cruz)"
+                              placeholder="Name (optional)"
                               className="field-input w-full"
                             />
                             <input
                               type="email"
                               name="email"
-                              placeholder="Email (e.g. juan@vienovo.ph)"
-                              required
+                              placeholder="Email (optional)"
                               className="field-input w-full"
                             />
                             <div className="flex justify-end">

@@ -52,7 +52,11 @@ export async function addLookup(formData: FormData) {
   const rawValue = String(formData.get("value") ?? "").trim();
   const value = email || rawValue;
   const label = name;
-  if (!value) return;
+  if (!value) {
+    await setFlashToast({ tone: "error", message: "Enter a value, or provide an email." });
+    revalidatePath("/admin/lookups");
+    return;
+  }
 
   const valueKey = normalizeKey(value);
   const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
@@ -143,6 +147,11 @@ export async function addLookupFromApproverRole(formData: FormData) {
   const rawCategory = parseCategory(formData.get("category"));
   const category = await resolveImportedCategoryAlias(rawCategory);
   const role = String(formData.get("approverRole") ?? "").trim() as ApproverRole;
+  if (!category) {
+    await setFlashToast({ tone: "error", message: "Missing dropdown category." });
+    revalidatePath("/admin/lookups");
+    return;
+  }
 
   if (!APPROVER_ROLES.includes(role)) {
     await setFlashToast({ tone: "error", message: "Choose a valid approver role." });
