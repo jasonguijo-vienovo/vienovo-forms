@@ -41,6 +41,9 @@ export default async function ImportedFormPage({
   if (!imported) {
     redirect("/forms");
   }
+  if (String(imported.slug ?? "").trim().toLowerCase() !== slug.trim().toLowerCase()) {
+    redirect(`/forms/${encodeURIComponent(String(imported.slug ?? "").trim().toLowerCase())}`);
+  }
 
   const runtime = await hydrateImportedFormRuntime({
     slug,

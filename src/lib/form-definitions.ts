@@ -198,8 +198,10 @@ async function hasLiveImportedSource(row: any) {
   if (!row || row.source !== "imported" || row.isDeleted) return false;
 
   if (row.importSourceId) {
-    const byId = await FormImport.exists({ _id: row.importSourceId });
-    if (byId) return true;
+    const byId = await FormImport.findById(row.importSourceId).select({ slug: 1 }).lean();
+    if (byId) {
+      return String(byId.slug ?? "").trim().toLowerCase() === String(row.slug ?? "").trim().toLowerCase();
+    }
   }
 
   const bySlug = await FormImport.exists({ slug: row.slug });
@@ -357,7 +359,7 @@ export async function getCatalogForms(opts?: {
         .lean(),
     ]);
 
-    const liveImportIds = new Set(
+    const liveImportKeys = new Set(
       (
         await FormImport.find({
           $or: [
@@ -367,7 +369,7 @@ export async function getCatalogForms(opts?: {
         })
           .select({ _id: 1, slug: 1 })
           .lean()
-      ).flatMap((row) => [String(row._id), String(row.slug)]),
+      ).flatMap((row) => [String(row._id), String(row.slug).trim().toLowerCase()]),
     );
 
     const builtInBySlug = new Map(builtinRows.map((row) => [row.slug, row]));
@@ -379,8 +381,8 @@ export async function getCatalogForms(opts?: {
     const imported = importedRows
       .filter((row) => {
         if (String(row.externalFormUrl ?? "").trim()) return true;
-        if (row.importSourceId && liveImportIds.has(String(row.importSourceId))) return true;
-        return liveImportIds.has(String(row.slug));
+        if (row.importSourceId && !liveImportKeys.has(String(row.importSourceId))) return false;
+        return liveImportKeys.has(String(row.slug).trim().toLowerCase());
       })
       .map(normalizeFormDefinitionRow)
       .map(withRuntime)
