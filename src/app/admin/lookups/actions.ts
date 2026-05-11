@@ -257,17 +257,16 @@ function categoryLooksRoleDriven(category: string) {
   );
 }
 
-function roleMatchesCategory(role: ApproverRole, category: string) {
-  const roleKey = normalizeKey(String(role));
-  const categoryKey = normalizeKey(category);
-  if (categoryKey.includes("manager") || categoryKey.includes("supervisor")) {
-    return roleKey.includes("supervisor") || roleKey.includes("head") || roleKey.includes("sla");
-  }
-  if (categoryKey.includes("processor")) return roleKey.includes("processor");
-  if (categoryKey.includes("hr")) return roleKey.includes("hr");
-  if (categoryKey.includes("cashadvance")) return roleKey.includes("cashadvanceapprover");
-  if (categoryKey.includes("approver")) return true;
-  return true;
+function inferRolesForCategory(category: string, label: string): ApproverRole[] {
+  const key = `${normalizeKey(category)} ${normalizeKey(label)}`;
+  if (key.includes("manager") || key.includes("supervisor")) return ["supervisor", "head", "sla"];
+  if (key.includes("processor")) return ["processor"];
+  if (key.includes("cashadvance")) return ["cashAdvanceApprover"];
+  if (key.includes("hr")) return ["hr"];
+  if (key.includes("head")) return ["head"];
+  if (key.includes("sla")) return ["sla"];
+  if (key.includes("approver")) return [...APPROVER_ROLES];
+  return [];
 }
 
 export async function scanRolesLookups() {
@@ -289,6 +288,10 @@ export async function scanRolesLookups() {
   let touchedCategories = 0;
 
   for (const category of categories) {
+    const sample = await Lookup.findOne({ category }).select({ label: 1 }).lean();
+    const categoryLabel = String(sample?.label ?? "");
+    const targetRoles = inferRolesForCategory(String(category), categoryLabel);
+    if (targetRoles.length === 0) continue;
     const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
     const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
     const toInsert: Array<{ value: string; label: string }> = [];
@@ -296,7 +299,7 @@ export async function scanRolesLookups() {
 
     for (const approver of approvers) {
       const roles = Array.isArray(approver.roles) ? (approver.roles as ApproverRole[]) : [];
-      const matches = roles.some((role) => roleMatchesCategory(role, String(category)));
+      const matches = roles.some((role) => targetRoles.includes(role));
       if (!matches) continue;
       const value = String(approver.email ?? "").trim().toLowerCase();
       const label = String(approver.name ?? "").trim();
