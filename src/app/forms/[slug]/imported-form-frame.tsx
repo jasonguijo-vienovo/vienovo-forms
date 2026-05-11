@@ -118,10 +118,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     display: inline-flex;
   }
   body.vf-salary-loan {
-    background:
-      radial-gradient(900px 280px at 10% -10%, rgba(22, 163, 74, 0.08), transparent 60%),
-      radial-gradient(900px 280px at 95% -15%, rgba(14, 116, 144, 0.08), transparent 62%),
-      linear-gradient(180deg, #f4f8fb 0%, #ffffff 58%);
+    background: #f8fafc;
     padding: 18px 12px 28px;
   }
   body.vf-salary-loan form {
