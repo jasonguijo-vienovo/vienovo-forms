@@ -614,6 +614,17 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       ? true
       : definition.writeResponsesToSheet || Boolean((imported as any).writeResponsesToSheet);
 
+    await RequestModel.updateOne(
+      { _id: createdRequest._id },
+      {
+        $set: {
+          responseSpreadsheetId: String(responseSpreadsheetId || "").trim(),
+          responseSheetName: String(responseSheetName || "").trim(),
+          sheetStatusSyncError: "",
+        },
+      },
+    );
+
     if (!responseSpreadsheetId && shouldWriteResponses) {
       throw new Error("Response spreadsheet is not configured for this form.");
     }
