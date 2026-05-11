@@ -502,7 +502,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             });
         })()
       : null;
-    if (requiresApproval && !selectedApprover) {
+    const resolvedSelectedApprover = selectedApprover ? await selectedApprover : null;
+    if (requiresApproval && !resolvedSelectedApprover) {
       throw new Error("No valid selected approver found. Please select a valid approver name or email in the form.");
     }
     const referenceNo = isSalaryLoan
@@ -512,9 +513,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       ? [
           {
             step: 1,
-            role: isSalaryLoan ? "sla" : String(selectedApprover?.roles?.[0] || "approver"),
-            approverEmail: String(selectedApprover?.email ?? "").trim().toLowerCase(),
-            approverName: String(selectedApprover?.name ?? "").trim(),
+            role: isSalaryLoan ? "sla" : String(resolvedSelectedApprover?.roles?.[0] || "approver"),
+            approverEmail: String(resolvedSelectedApprover?.email ?? "").trim().toLowerCase(),
+            approverName: String(resolvedSelectedApprover?.name ?? "").trim(),
             status: "pending",
           },
         ]
