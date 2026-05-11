@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePathname, useSearchParams } from "next/navigation";
 import { SmoothPageLink } from "@/components/smooth-page-link";
 import {
@@ -27,6 +28,7 @@ import {
 } from "@/components/admin-ui";
 import { humanizeQueueRole } from "@/lib/request-queue";
 import type { ParsedAdminRequestsQuery } from "./query";
+import { rejectRequestFromQueue } from "./actions";
 
 const ADMIN_REQUEST_STATUSES = ["all", "pending", "submitted", "approved", "returned", "rejected"] as const;
 const ADMIN_REQUEST_SORTS = ["createdAt", "updatedAt", "age"] as const;
@@ -113,6 +115,7 @@ export function RequestsClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const router = useRouter();
 
   const selectedRow = rows.find((row) => row._id === selectedId) ?? null;
   const current = searchParams.toString();
@@ -391,6 +394,23 @@ export function RequestsClient({
                           <Layers3 className="h-4 w-4" />
                           Quick view
                         </button>
+                        {row.status !== "approved" && row.status !== "rejected" ? (
+                          <form
+                            action={async (formData) => {
+                              await rejectRequestFromQueue(formData);
+                              router.refresh();
+                            }}
+                          >
+                            <input type="hidden" name="referenceNo" value={row.referenceNo} />
+                            <input type="hidden" name="reason" value="Cancelled from admin queue." />
+                            <button
+                              type="submit"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 hover:text-red-800"
+                            >
+                              Reject / Cancel
+                            </button>
+                          </form>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -514,6 +534,7 @@ function RequestDrawer({
   queueHref: string;
   onClose: () => void;
 }) {
+  const router = useRouter();
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/20">
       <button type="button" className="flex-1 cursor-default" onClick={onClose} aria-label="Close quick view" />
@@ -627,6 +648,21 @@ function RequestDrawer({
             <button type="button" onClick={onClose} className="btn-secondary">
               Close
             </button>
+            {row.status !== "approved" && row.status !== "rejected" ? (
+              <form
+                action={async (formData) => {
+                  await rejectRequestFromQueue(formData);
+                  onClose();
+                  router.refresh();
+                }}
+              >
+                <input type="hidden" name="referenceNo" value={row.referenceNo} />
+                <input type="hidden" name="reason" value="Cancelled from admin queue quick view." />
+                <button type="submit" className="border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">
+                  Reject / Cancel
+                </button>
+              </form>
+            ) : null}
           </div>
         </div>
       </aside>
