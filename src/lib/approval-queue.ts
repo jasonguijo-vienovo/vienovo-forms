@@ -1,4 +1,5 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { getActiveDelegatorEmailsForDelegate, listActiveDelegationsForUser, type ActiveApprovalDelegation } from "@/lib/approval-delegations";
 import { RequestModel } from "@/models/Request";
 
 type LeanApprovalStep = {
@@ -60,6 +61,8 @@ export type ApprovalQueueItem = {
   } | null;
   ageHours: number;
   urgency: "overdue" | "due-soon" | "normal";
+  delegatedFromEmail: string;
+  delegatedFromName: string;
 };
 
 export type ApprovalQueueData = {
@@ -73,6 +76,10 @@ export type ApprovalQueueData = {
     approvedRecently: number;
     rejectedRecently: number;
     actedRecently: number;
+  };
+  delegations: {
+    toMe: ActiveApprovalDelegation[];
+    fromMe: ActiveApprovalDelegation[];
   };
 };
 
@@ -114,7 +121,11 @@ function urgencyForAge(ageHours: number): ApprovalQueueItem["urgency"] {
   return "normal";
 }
 
-function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
+function mapRequest(
+  doc: LeanRequest,
+  email: string,
+  delegatedByEmail: Map<string, ActiveApprovalDelegation>,
+): ApprovalQueueItem {
   const activeStep = doc.approvalChain.find((step) => step.step === doc.currentStep) ?? null;
   const matchingUserSteps = doc.approvalChain
     .filter((step) => step.approverEmail === email && (step.status === "approved" || step.status === "rejected"))
@@ -126,6 +137,7 @@ function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
 
   const latestUserDecision = matchingUserSteps[0] ?? null;
   const ageHours = ageHoursFrom(activeStep?.actedAt ?? doc.updatedAt ?? doc.createdAt);
+  const delegated = activeStep?.approverEmail ? delegatedByEmail.get(activeStep.approverEmail) : null;
 
   return {
     id: String(doc._id),
@@ -163,18 +175,27 @@ function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
       : null,
     ageHours,
     urgency: urgencyForAge(ageHours),
+    delegatedFromEmail: delegated?.delegatorEmail ?? "",
+    delegatedFromName: delegated?.delegatorName ?? "",
   };
 }
 
 export async function getApprovalQueueData(email: string): Promise<ApprovalQueueData> {
   await connectMongo();
+  const normalizedEmail = String(email ?? "").trim().toLowerCase();
+  const [delegations, delegatedApproverEmails] = await Promise.all([
+    listActiveDelegationsForUser(normalizedEmail),
+    getActiveDelegatorEmailsForDelegate(normalizedEmail),
+  ]);
+  const delegatedByEmail = new Map(delegations.toMe.map((item) => [item.delegatorEmail, item]));
+  const actorEmails = Array.from(new Set([normalizedEmail, ...delegatedApproverEmails].filter(Boolean)));
 
   const [pendingDocs, actedDocs] = await Promise.all([
     RequestModel.find({
       status: { $in: ["pending", "submitted", "returned"] },
       approvalChain: {
         $elemMatch: {
-          approverEmail: email,
+          approverEmail: { $in: actorEmails },
           status: "pending",
         },
       },
@@ -184,7 +205,7 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
     RequestModel.find({
       approvalChain: {
         $elemMatch: {
-          approverEmail: email,
+          approverEmail: { $in: actorEmails },
           status: { $in: ["approved", "rejected"] },
         },
       },
@@ -197,9 +218,9 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
   const pending = pendingDocs
     .filter((doc) => {
       const activeStep = doc.approvalChain.find((step) => step.step === doc.currentStep);
-      return activeStep?.approverEmail === email && activeStep?.status === "pending";
+      return Boolean(activeStep?.approverEmail && actorEmails.includes(activeStep.approverEmail)) && activeStep?.status === "pending";
     })
-    .map((doc) => mapRequest(doc, email))
+    .map((doc) => mapRequest(doc, normalizedEmail, delegatedByEmail))
     .sort((left, right) => {
       const urgencyRank = { overdue: 0, "due-soon": 1, normal: 2 };
       const rankDelta = urgencyRank[left.urgency] - urgencyRank[right.urgency];
@@ -208,7 +229,7 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
     });
 
   const acted = actedDocs
-    .map((doc) => mapRequest(doc, email))
+    .map((doc) => mapRequest(doc, normalizedEmail, delegatedByEmail))
     .filter((doc) => doc.latestUserDecision);
 
   const recentlyApproved = acted
@@ -230,5 +251,6 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
       rejectedRecently: recentlyRejected.length,
       actedRecently: acted.length,
     },
+    delegations,
   };
 }

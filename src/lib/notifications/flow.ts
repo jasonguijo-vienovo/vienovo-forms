@@ -382,12 +382,15 @@ export async function sendFlowNotification(opts: {
           viewAllUrl: opts.viewAllUrl,
           accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
         });
+    const replayPayload = {
+      text: finalText,
+      html: resolvedHtml,
+    };
     try {
       await sendNotificationEmail({
         to: recipient,
         subject: opts.subject,
-        text: finalText,
-        html: resolvedHtml,
+        ...replayPayload,
       });
       await NotificationDeliveryLog.create({
         formSlug: opts.formSlug,
@@ -396,6 +399,8 @@ export async function sendFlowNotification(opts: {
         recipient,
         subject: opts.subject,
         status: "sent",
+        ...replayPayload,
+        replayable: true,
       });
     } catch (error) {
       await NotificationDeliveryLog.create({
@@ -406,6 +411,8 @@ export async function sendFlowNotification(opts: {
         subject: opts.subject,
         status: "failed",
         error: error instanceof Error ? error.message : "Unknown notification failure",
+        ...replayPayload,
+        replayable: true,
       });
       throw error;
     }

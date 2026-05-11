@@ -14,7 +14,13 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import type { SystemReadinessSnapshot } from "@/lib/system-readiness";
-import { enableEmployeeInformationDefaults, resetNotificationFlow, saveNotificationFlow, sendNotificationTestEmail } from "./actions";
+import {
+  enableEmployeeInformationDefaults,
+  resendFailedNotification,
+  resetNotificationFlow,
+  saveNotificationFlow,
+  sendNotificationTestEmail,
+} from "./actions";
 
 type Flow = {
   formSlug: string;
@@ -54,6 +60,8 @@ export function NotificationsClient({
     recipient: string;
     subject: string;
     error: string;
+    replayable: boolean;
+    resentAt: string;
     sentAt: string;
   }>;
 }) {
@@ -171,11 +179,27 @@ export function NotificationsClient({
                   <AdminStatusPill tone="danger">failed</AdminStatusPill>
                 </div>
                 <p className="mt-3 text-xs text-surface-muted">{failure.subject || "No subject recorded"}</p>
-                <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
-                  {failure.error || "Unknown notification failure"}
-                </p>
-              </div>
-            ))}
+                  <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                    {failure.error || "Unknown notification failure"}
+                  </p>
+                  {failure.resentAt ? (
+                    <p className="mt-2 text-xs text-surface-muted">
+                      Resent {formatRelativeDate(failure.resentAt)}
+                    </p>
+                  ) : null}
+                  {failure.replayable ? (
+                    <form action={resendFailedNotification} className="mt-3">
+                      <input type="hidden" name="id" value={failure.id} />
+                      <PendingSubmitButton
+                        type="submit"
+                        idleLabel="Resend"
+                        pendingLabel="Resending..."
+                        className="btn-secondary"
+                      />
+                    </form>
+                  ) : null}
+                </div>
+              ))}
           </div>
         )}
       </AdminSection>

@@ -19,7 +19,7 @@ import { retryEmployeeSyncJob, syncEmployeesDirectory } from "./actions";
 type EmployeeView = "all" | "active" | "inactive" | "unsynced";
 type RecentJob = {
   id: string;
-  status: "running" | "succeeded" | "failed";
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   actorEmail: string;
   summary: string;
   errorMessage: string;
@@ -376,7 +376,7 @@ export function UserInfosClient({
 function jobTone(status: RecentJob["status"]): "ok" | "warn" | "danger" | "neutral" {
   if (status === "succeeded") return "ok";
   if (status === "failed") return "danger";
-  if (status === "running") return "warn";
+  if (status === "running" || status === "queued") return "warn";
   return "neutral";
 }
 

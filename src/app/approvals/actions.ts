@@ -2,8 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { setFlashToast } from "@/lib/flash";
+import { connectMongo } from "@/lib/db/mongo";
+import { completeAdminJob, failAdminJob, startAdminJob } from "@/lib/admin-jobs";
 import { safeAuth } from "@/lib/safe-auth";
 import { applyApprovalDecision } from "@/lib/request-approval";
+import { ApprovalDelegation } from "@/models/ApprovalDelegation";
 
 function readRequiredReference(formData: FormData) {
   const referenceNo = String(formData.get("referenceNo") ?? "").trim();
@@ -84,6 +87,15 @@ async function handleBulkDecision(formData: FormData, decision: "approve" | "rej
 
   const successes: string[] = [];
   const failures: Array<{ referenceNo: string; error: string }> = [];
+  await connectMongo();
+  const job = await startAdminJob({
+    type: "bulk-approval",
+    actorEmail: userEmail,
+    targetType: "approval-queue",
+    targetId: decision,
+    summary: `Bulk ${decision} started for ${references.length} request(s).`,
+    metadata: { references, decision },
+  });
 
   for (const referenceNo of references) {
     try {
@@ -101,6 +113,19 @@ async function handleBulkDecision(formData: FormData, decision: "approve" | "rej
         error: error instanceof Error ? error.message : "Unknown error",
       });
     }
+  }
+
+  if (successes.length > 0) {
+    await completeAdminJob(String(job._id), {
+      summary: `Bulk ${decision} completed for ${successes.length} request(s).`,
+      metadata: { references, successes, failures, decision },
+    });
+  } else {
+    await failAdminJob(String(job._id), {
+      summary: `Bulk ${decision} failed.`,
+      errorMessage: failures[0]?.error || "No requests could be processed.",
+      metadata: { references, failures, decision },
+    });
   }
 
   if (successes.length > 0) {
@@ -143,4 +168,66 @@ export async function bulkRejectFromQueue(formData: FormData) {
 
 export async function bulkReturnFromQueue(formData: FormData) {
   await handleBulkDecision(formData, "return");
+}
+
+export async function createApprovalDelegation(formData: FormData) {
+  const { userEmail, userName } = await getApproverIdentity();
+  const delegateEmail = String(formData.get("delegateEmail") ?? "").trim().toLowerCase();
+  const delegateName = String(formData.get("delegateName") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "").trim();
+  const endsAtRaw = String(formData.get("endsAt") ?? "").trim();
+
+  if (!delegateEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(delegateEmail)) {
+    await setFlashToast({ tone: "error", message: "Enter a valid delegate email." });
+    redirect("/approvals");
+  }
+  if (delegateEmail === userEmail) {
+    await setFlashToast({ tone: "error", message: "Choose someone else as your delegate." });
+    redirect("/approvals");
+  }
+
+  const endsAt = endsAtRaw ? new Date(`${endsAtRaw}T23:59:59.999Z`) : null;
+  if (endsAt && Number.isNaN(endsAt.getTime())) {
+    await setFlashToast({ tone: "error", message: "Delegation end date is invalid." });
+    redirect("/approvals");
+  }
+
+  await connectMongo();
+  await ApprovalDelegation.updateMany(
+    { delegatorEmail: userEmail, isActive: true },
+    { $set: { isActive: false, revokedAt: new Date(), revokedByEmail: userEmail } },
+  );
+  await ApprovalDelegation.create({
+    delegatorEmail: userEmail,
+    delegatorName: userName,
+    delegateEmail,
+    delegateName,
+    reason,
+    startsAt: new Date(),
+    endsAt,
+    isActive: true,
+    createdByEmail: userEmail,
+  });
+
+  await setFlashToast({ tone: "success", message: `Approval delegation set for ${delegateEmail}.` });
+  redirect("/approvals");
+}
+
+export async function revokeApprovalDelegation(formData: FormData) {
+  const { userEmail } = await getApproverIdentity();
+  const id = String(formData.get("id") ?? "").trim();
+  await connectMongo();
+
+  await ApprovalDelegation.updateOne(
+    { _id: id, delegatorEmail: userEmail, isActive: true },
+    {
+      $set: {
+        isActive: false,
+        revokedAt: new Date(),
+        revokedByEmail: userEmail,
+      },
+    },
+  );
+  await setFlashToast({ tone: "success", message: "Approval delegation revoked." });
+  redirect("/approvals");
 }

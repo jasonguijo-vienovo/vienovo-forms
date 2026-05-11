@@ -10,7 +10,9 @@ import {
   bulkApproveFromQueue,
   bulkRejectFromQueue,
   bulkReturnFromQueue,
+  createApprovalDelegation,
   rejectFromQueue,
+  revokeApprovalDelegation,
   returnFromQueue,
 } from "./actions";
 import type { ApprovalQueueData, ApprovalQueueItem } from "@/lib/approval-queue";
@@ -96,6 +98,50 @@ export function ApprovalsClient({ data }: Props) {
         <MetricCard label="Due soon" value={data.metrics.dueSoon} tone="warn" />
         <MetricCard label="Recently approved" value={data.metrics.approvedRecently} tone="ok" />
       </div>
+
+      <section className="app-panel p-5">
+        <div className="mb-4 flex flex-col gap-1">
+          <h2 className="text-base font-semibold text-surface-text">Delegation</h2>
+          <p className="text-sm text-surface-muted">
+            Temporarily let another approver act on requests assigned to you.
+          </p>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <form action={createApprovalDelegation} className="space-y-3 rounded border border-surface-border bg-slate-50 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate email</span>
+                <input name="delegateEmail" type="email" className="field-input" placeholder="approver@vienovo.ph" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate name</span>
+                <input name="delegateName" className="field-input" placeholder="Optional" />
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Reason</span>
+                <input name="reason" className="field-input" placeholder="Leave, travel, temporary coverage" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Ends on</span>
+                <input name="endsAt" type="date" className="field-input" />
+              </label>
+            </div>
+            <PendingSubmitButton
+              type="submit"
+              idleLabel="Set delegation"
+              pendingLabel="Saving delegation..."
+              className="btn-primary"
+            />
+          </form>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <DelegationList title="Delegated to me" rows={data.delegations.toMe} mode="to-me" />
+            <DelegationList title="My delegation" rows={data.delegations.fromMe} mode="from-me" />
+          </div>
+        </div>
+      </section>
 
       <section className="app-panel p-5">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -325,6 +371,11 @@ function PendingApprovalCard({
             <p className="mt-1 text-sm text-surface-muted">
               Waiting on step {item.activeStep?.step ?? item.currentStep} {item.activeStep?.role ? `(${item.activeStep.role})` : ""}
             </p>
+            {item.delegatedFromEmail ? (
+              <p className="mt-1 text-xs font-semibold text-brand-700">
+                Delegated from {item.delegatedFromName || item.delegatedFromEmail}
+              </p>
+            ) : null}
             <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
               <Clock3 className="h-3.5 w-3.5" />
               Submitted {formatDate(item.createdAt)} · waiting about {formatAge(item.ageHours)}
@@ -458,6 +509,53 @@ function HistorySection({
 
 function EmptyState({ message, className = "" }: { message: string; className?: string }) {
   return <div className={`text-sm text-surface-muted ${className}`}>{message}</div>;
+}
+
+function DelegationList({
+  title,
+  rows,
+  mode,
+}: {
+  title: string;
+  rows: ApprovalQueueData["delegations"]["toMe"];
+  mode: "to-me" | "from-me";
+}) {
+  return (
+    <div className="rounded border border-surface-border bg-white p-4">
+      <p className="text-sm font-semibold text-surface-text">{title}</p>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-surface-muted">No active delegations.</p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {rows.map((row) => (
+            <div key={row.id} className="rounded border border-surface-border bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-surface-text">
+                {mode === "to-me"
+                  ? row.delegatorName || row.delegatorEmail
+                  : row.delegateName || row.delegateEmail}
+              </p>
+              <p className="mt-1 text-xs text-surface-muted">
+                {mode === "to-me" ? row.delegatorEmail : row.delegateEmail}
+                {row.endsAt ? ` · until ${formatDate(row.endsAt)}` : ""}
+              </p>
+              {row.reason ? <p className="mt-1 text-xs text-surface-muted">{row.reason}</p> : null}
+              {mode === "from-me" ? (
+                <form action={revokeApprovalDelegation} className="mt-2">
+                  <input type="hidden" name="id" value={row.id} />
+                  <PendingSubmitButton
+                    type="submit"
+                    idleLabel="Revoke"
+                    pendingLabel="Revoking..."
+                    className="btn-secondary"
+                  />
+                </form>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function formatDate(value: string | null) {

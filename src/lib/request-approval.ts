@@ -1,6 +1,7 @@
 "use server";
 
 import { connectMongo } from "@/lib/db/mongo";
+import { findActiveDelegation } from "@/lib/approval-delegations";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
@@ -57,7 +58,14 @@ export async function applyApprovalDecision({
   if (!current || current.status !== "pending") {
     throw new Error("Nothing to act on.");
   }
-  if (current.approverEmail !== normalizedEmail) {
+  const activeDelegation =
+    current.approverEmail === normalizedEmail
+      ? null
+      : await findActiveDelegation({
+          delegatorEmail: current.approverEmail,
+          delegateEmail: normalizedEmail,
+        });
+  if (current.approverEmail !== normalizedEmail && !activeDelegation) {
     throw new Error("Forbidden: not the current approver.");
   }
 
@@ -95,6 +103,9 @@ export async function applyApprovalDecision({
       step: doc.currentStep,
       role: current.role,
       comment: note,
+      actedForEmail: current.approverEmail !== normalizedEmail ? current.approverEmail : "",
+      actedForName: current.approverEmail !== normalizedEmail ? current.approverName || "" : "",
+      delegationId: activeDelegation?._id ? String(activeDelegation._id) : "",
     },
   };
   const nextStatus = isApprove ? (isFinal ? "approved" : doc.status) : isReturn ? "returned" : "rejected";

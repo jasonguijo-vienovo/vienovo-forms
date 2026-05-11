@@ -43,7 +43,7 @@ function definitionLaunchHref(item: any, definition: any) {
   return String(definition?.externalFormUrl ?? "").trim() || `/forms/${item.slug}`;
 }
 
-export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlugKey, statuses }: any) {
+export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlugKey, versionsByImportId, statuses }: any) {
   const [q, setQ] = useState("");
   const [view, setView] = useState<"all" | "blocked" | "needs_review" | "needs_registry" | "needs_sync" | "live">("all");
   const [selectedId, setSelectedId] = useState<string | null>(imports[0]?._id ? String(imports[0]._id) : null);
@@ -188,6 +188,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
                 item={current}
                 definition={definitionBySlug[current.slug]}
                 synced={syncedStatsBySlugKey[normalizeLookupKey(current.slug)] ?? { valueCount: 0 }}
+                versions={versionsByImportId[String(current._id)] ?? []}
                 statuses={statuses}
               />
             ) : (
@@ -220,7 +221,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
   );
 }
 
-function DraftPanel({ item, definition, synced, statuses }: any) {
+function DraftPanel({ item, definition, synced, versions, statuses }: any) {
   const isLive = isDefinitionLive(definition);
   const blockerCount = item.parseDiagnostics?.blockerCount ?? item.parseDiagnostics?.blockers?.length ?? 0;
   const warningCount = item.parseDiagnostics?.warningCount ?? item.parseDiagnostics?.warnings?.length ?? 0;
@@ -253,6 +254,7 @@ function DraftPanel({ item, definition, synced, statuses }: any) {
         Last parsed: {item.lastParsedAt ? new Date(item.lastParsedAt).toLocaleString() : "Not recorded"}
       </p>
       <ImportReadinessPanel item={item} definition={definition} synced={synced} />
+      <VersionHistory rows={versions ?? []} />
 
       <details>
         <summary className="cursor-pointer text-sm font-semibold text-brand-700">Status</summary>
@@ -481,6 +483,40 @@ function DraftPanel({ item, definition, synced, statuses }: any) {
         </form>
       </div>
     </div>
+  );
+}
+
+function VersionHistory({ rows }: { rows: any[] }) {
+  return (
+    <details className="rounded border border-surface-border bg-white p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-brand-700">
+        Version history ({rows.length})
+      </summary>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-surface-muted">No version snapshots recorded yet.</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {rows.slice(0, 8).map((row) => (
+            <div key={String(row._id)} className="rounded border border-surface-border bg-slate-50 px-3 py-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-surface-text">
+                    v{row.sourceVersion} · {String(row.event ?? "").replace(/-/g, " ")}
+                  </p>
+                  <p className="mt-1 text-xs text-surface-muted">
+                    {row.createdAt ? new Date(row.createdAt).toLocaleString() : "No timestamp"}
+                    {row.createdByEmail ? ` by ${row.createdByEmail}` : ""}
+                  </p>
+                </div>
+                <AdminStatusPill tone={row.readinessState === "blocked" ? "danger" : row.readinessState === "needs-review" ? "warn" : "ok"}>
+                  {row.readinessState || "snapshot"}
+                </AdminStatusPill>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </details>
   );
 }
 

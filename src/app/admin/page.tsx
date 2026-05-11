@@ -219,13 +219,13 @@ export default async function AdminOverviewPage() {
             }
           />
           <ExceptionCard
-            href="/admin/users"
+            href="/admin/jobs"
             label="Running admin jobs"
             value={runningAdminJobCount}
             detail="Tracked admin operations still in progress."
           />
           <ExceptionCard
-            href="/admin/users"
+            href="/admin/jobs"
             label="Failed admin jobs"
             value={failedAdminJobCount}
             detail="Failures logged in the last 7 days."
@@ -511,7 +511,7 @@ function jobLink(type: string) {
   if (type === "employee-sync") return "/admin/users";
   if (type === "import-sync" || type === "import-publish") return "/admin/form-imports?tab=manage";
   if (type === "bulk-approval") return "/approvals";
-  return "/admin";
+  return "/admin/jobs";
 }
 
 function formatJobTime(value: Date | string | null | undefined) {

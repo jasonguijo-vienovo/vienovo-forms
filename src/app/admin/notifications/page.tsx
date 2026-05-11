@@ -26,6 +26,8 @@ export default async function NotificationFlowPage() {
         recipient: item.recipient || "",
         subject: item.subject || "",
         error: item.error || "",
+        replayable: Boolean(item.replayable && item.recipient && item.subject && (item.text || item.html)),
+        resentAt: item.resentAt ? new Date(item.resentAt).toISOString() : "",
         sentAt: item.sentAt ? new Date(item.sentAt).toISOString() : "",
       }))}
     />

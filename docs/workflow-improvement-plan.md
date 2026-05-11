@@ -75,6 +75,12 @@ Delivered in the first implementation slice:
 - notification admin now surfaces recent failed deliveries so broken email flow is visible without checking the database
 - imported form admin now includes a repair-linkage action for registry drift, stale importSource links, and route mismatches
 - notification admin now includes a rendered sample preview so email layout can be checked before live testing
+- approval workspace now supports active delegation so another approver can act during temporary coverage
+- bulk approval actions now write to the admin job ledger for operational tracking
+- admin jobs now have a dedicated `/admin/jobs` ledger with queued, running, succeeded, failed, and cancelled states
+- notification delivery logs now store replay payloads, and failed notifications can be resent from the notification admin page
+- imported form saves, publishes, and repairs now create version snapshots that appear in the importer
+- imported runtime forms now keep a local browser draft and restore it when the requester comes back
 
 Verified:
 

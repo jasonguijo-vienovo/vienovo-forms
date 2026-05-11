@@ -8,7 +8,7 @@ export const ADMIN_JOB_TYPES = [
 ] as const;
 export type AdminJobType = (typeof ADMIN_JOB_TYPES)[number];
 
-export const ADMIN_JOB_STATUSES = ["running", "succeeded", "failed"] as const;
+export const ADMIN_JOB_STATUSES = ["queued", "running", "succeeded", "failed", "cancelled"] as const;
 export type AdminJobStatus = (typeof ADMIN_JOB_STATUSES)[number];
 
 const adminJobSchema = new Schema(
@@ -21,6 +21,9 @@ const adminJobSchema = new Schema(
     summary: { type: String, default: "", trim: true },
     errorMessage: { type: String, default: "", trim: true },
     metadata: { type: Schema.Types.Mixed, default: {} },
+    retryCount: { type: Number, default: 0 },
+    queuedAt: { type: Date, default: null, index: true },
+    lastHeartbeatAt: { type: Date, default: null },
     startedAt: { type: Date, default: Date.now, index: true },
     finishedAt: { type: Date, default: null },
     durationMs: { type: Number, default: null },
