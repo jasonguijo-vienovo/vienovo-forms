@@ -79,11 +79,34 @@ export default async function DashboardPage({
   const pendingOwnershipFilter = {
     $or: [
       { currentActorEmail: userEmail },
+      {
+        $expr: {
+          $gt: [
+            {
+              $size: {
+                $filter: {
+                  input: "$approvalChain",
+                  as: "step",
+                  cond: {
+                    $and: [
+                      { $eq: ["$$step.approverEmail", userEmail] },
+                      { $eq: ["$$step.step", "$currentStep"] },
+                      { $eq: ["$$step.status", "pending"] },
+                    ],
+                  },
+                },
+              },
+            },
+            0,
+          ],
+        },
+      },
       { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
     ],
   };
   const pendingFilter: Record<string, unknown> = {
-    status: "pending",
+    status: { $in: ["pending", "submitted"] },
+    "approvalChain.0": { $exists: true },
     ...pendingOwnershipFilter,
   };
   if (pendingQuery) {
