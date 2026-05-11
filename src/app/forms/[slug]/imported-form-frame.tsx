@@ -118,29 +118,88 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     display: inline-flex;
   }
   body.vf-salary-loan {
-    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 55%);
-    padding: 16px 12px 24px;
+    background:
+      radial-gradient(900px 280px at 10% -10%, rgba(22, 163, 74, 0.08), transparent 60%),
+      radial-gradient(900px 280px at 95% -15%, rgba(14, 116, 144, 0.08), transparent 62%),
+      linear-gradient(180deg, #f4f8fb 0%, #ffffff 58%);
+    padding: 18px 12px 28px;
   }
   body.vf-salary-loan form {
-    max-width: 940px;
+    max-width: 960px;
     margin: 0 auto;
-    border: 1px solid #dbe7f4;
-    border-radius: 14px;
+    border: 1px solid #d6e3ef;
+    border-radius: 16px;
     background: #ffffff;
-    padding: 18px 16px;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+    padding: 24px 20px;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
   }
+  body.vf-salary-loan h1,
+  body.vf-salary-loan h2,
+  body.vf-salary-loan h3,
   body.vf-salary-loan label,
   body.vf-salary-loan p,
   body.vf-salary-loan span {
     color: #0f172a;
   }
+  body.vf-salary-loan label {
+    display: inline-block;
+    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
   body.vf-salary-loan input,
   body.vf-salary-loan select,
   body.vf-salary-loan textarea {
-    border-radius: 10px !important;
-    border-color: #c6d6e8 !important;
-    min-height: 40px;
+    border-radius: 12px !important;
+    border-color: #bfd1e2 !important;
+    min-height: 44px;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    background: #fff !important;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+  }
+  body.vf-salary-loan input:focus,
+  body.vf-salary-loan select:focus,
+  body.vf-salary-loan textarea:focus,
+  body.vf-salary-loan .vf-search-input:focus {
+    border-color: #0f766e !important;
+    box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12) !important;
+    outline: none !important;
+  }
+  body.vf-salary-loan .vf-search-shell {
+    margin-top: 2px;
+  }
+  body.vf-salary-loan .vf-search-input {
+    min-height: 44px;
+    border: 1px solid #bfd1e2;
+    border-radius: 12px;
+    font-size: 15px;
+    color: #0f172a;
+    background: #fff;
+  }
+  body.vf-salary-loan .vf-search-menu {
+    border: 1px solid #c8d7e7;
+    border-radius: 12px;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+    max-height: 270px;
+  }
+  body.vf-salary-loan .vf-search-item {
+    padding: 9px 12px;
+    border-bottom: 1px solid #edf2f7;
+    font-size: 14px;
+  }
+  body.vf-salary-loan .vf-search-item:last-child {
+    border-bottom: none;
+  }
+  body.vf-salary-loan .vf-search-item:hover {
+    background: #ecfeff;
+    color: #0f172a;
+  }
+  body.vf-salary-loan .vf-search-clear {
+    border-color: #c8d7e7;
+    color: #475569;
+    background: #f8fafc;
   }
 </style>
 <script>
