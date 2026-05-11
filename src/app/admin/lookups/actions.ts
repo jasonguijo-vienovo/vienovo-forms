@@ -43,45 +43,59 @@ async function resolveImportedCategoryAlias(category: LookupCategory) {
 }
 
 export async function addLookup(formData: FormData) {
-  await requireAdmin();
-  await connectMongo();
-  const rawCategory = parseCategory(formData.get("category"));
-  const category = await resolveImportedCategoryAlias(rawCategory);
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const rawValue = String(formData.get("value") ?? "").trim();
-  const value = email || rawValue;
-  const label = name;
-  if (!value) {
-    await setFlashToast({ tone: "error", message: "Enter a value, or provide an email." });
+  try {
+    await requireAdmin();
+    await connectMongo();
+    const rawCategory = parseCategory(formData.get("category"));
+    const category = await resolveImportedCategoryAlias(rawCategory);
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const rawValue = String(formData.get("value") ?? "").trim();
+    const value = email || rawValue;
+    const label = name;
+
+    if (!value) {
+      await setFlashToast({ tone: "error", message: "Enter a value, or provide an email." });
+      revalidatePath("/admin/lookups");
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      await setFlashToast({ tone: "error", message: "Email format is invalid." });
+      revalidatePath("/admin/lookups");
+      return;
+    }
+
+    const valueKey = normalizeKey(value);
+    const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
+    const exists = existing.some((item) => normalizeKey(String(item.value)) === valueKey);
+    if (exists) {
+      await setFlashToast({ tone: "success", message: `Skipped: "${value}" already exists.` });
+      revalidatePath("/admin/lookups");
+      return;
+    }
+
+    const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 });
+    await Lookup.create({
+      category,
+      value,
+      label,
+      sortOrder: (last?.sortOrder ?? -1) + 1,
+      isActive: true,
+    });
+
+    await resequenceCategoryAlphabetically(String(category));
+    await setFlashToast({
+      tone: "success",
+      message: label ? `Added dropdown value: ${label} <${value}>` : `Added dropdown value: ${value}`,
+    });
     revalidatePath("/admin/lookups");
-    return;
-  }
-
-  const valueKey = normalizeKey(value);
-  const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
-  const exists = existing.some((item) => normalizeKey(String(item.value)) === valueKey);
-  if (exists) {
-    await setFlashToast({ tone: "success", message: `Skipped: "${value}" already exists.` });
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message: error instanceof Error ? error.message : "Failed to add dropdown value.",
+    });
     revalidatePath("/admin/lookups");
-    return;
   }
-
-  const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 });
-  await Lookup.create({
-    category,
-    value,
-    label,
-    sortOrder: (last?.sortOrder ?? -1) + 1,
-    isActive: true,
-  });
-
-  await resequenceCategoryAlphabetically(String(category));
-  await setFlashToast({
-    tone: "success",
-    message: label ? `Added dropdown value: ${label} <${value}>` : `Added dropdown value: ${value}`,
-  });
-  revalidatePath("/admin/lookups");
 }
 
 export async function addLookupBulk(formData: FormData) {
@@ -142,29 +156,30 @@ export async function addLookupBulk(formData: FormData) {
 }
 
 export async function addLookupFromApproverRole(formData: FormData) {
-  await requireAdmin();
-  await connectMongo();
-  const rawCategory = parseCategory(formData.get("category"));
-  const category = await resolveImportedCategoryAlias(rawCategory);
-  const role = String(formData.get("approverRole") ?? "").trim() as ApproverRole;
-  if (!category) {
-    await setFlashToast({ tone: "error", message: "Missing dropdown category." });
-    revalidatePath("/admin/lookups");
-    return;
-  }
+  try {
+    await requireAdmin();
+    await connectMongo();
+    const rawCategory = parseCategory(formData.get("category"));
+    const category = await resolveImportedCategoryAlias(rawCategory);
+    const role = String(formData.get("approverRole") ?? "").trim() as ApproverRole;
+    if (!category) {
+      await setFlashToast({ tone: "error", message: "Missing dropdown category." });
+      revalidatePath("/admin/lookups");
+      return;
+    }
 
-  if (!APPROVER_ROLES.includes(role)) {
-    await setFlashToast({ tone: "error", message: "Choose a valid approver role." });
-    revalidatePath("/admin/lookups");
-    return;
-  }
+    if (!APPROVER_ROLES.includes(role)) {
+      await setFlashToast({ tone: "error", message: "Choose a valid approver role." });
+      revalidatePath("/admin/lookups");
+      return;
+    }
 
-  const approvers = await Approver.find({ isActive: true, roles: role }).select({ name: 1, email: 1 }).lean();
-  if (approvers.length === 0) {
-    await setFlashToast({ tone: "success", message: `No active approver emails found for role "${role}".` });
-    revalidatePath("/admin/lookups");
-    return;
-  }
+    const approvers = await Approver.find({ isActive: true, roles: role }).select({ name: 1, email: 1 }).lean();
+    if (approvers.length === 0) {
+      await setFlashToast({ tone: "success", message: `No active approver emails found for role "${role}".` });
+      revalidatePath("/admin/lookups");
+      return;
+    }
 
   const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
   const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
@@ -203,12 +218,19 @@ export async function addLookupFromApproverRole(formData: FormData) {
     })),
   );
 
-  await resequenceCategoryAlphabetically(String(category));
-  await setFlashToast({
-    tone: "success",
-    message: `Added ${toInsert.length} approver email value(s) from role "${role}".`,
-  });
-  revalidatePath("/admin/lookups");
+    await resequenceCategoryAlphabetically(String(category));
+    await setFlashToast({
+      tone: "success",
+      message: `Added ${toInsert.length} approver email value(s) from role "${role}".`,
+    });
+    revalidatePath("/admin/lookups");
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message: error instanceof Error ? error.message : "Failed to add values from approver role.",
+    });
+    revalidatePath("/admin/lookups");
+  }
 }
 
 export async function toggleLookup(formData: FormData) {

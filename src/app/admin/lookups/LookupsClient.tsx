@@ -223,6 +223,9 @@ export default function LookupsClient(props: {
                         <form action={addLookup} className="mt-3">
                           <PendingFormState className="space-y-2">
                             <input type="hidden" name="category" value={cat} />
+                            <p className="text-xs text-surface-muted">
+                              Add either a plain value, or enter Name + Email for people-based dropdowns.
+                            </p>
                             <input
                               type="text"
                               name="value"
