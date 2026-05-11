@@ -1,12 +1,20 @@
 ﻿"use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminStatusPill } from "@/components/admin-ui";
 import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { addLookup, addLookupBulk, addLookupFromApproverRole, deleteLookup, deleteLookupCategory, toggleLookup, updateLookup } from "./actions";
+import {
+  addLookup,
+  addLookupBulk,
+  addLookupFromApproverRole,
+  deleteLookup,
+  deleteLookupCategory,
+  scanRolesLookups,
+  toggleLookup,
+  updateLookup,
+} from "./actions";
 
 export type LookupAdminItem = {
   id: string;
@@ -28,8 +36,6 @@ export default function LookupsClient(props: {
   itemsByCategory: Record<string, LookupAdminItem[]>;
 }) {
   const { categoryLabels, groups, itemsByCategory } = props;
-  const router = useRouter();
-  const [isScanning, startScan] = useTransition();
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
   const [openAddPanelByCategory, setOpenAddPanelByCategory] = useState<Record<string, "bulk" | "single">>({});
@@ -94,14 +100,14 @@ export default function LookupsClient(props: {
                   <div className="text-xs text-surface-muted">
                     Tip: imported dropdowns can be updated from the importer, then fine-tuned here.
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => startScan(() => router.refresh())}
-                    disabled={isScanning}
-                    className="btn-secondary"
-                  >
-                    {isScanning ? "Scanning..." : "Scan dropdowns"}
-                  </button>
+                  <form action={scanRolesLookups}>
+                    <PendingSubmitButton
+                      type="submit"
+                      idleLabel="Scan roles"
+                      pendingLabel="Scanning roles..."
+                      className="btn-secondary"
+                    />
+                  </form>
                 </div>
                 <AdminSearchField
                   value={categoryQuery}
