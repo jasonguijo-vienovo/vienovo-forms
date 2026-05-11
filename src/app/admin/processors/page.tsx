@@ -1,10 +1,14 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { getAdminEmployeePickerOptions } from "@/lib/employee-admin";
 import { Approver } from "@/models/Approver";
 import { ProcessorsClient } from "./ProcessorsClient";
 
 export default async function ProcessorsPage() {
   await connectMongo();
-  const processors = await Approver.find({ roles: "processor" }).sort({ name: 1 }).lean();
+  const [processors, employeeOptions] = await Promise.all([
+    Approver.find({ roles: "processor" }).sort({ name: 1 }).lean(),
+    getAdminEmployeePickerOptions(),
+  ]);
 
   return (
     <ProcessorsClient
@@ -16,6 +20,7 @@ export default async function ProcessorsPage() {
         emailNeedsReview: item.emailNeedsReview,
         department: item.department || "",
       }))}
+      employeeOptions={employeeOptions}
     />
   );
 }

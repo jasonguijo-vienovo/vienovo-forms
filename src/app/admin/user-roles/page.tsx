@@ -1,13 +1,17 @@
 import { configuredAdminEmails } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
+import { getAdminEmployeePickerOptions } from "@/lib/employee-admin";
 import { User } from "@/models/User";
 import { UserRolesClient } from "./UserRolesClient";
 
 export default async function UserRolesPage() {
   await connectMongo();
-  const docs = await User.find({})
-    .sort({ role: -1, lastSeenAt: -1, email: 1 })
-    .lean();
+  const [docs, employeeOptions] = await Promise.all([
+    User.find({})
+      .sort({ role: -1, lastSeenAt: -1, email: 1 })
+      .lean(),
+    getAdminEmployeePickerOptions(),
+  ]);
 
   const envAdmins = configuredAdminEmails();
   const byEmail = new Map<
@@ -53,5 +57,5 @@ export default async function UserRolesPage() {
     return a.email.localeCompare(b.email);
   });
 
-  return <UserRolesClient users={users} />;
+  return <UserRolesClient users={users} employeeOptions={employeeOptions} />;
 }
