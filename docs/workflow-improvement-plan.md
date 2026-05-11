@@ -65,6 +65,7 @@ Delivered in the first implementation slice:
 - returned requests can be edited again by the requester
 - response sheet status sync supports the `returned` status
 - admin operational exception cards for blocked imports, overdue approvals, returned requests, and failed notification deliveries
+- approver admin setup now supports employee-directory-backed selection and stores employee context alongside approver records
 
 Verified:
 

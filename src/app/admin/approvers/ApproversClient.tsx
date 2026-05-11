@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -12,16 +12,28 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
+import { SearchableSelect } from "@/components/searchable-select";
 import { addApprover, deleteApprover, toggleApprover, updateApprover } from "./actions";
 
 type ApproverRow = {
   _id: string;
   name: string;
   email: string;
+  employeeId: string;
   roles: string[];
   isActive: boolean;
   emailNeedsReview: boolean;
   department?: string;
+  jobTitle?: string;
+};
+
+type EmployeeOption = {
+  email: string;
+  fullName: string;
+  employeeId: string;
+  department: string;
+  jobTitle: string;
+  isActive: boolean;
 };
 
 type ViewFilter = "all" | "review" | "active" | "inactive" | "hr_missing_email";
@@ -51,15 +63,38 @@ const ROLE_TONE: Record<string, string> = {
 export function ApproversClient({
   approvers,
   roles,
+  employeeOptions,
 }: {
   approvers: ApproverRow[];
   roles: string[];
+  employeeOptions: EmployeeOption[];
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
+  const [draftName, setDraftName] = useState("");
+  const [draftEmail, setDraftEmail] = useState("");
+
+  const selectedEmployee = useMemo(
+    () => employeeOptions.find((employee) => employee.email === selectedEmployeeEmail) ?? null,
+    [employeeOptions, selectedEmployeeEmail],
+  );
+  const employeeSelectOptions = useMemo(
+    () =>
+      employeeOptions
+        .filter((employee) => employee.isActive)
+        .map((employee) => ({
+          value: employee.email,
+          label:
+            `${employee.fullName} - ${employee.email}` +
+            `${employee.department ? ` - ${employee.department}` : ""}` +
+            `${employee.employeeId ? ` - ${employee.employeeId}` : ""}`,
+        })),
+    [employeeOptions],
+  );
 
   const filtered = approvers.filter((approver) => {
     const matchesQuery =
@@ -122,11 +157,55 @@ export function ApproversClient({
                 Close
               </button>
             </div>
-            <form action={addApprover} className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_auto]">
-              <input type="text" name="name" placeholder="Full name" required className="field-input" />
-              <input type="email" name="email" placeholder="email@vienovo.ph" className="field-input" />
-              <PendingSubmitButton type="submit" idleLabel="Add approver" pendingLabel="Adding..." className="btn-primary" />
-              <div className="lg:col-span-3 flex flex-wrap gap-3 text-sm text-surface-text">
+            <form action={addApprover} className="space-y-3">
+              <input type="hidden" name="name" value={draftName} />
+              <input type="hidden" name="email" value={draftEmail} />
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-surface-text">Search employee</label>
+                <SearchableSelect
+                  value={selectedEmployeeEmail}
+                  onChange={(email) => {
+                    setSelectedEmployeeEmail(email);
+                    const employee = employeeOptions.find((option) => option.email === email) ?? null;
+                    setDraftName(employee?.fullName ?? "");
+                    setDraftEmail(employee?.email ?? "");
+                  }}
+                  options={employeeSelectOptions}
+                  placeholder="Select an employee from the employee table"
+                />
+              </div>
+              {selectedEmployee ? (
+                <div className="rounded-md border border-surface-border bg-slate-50 px-3 py-3 text-sm text-surface-text">
+                  <p className="font-semibold">{selectedEmployee.fullName}</p>
+                  <p className="text-surface-muted">{selectedEmployee.email}</p>
+                  <p className="mt-1 text-xs text-surface-muted">
+                    {selectedEmployee.department || "No department"}
+                    {selectedEmployee.employeeId ? ` - ${selectedEmployee.employeeId}` : ""}
+                    {selectedEmployee.jobTitle ? ` - ${selectedEmployee.jobTitle}` : ""}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <input
+                    type="text"
+                    name="manual_name_preview"
+                    placeholder="Full name"
+                    value={draftName}
+                    onChange={(event) => setDraftName(event.target.value)}
+                    required
+                    className="field-input"
+                  />
+                  <input
+                    type="email"
+                    name="manual_email_preview"
+                    placeholder="email@vienovo.ph"
+                    value={draftEmail}
+                    onChange={(event) => setDraftEmail(event.target.value)}
+                    className="field-input"
+                  />
+                </div>
+              )}
+              <div className="flex flex-wrap gap-3 text-sm text-surface-text">
                 {roles.map((role) => (
                   <label key={role} className="flex items-center gap-1.5">
                     <input type="checkbox" name={`role_${role}`} className="accent-brand-600" />
@@ -134,6 +213,7 @@ export function ApproversClient({
                   </label>
                 ))}
               </div>
+              <PendingSubmitButton type="submit" idleLabel="Add approver" pendingLabel="Adding..." className="btn-primary" />
             </form>
           </div>
         </div>
@@ -187,7 +267,14 @@ export function ApproversClient({
               <tbody className="divide-y divide-surface-border">
                 {filtered.map((approver) => (
                   <tr key={approver._id} className="bg-white align-top">
-                    <td className="px-4 py-4 font-medium text-surface-text">{approver.name}</td>
+                    <td className="px-4 py-4">
+                      <p className="font-medium text-surface-text">{approver.name}</p>
+                      <p className="mt-1 text-xs text-surface-muted">
+                        {approver.department || "No department"}
+                        {approver.employeeId ? ` - ${approver.employeeId}` : ""}
+                        {approver.jobTitle ? ` - ${approver.jobTitle}` : ""}
+                      </p>
+                    </td>
                     <td className="px-4 py-4">
                       {editingId === approver._id ? (
                         <input
