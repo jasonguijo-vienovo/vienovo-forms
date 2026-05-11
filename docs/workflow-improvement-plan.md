@@ -66,6 +66,7 @@ Delivered in the first implementation slice:
 - response sheet status sync supports the `returned` status
 - admin operational exception cards for blocked imports, overdue approvals, returned requests, and failed notification deliveries
 - approver admin setup now supports employee-directory-backed selection and stores employee context alongside approver records
+- employee sync now records recent admin job runs with status, timing, actor, and failure context
 
 Verified:
 

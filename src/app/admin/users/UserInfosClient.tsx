@@ -17,6 +17,16 @@ import type { AdminEmployeeListRow } from "@/lib/employee-admin";
 import { syncEmployeesDirectory } from "./actions";
 
 type EmployeeView = "all" | "active" | "inactive" | "unsynced";
+type RecentJob = {
+  id: string;
+  status: "running" | "succeeded" | "failed";
+  actorEmail: string;
+  summary: string;
+  errorMessage: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number | null;
+};
 
 function formatDate(value: string) {
   if (!value) return "Not recorded";
@@ -49,11 +59,13 @@ export function UserInfosClient({
   graphReady,
   syncEnabled,
   deviceSyncEnabled,
+  recentJobs,
 }: {
   employees: AdminEmployeeListRow[];
   graphReady: boolean;
   syncEnabled: boolean;
   deviceSyncEnabled: boolean;
+  recentJobs: RecentJob[];
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<EmployeeView>("all");
@@ -127,6 +139,51 @@ export function UserInfosClient({
             : " Device summaries are off unless INTUNE_SYNC_INCLUDE_DEVICES is enabled."}
         </AdminHelpPanel>
       </div>
+
+      <AdminSection
+        title="Recent sync jobs"
+        description="This is the first step toward background job visibility for admin operations."
+        meta={`${recentJobs.length} recent run${recentJobs.length === 1 ? "" : "s"}`}
+      >
+        {recentJobs.length === 0 ? (
+          <AdminEmptyState
+            title="No sync jobs yet"
+            description="Run the employee sync once to start recording operational history."
+          />
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {recentJobs.map((job) => (
+              <div key={job.id} className="rounded border border-surface-border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-surface-text">
+                      {job.summary || "Employee sync run"}
+                    </p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      Started {formatDate(job.startedAt)}
+                      {job.actorEmail ? ` by ${job.actorEmail}` : ""}
+                    </p>
+                  </div>
+                  <AdminStatusPill tone={jobTone(job.status)}>
+                    {job.status}
+                  </AdminStatusPill>
+                </div>
+                <div className="mt-3 text-xs text-surface-muted">
+                  <p>
+                    Duration: {formatDuration(job.durationMs)}
+                    {job.finishedAt ? ` · Finished ${formatDate(job.finishedAt)}` : ""}
+                  </p>
+                  {job.errorMessage ? (
+                    <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-red-800">
+                      {job.errorMessage}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </AdminSection>
 
       <AdminSection
         title="Directory"
@@ -271,4 +328,17 @@ export function UserInfosClient({
       </AdminSection>
     </div>
   );
+}
+
+function jobTone(status: RecentJob["status"]): "ok" | "warn" | "danger" | "neutral" {
+  if (status === "succeeded") return "ok";
+  if (status === "failed") return "danger";
+  if (status === "running") return "warn";
+  return "neutral";
+}
+
+function formatDuration(durationMs: number | null) {
+  if (!durationMs || durationMs < 1000) return "under 1s";
+  if (durationMs < 60_000) return `${Math.round(durationMs / 100) / 10}s`;
+  return `${Math.round(durationMs / 6000) / 10}m`;
 }
