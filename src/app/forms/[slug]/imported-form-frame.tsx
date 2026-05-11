@@ -117,6 +117,31 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   .vf-search-clear[data-show="1"] {
     display: inline-flex;
   }
+  body.vf-salary-loan {
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 55%);
+    padding: 16px 12px 24px;
+  }
+  body.vf-salary-loan form {
+    max-width: 940px;
+    margin: 0 auto;
+    border: 1px solid #dbe7f4;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 18px 16px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  }
+  body.vf-salary-loan label,
+  body.vf-salary-loan p,
+  body.vf-salary-loan span {
+    color: #0f172a;
+  }
+  body.vf-salary-loan input,
+  body.vf-salary-loan select,
+  body.vf-salary-loan textarea {
+    border-radius: 10px !important;
+    border-color: #c6d6e8 !important;
+    min-height: 40px;
+  }
 </style>
 <script>
 (function () {
@@ -605,28 +630,3 @@ function SubmitStateSync({ onPendingChange }: { onPendingChange: (pending: boole
 
   return null;
 }
-  body.vf-salary-loan {
-    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 55%);
-    padding: 16px 12px 24px;
-  }
-  body.vf-salary-loan form {
-    max-width: 940px;
-    margin: 0 auto;
-    border: 1px solid #dbe7f4;
-    border-radius: 14px;
-    background: #ffffff;
-    padding: 18px 16px;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
-  }
-  body.vf-salary-loan label,
-  body.vf-salary-loan p,
-  body.vf-salary-loan span {
-    color: #0f172a;
-  }
-  body.vf-salary-loan input,
-  body.vf-salary-loan select,
-  body.vf-salary-loan textarea {
-    border-radius: 10px !important;
-    border-color: #c6d6e8 !important;
-    min-height: 40px;
-  }
