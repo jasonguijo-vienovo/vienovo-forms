@@ -22,6 +22,12 @@ export type NotificationFlowSettings = {
   extraRecipients: string[];
   notes: string;
 };
+export type NotificationPreview = {
+  subject: string;
+  summary: string;
+  html: string;
+  details: NotificationDetail[];
+};
 
 const DEFAULT_SETTINGS: Omit<NotificationFlowSettings, "formSlug" | "formName"> = {
   isActive: true,
@@ -234,6 +240,30 @@ function buildNotificationBodyHtml(opts: {
       ${ctaHtml}
     </div>
   `;
+}
+
+export function buildNotificationPreview(formSlug: string, formName: string): NotificationPreview {
+  const subject = `${formName} request submitted (SAMPLE-20260511-0001)`;
+  const summary = `A sample ${formName} request has been submitted. This preview shows how the current email layout will look when real request data is plugged in.`;
+  const details = [
+    { label: "Reference", value: "SAMPLE-20260511-0001" },
+    { label: "Requester", value: "Juan Dela Cruz" },
+    { label: "Department", value: "Finance" },
+    { label: "Current step", value: "Manager approval" },
+  ];
+  const html = buildNotificationBodyHtml({
+    title: subject,
+    summary,
+    bodyHtml: messageTextToHtml(
+      "This is a sample notification preview for admins.\n\nUse it to verify spacing, labels, and the request summary before testing live emails.",
+    ),
+    details,
+    ctaUrl: "https://vienovo-forms.vercel.app/requests/SAMPLE-20260511-0001",
+    ctaLabel: "Open sample request",
+    accent: "brand",
+  });
+
+  return { subject, summary, html, details };
 }
 
 export async function listNotificationFlowSettings() {

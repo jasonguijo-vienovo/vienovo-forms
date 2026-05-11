@@ -757,6 +757,112 @@ export async function deleteFormDefinitionEntry(input: { id?: string; slug?: str
   });
 }
 
+export async function repairImportedFormLinkage(input: { id: string }) {
+  return runWithOptionalTransaction(async (session) => {
+    const imported = await FormImport.findById(input.id).session(session).lean();
+    if (!imported) {
+      throw new Error("Import draft not found.");
+    }
+
+    const normalizedExternalFormUrl = normalizeExternalFormUrl(imported.externalFormUrl ?? "");
+    const diagnostics = analyzeImportedSource({
+      name: imported.name,
+      slug: imported.slug,
+      htmlSource: imported.htmlSource ?? "",
+      appsScriptSource: imported.appsScriptSource ?? "",
+      spreadsheetBindings: imported.spreadsheetBindings ?? {},
+      writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
+      responseSheetName: imported.responseSheetName ?? "",
+      spreadsheetId: imported.spreadsheetId ?? "",
+      externalFormUrl: normalizedExternalFormUrl,
+      defaultResponseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
+    });
+
+    const definitionBefore =
+      (await FormDefinition.findOne({
+        $or: [{ importSourceId: imported._id }, { slug: imported.slug }],
+      })
+        .session(session)
+        .lean()) ?? null;
+
+    await FormImport.updateOne(
+      { _id: imported._id },
+      {
+        $set: {
+          externalFormUrl: normalizedExternalFormUrl,
+          spreadsheetBindings: diagnostics.bindings,
+          sourceType:
+            normalizedExternalFormUrl &&
+            !String(imported.htmlSource ?? "").trim() &&
+            !String(imported.appsScriptSource ?? "").trim()
+              ? "external-link"
+              : "google-apps-script",
+          sourceChecksum: diagnostics.sourceChecksum,
+          readinessState: diagnostics.readinessState,
+          lastParsedAt: new Date(),
+          parseDiagnostics: diagnostics.parseDiagnostics,
+          summary: diagnostics.summary,
+        },
+      },
+      sessionOptions(session),
+    );
+
+    await ensureImportedRegistryEntry(
+      {
+        ...imported,
+        externalFormUrl: normalizedExternalFormUrl,
+      },
+      session,
+    );
+
+    const definitionCurrent = await FormDefinition.findOne({ slug: imported.slug }).session(session).lean();
+    if (!definitionCurrent) {
+      throw new Error("Failed to rebuild a registry entry for this import.");
+    }
+
+    await FormDefinition.updateOne(
+      { _id: definitionCurrent._id },
+      {
+        $set: {
+          slug: imported.slug,
+          routePath: `/forms/${imported.slug}`,
+          source: "imported",
+          importSourceId: imported._id,
+          externalFormUrl: normalizedExternalFormUrl,
+          writeResponsesToSheet: Boolean(imported.writeResponsesToSheet),
+          responseSpreadsheetId:
+            String(definitionCurrent.responseSpreadsheetId ?? "").trim() ||
+            DEFAULT_RESPONSE_SPREADSHEET_ID ||
+            imported.spreadsheetId ||
+            "",
+          responseSheetName:
+            String(definitionCurrent.responseSheetName ?? "").trim() ||
+            imported.responseSheetName ||
+            `${imported.name} Responses`,
+        },
+      },
+      sessionOptions(session),
+    );
+
+    const definitionAfter = await FormDefinition.findById(definitionCurrent._id).session(session).lean();
+
+    return {
+      importRecord: await FormImport.findById(imported._id).session(session).lean(),
+      definitionBefore,
+      definitionAfter,
+      diagnostics,
+      repaired: {
+        registryWasMissing: !definitionBefore,
+        importSourceLinked:
+          String(definitionAfter?.importSourceId ?? "") === String(imported._id),
+        routeAligned: String(definitionAfter?.routePath ?? "") === `/forms/${imported.slug}`,
+        externalUrlAligned:
+          String(definitionAfter?.externalFormUrl ?? "") === normalizedExternalFormUrl,
+      },
+    };
+  });
+}
+
 export async function deleteFormEverywhere(input: { id?: string; slug?: string; importId?: string }) {
   const requestedSlug = slugifyFormId(input.slug || "");
   const baseForm = input.id

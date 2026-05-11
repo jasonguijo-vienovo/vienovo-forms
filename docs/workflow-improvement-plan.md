@@ -73,6 +73,8 @@ Delivered in the first implementation slice:
 - failed employee sync jobs can now be retried directly from the admin user info page
 - the requester forms catalog now has real search and live availability filters instead of a placeholder search bar
 - notification admin now surfaces recent failed deliveries so broken email flow is visible without checking the database
+- imported form admin now includes a repair-linkage action for registry drift, stale importSource links, and route mismatches
+- notification admin now includes a rendered sample preview so email layout can be checked before live testing
 
 Verified:
 

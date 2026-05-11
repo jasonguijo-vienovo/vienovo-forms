@@ -12,6 +12,7 @@ import {
   deleteFormEverywhere as deleteFormEverywhereEntry,
   deleteImportedForm,
   publishImportedForm,
+  repairImportedFormLinkage,
   saveImportDraft,
   slugifyFormId,
   updateImportConfig,
@@ -504,6 +505,61 @@ export async function deleteFormImport(formData: FormData) {
     await setFlashToast({ tone: "error", message: messageFromError(error) });
   }
 
+  redirect(FORM_IMPORTS_PATH);
+}
+
+export async function repairFormImport(formData: FormData) {
+  const { email } = await requireAdmin();
+  await connectMongo();
+
+  const id = s(formData, "id");
+  if (!id) return;
+
+  try {
+    const result = await repairImportedFormLinkage({ id });
+    await setFlashToast({
+      tone: result.diagnostics.parseDiagnostics.blockerCount > 0 ? "error" : "success",
+      message:
+        result.diagnostics.parseDiagnostics.blockerCount > 0
+          ? `Repair finished for ${result.importRecord?.name || "import draft"}, but ${result.diagnostics.parseDiagnostics.blockerCount} blocker(s) still need manual fixes.`
+          : `Repair finished for ${result.importRecord?.name || "import draft"}. Registry and runtime links were re-aligned.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "repair_form_import",
+      targetType: "form-import",
+      targetId: id,
+      correlationId: randomUUID(),
+      before: result.definitionBefore
+        ? {
+            slug: result.definitionBefore.slug,
+            routePath: result.definitionBefore.routePath,
+            importSourceId: result.definitionBefore.importSourceId
+              ? String(result.definitionBefore.importSourceId)
+              : "",
+          }
+        : null,
+      after: result.definitionAfter
+        ? {
+            slug: result.definitionAfter.slug,
+            routePath: result.definitionAfter.routePath,
+            importSourceId: result.definitionAfter.importSourceId
+              ? String(result.definitionAfter.importSourceId)
+              : "",
+          }
+        : null,
+      details: {
+        repaired: result.repaired,
+        blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+        warningCount: result.diagnostics.parseDiagnostics.warningCount,
+      },
+    });
+  } catch (error) {
+    console.error("repairFormImport failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
+  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 

@@ -33,10 +33,20 @@ type ViewFilter = "all" | "active" | "off";
 export function NotificationsClient({
   flows,
   readiness,
+  previews,
   recentFailures,
 }: {
   flows: Flow[];
   readiness: SystemReadinessSnapshot;
+  previews: Record<
+    string,
+    {
+      subject: string;
+      summary: string;
+      html: string;
+      details: Array<{ label: string; value: string }>;
+    }
+  >;
   recentFailures: Array<{
     id: string;
     formName: string;
@@ -254,6 +264,26 @@ export function NotificationsClient({
                     )}
                   </div>
                 </div>
+
+                <details className="mt-4 rounded border border-surface-border bg-slate-50/70 p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-surface-text">
+                    Preview sample email
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded border border-surface-border bg-white px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                        Subject
+                      </p>
+                      <p className="mt-1 text-sm text-surface-text">
+                        {previews[flow.formSlug]?.subject || "Sample notification"}
+                      </p>
+                    </div>
+                    <div
+                      className="overflow-hidden rounded border border-surface-border bg-white"
+                      dangerouslySetInnerHTML={{ __html: previews[flow.formSlug]?.html || "" }}
+                    />
+                  </div>
+                </details>
 
                 <form action={saveNotificationFlow} className="mt-4">
                   <PendingFormState className="space-y-4">
