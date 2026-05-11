@@ -75,6 +75,10 @@ const requestSchema = new Schema(
     },
     lastActionAt: { type: Date, default: null },
     lastActionBy: { type: String, default: "", trim: true },
+    responseSpreadsheetId: { type: String, default: "", trim: true },
+    responseSheetName: { type: String, default: "", trim: true },
+    sheetStatusSyncedAt: { type: Date, default: null },
+    sheetStatusSyncError: { type: String, default: "" },
   },
   { timestamps: true }
 );
