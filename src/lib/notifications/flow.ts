@@ -30,7 +30,12 @@ const DEFAULT_SETTINGS: Omit<NotificationFlowSettings, "formSlug" | "formName"> 
 };
 
 const APPROVER_CACHE_TTL_MS = 60_000;
-const approverCache = new Map<string, { at: number; value: any }>();
+type ApproverLookupRow = {
+  email?: string;
+  name?: string;
+  roles?: string[];
+};
+const approverCache = new Map<string, { at: number; value: ApproverLookupRow[] }>();
 
 function normalizeSettings(input: Partial<NotificationFlowSettings> & Pick<NotificationFlowSettings, "formSlug" | "formName">) {
   return {
@@ -231,7 +236,7 @@ export async function sendFlowNotification(opts: {
   const key = cacheKeyForRecipients(recipients);
   const cached = approverCache.get(key);
   const isFresh = cached && Date.now() - cached.at < APPROVER_CACHE_TTL_MS;
-  const approvers = isFresh
+  const approvers: ApproverLookupRow[] = isFresh
     ? cached.value
     : await Approver.find({ email: { $in: recipients } }).select({ email: 1, name: 1, roles: 1 }).lean();
   if (!isFresh) approverCache.set(key, { at: Date.now(), value: approvers });
