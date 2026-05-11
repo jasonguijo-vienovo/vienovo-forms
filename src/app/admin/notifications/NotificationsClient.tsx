@@ -33,9 +33,19 @@ type ViewFilter = "all" | "active" | "off";
 export function NotificationsClient({
   flows,
   readiness,
+  recentFailures,
 }: {
   flows: Flow[];
   readiness: SystemReadinessSnapshot;
+  recentFailures: Array<{
+    id: string;
+    formName: string;
+    formSlug: string;
+    recipient: string;
+    subject: string;
+    error: string;
+    sentAt: string;
+  }>;
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -77,10 +87,16 @@ export function NotificationsClient({
           <CompactMetricCard label="Notifications off" value={offCount} tone="warn" />
           <CompactMetricCard label="Visible now" value={filtered.length} />
           <CompactMetricCard label="Flow health" value={healthy ? "Healthy" : "Needs attention"} tone={healthy ? "ok" : "warn"} />
+          <CompactMetricCard
+            label="Recent failures"
+            value={recentFailures.length}
+            tone={recentFailures.length > 0 ? "warn" : "ok"}
+          />
         </div>
         <AdminHelpPanel title="What this page does">
           Default recipients still come from the form logic. This page only turns those emails on or off
-          and lets you add extra recipients for each form.
+          and lets you add extra recipients for each form. Recent delivery failures below help us spot
+          broken recipient or SMTP issues before users report them.
         </AdminHelpPanel>
       </div>
 
@@ -119,6 +135,39 @@ export function NotificationsClient({
             </PendingFormState>
           </form>
         </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Recent delivery failures"
+        description="The latest failed notification attempts so we can diagnose recipient or SMTP issues quickly."
+        meta={`${recentFailures.length} recent failure${recentFailures.length === 1 ? "" : "s"}`}
+      >
+        {recentFailures.length === 0 ? (
+          <AdminEmptyState
+            title="No failed deliveries recently"
+            description="Notification delivery looks healthy from the latest recorded attempts."
+          />
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {recentFailures.map((failure) => (
+              <div key={failure.id} className="rounded border border-surface-border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-surface-text">{failure.formName}</p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      {failure.recipient || "Unknown recipient"} · {formatRelativeDate(failure.sentAt)}
+                    </p>
+                  </div>
+                  <AdminStatusPill tone="danger">failed</AdminStatusPill>
+                </div>
+                <p className="mt-3 text-xs text-surface-muted">{failure.subject || "No subject recorded"}</p>
+                <p className="mt-2 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                  {failure.error || "Unknown notification failure"}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </AdminSection>
 
       <AdminSection
@@ -329,4 +378,15 @@ function CompactMetricCard({
       <p className={`mt-1 text-2xl font-semibold leading-none ${valueClass}`}>{value}</p>
     </div>
   );
+}
+
+function formatRelativeDate(value: string) {
+  if (!value) return "Not recorded";
+  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
 }

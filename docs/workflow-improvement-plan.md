@@ -69,6 +69,10 @@ Delivered in the first implementation slice:
 - employee sync now records recent admin job runs with status, timing, actor, and failure context
 - admin overview now surfaces stale employee sync plus running and failed admin jobs
 - admin requests now surfaces volume-by-form and bottleneck-lane analytics for the current queue slice
+- employee sync now stores a Microsoft Graph delta cursor so later runs can sync incrementally instead of refetching every user every time
+- failed employee sync jobs can now be retried directly from the admin user info page
+- the requester forms catalog now has real search and live availability filters instead of a placeholder search bar
+- notification admin now surfaces recent failed deliveries so broken email flow is visible without checking the database
 
 Verified:
 

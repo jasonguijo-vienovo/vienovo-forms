@@ -1,5 +1,6 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { Employee } from "@/models/Employee";
+import { SyncState } from "@/models/SyncState";
 
 type GraphUserRow = {
   id?: string;
@@ -26,6 +27,9 @@ type GraphUserRow = {
     extensionAttribute13?: string;
     extensionAttribute14?: string;
     extensionAttribute15?: string;
+  };
+  "@removed"?: {
+    reason?: string;
   };
 };
 
@@ -54,6 +58,8 @@ export type EmployeeSyncResult = {
   deviceEnriched: number;
   employeeIdFallbackCount: number;
   employeeIdMissingCount: number;
+  removed: number;
+  syncMode: "full" | "delta";
 };
 
 type EmployeeIdResolution = {
@@ -79,6 +85,7 @@ const DEFAULT_EMPLOYEE_ID_FIELDS = [
   "onPremisesExtensionAttributes.extensionAttribute14",
   "onPremisesExtensionAttributes.extensionAttribute15",
 ] as const;
+const EMPLOYEE_GRAPH_SYNC_KEY = "employee-graph-users";
 
 function hasValue(value: string | undefined) {
   return Boolean(String(value ?? "").trim());
@@ -195,6 +202,39 @@ async function fetchGraphCollection<T>(accessToken: string, initialUrl: string) 
   return rows;
 }
 
+async function fetchGraphDeltaCollection<T>(accessToken: string, initialUrl: string) {
+  const rows: T[] = [];
+  let nextUrl: string | undefined = initialUrl;
+  let deltaLink = "";
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl, {
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Microsoft Graph request failed (${response.status}) for ${nextUrl}.`);
+      (error as Error & { status?: number }).status = response.status;
+      throw error;
+    }
+
+    const json = (await response.json()) as GraphCollectionResponse<T> & { "@odata.deltaLink"?: string };
+    rows.push(...(json.value ?? []));
+    if (json["@odata.deltaLink"]) deltaLink = json["@odata.deltaLink"];
+    nextUrl = json["@odata.nextLink"];
+  }
+
+  if (!deltaLink) {
+    throw new Error("Microsoft Graph delta sync did not return a delta link.");
+  }
+
+  return { rows, deltaLink };
+}
+
 function getGraphUserEmail(user: GraphUserRow) {
   return normalizeEmail(user.mail || user.userPrincipalName);
 }
@@ -251,8 +291,35 @@ async function fetchUsers(accessToken: string) {
     "onPremisesExtensionAttributes",
   ].join(",");
 
-  const url = `https://graph.microsoft.com/v1.0/users?$select=${encodeURIComponent(select)}&$top=${pageSize}`;
-  return fetchGraphCollection<GraphUserRow>(accessToken, url);
+  await connectMongo();
+  const state = await SyncState.findOne({ key: EMPLOYEE_GRAPH_SYNC_KEY })
+    .select({ cursorUrl: 1 })
+    .lean();
+  const storedCursor = String(state?.cursorUrl ?? "").trim();
+  const initialUrl =
+    storedCursor ||
+    `https://graph.microsoft.com/v1.0/users/delta?$select=${encodeURIComponent(select)}&$top=${pageSize}`;
+
+  try {
+    const result = await fetchGraphDeltaCollection<GraphUserRow>(accessToken, initialUrl);
+    return {
+      users: result.rows,
+      deltaLink: result.deltaLink,
+      syncMode: storedCursor ? ("delta" as const) : ("full" as const),
+    };
+  } catch (error) {
+    const status = (error as Error & { status?: number })?.status;
+    if (!storedCursor || (status !== 400 && status !== 410)) throw error;
+
+    const fallbackUrl =
+      `https://graph.microsoft.com/v1.0/users/delta?$select=${encodeURIComponent(select)}&$top=${pageSize}`;
+    const result = await fetchGraphDeltaCollection<GraphUserRow>(accessToken, fallbackUrl);
+    return {
+      users: result.rows,
+      deltaLink: result.deltaLink,
+      syncMode: "full" as const,
+    };
+  }
 }
 
 async function fetchDeviceSummaryByEmail(accessToken: string) {
@@ -303,12 +370,22 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
   }
 
   const accessToken = await getGraphAccessToken();
-  const [users, deviceSummaryByEmail] = await Promise.all([
+  await connectMongo();
+  await SyncState.updateOne(
+    { key: EMPLOYEE_GRAPH_SYNC_KEY },
+    {
+      $setOnInsert: { key: EMPLOYEE_GRAPH_SYNC_KEY },
+      $set: {
+        lastStartedAt: new Date(),
+      },
+    },
+    { upsert: true },
+  );
+
+  const [{ users, deltaLink, syncMode }, deviceSummaryByEmail] = await Promise.all([
     fetchUsers(accessToken),
     fetchDeviceSummaryByEmail(accessToken),
   ]);
-
-  await connectMongo();
 
   let processed = 0;
   let skipped = 0;
@@ -316,12 +393,49 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
   let deviceEnriched = 0;
   let employeeIdFallbackCount = 0;
   let employeeIdMissingCount = 0;
+  let removed = 0;
   const now = new Date();
 
   for (const user of users) {
+    if (user["@removed"]) {
+      const entraUserId = String(user.id ?? "").trim();
+      if (!entraUserId) continue;
+
+      await Employee.updateOne(
+        { entraUserId },
+        {
+          $set: {
+            isActive: false,
+            lastSyncedAt: now,
+            syncSource: "graph",
+          },
+        },
+      );
+
+      processed += 1;
+      inactive += 1;
+      removed += 1;
+      continue;
+    }
+
     const email = getGraphUserEmail(user);
     if (!shouldKeepEmployee(email)) {
-      skipped += 1;
+      const entraUserId = String(user.id ?? "").trim();
+      if (entraUserId) {
+        await Employee.updateOne(
+          { entraUserId },
+          {
+            $set: {
+              isActive: false,
+              lastSyncedAt: now,
+              syncSource: "graph",
+            },
+          },
+        );
+        inactive += 1;
+      } else {
+        skipped += 1;
+      }
       continue;
     }
 
@@ -374,6 +488,22 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
     processed += 1;
   }
 
+  await SyncState.updateOne(
+    { key: EMPLOYEE_GRAPH_SYNC_KEY },
+    {
+      $setOnInsert: { key: EMPLOYEE_GRAPH_SYNC_KEY },
+      $set: {
+        cursorUrl: deltaLink,
+        lastMode: syncMode,
+        lastCompletedAt: now,
+        lastSucceededAt: now,
+        lastErrorAt: null,
+        lastErrorMessage: "",
+      },
+    },
+    { upsert: true },
+  );
+
   return {
     processed,
     skipped,
@@ -381,5 +511,7 @@ export async function syncEmployeesFromGraph(): Promise<EmployeeSyncResult> {
     deviceEnriched,
     employeeIdFallbackCount,
     employeeIdMissingCount,
+    removed,
+    syncMode,
   };
 }
