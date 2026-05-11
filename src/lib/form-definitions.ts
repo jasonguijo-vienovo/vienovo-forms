@@ -214,6 +214,9 @@ function mergeBuiltInWithOverride(
 ): Omit<AppFormDefinition, "runtime"> | null {
   if (override?.isDeleted) return null;
   if (!override) return builtin;
+  if (override.source === "imported") {
+    return normalizeFormDefinitionRow(override);
+  }
   const normalized = normalizeFormDefinitionRow(override);
   return {
     ...builtin,

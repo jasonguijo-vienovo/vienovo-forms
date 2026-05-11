@@ -24,7 +24,52 @@ export default async function ImportedFormPage({
   if (!session?.user?.email) redirect("/sign-in");
 
   const definition = await getFormDefinitionBySlug(slug);
-  if (!definition || definition.source !== "imported") notFound();
+  if (!definition) notFound();
+
+  if (definition.source !== "imported") {
+    if (definition.externalFormUrl) {
+      redirect(definition.externalFormUrl);
+    }
+
+    const isAdmin = await isAdminUser(session.user.email);
+    return (
+      <>
+        <Navbar />
+        <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <div className="bg-white rounded-2xl shadow-sm border border-brand-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-6 py-6 text-white">
+              <h1 className="text-2xl font-bold mt-1">{definition.name}</h1>
+              <p className="text-sm text-brand-50 mt-2 max-w-2xl">
+                This form is configured in the registry, but it does not have an imported runtime or a dedicated native page yet.
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4 text-sm text-surface-muted">
+              <p>
+                Route path: <code>{definition.routePath || `/forms/${slug}`}</code>
+              </p>
+              <p>
+                Source: <code>{definition.source}</code>
+              </p>
+              <p>
+                Availability: <code>{definition.availability}</code>
+              </p>
+              {isAdmin ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  <p className="font-semibold">Admin note</p>
+                  <p className="mt-1">
+                    If this should run as an imported form, make sure its form registry entry is saved with
+                    <code> source: imported</code> and linked to a live import record. If this should stay native,
+                    it needs a dedicated page under <code>src/app/forms/{slug}/page.tsx</code>.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   const isAdmin = await isAdminUser(session.user.email);
   const requesterPreview = isAdmin && resolvedSearchParams?.preview === "requester";
