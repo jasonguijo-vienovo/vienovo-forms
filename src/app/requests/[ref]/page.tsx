@@ -234,14 +234,6 @@ export default async function RequestDetailPage({
                   Edit request
                 </Link>
               )}
-              {isCurrentApprover && (
-                <Link
-                  href={`/requests/${encodeURIComponent(doc.referenceNo)}/approve`}
-                  className="flex-1 text-center bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
-                >
-                  Review / Approve
-                </Link>
-              )}
               <Link
                 href={returnHref}
                 className="flex-1 text-center bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
