@@ -13,6 +13,7 @@ import {
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { SearchableSelect } from "@/components/searchable-select";
 import {
   demoteUserToRequester,
   promoteUserToAdmin,
@@ -29,6 +30,15 @@ type UserRow = {
   lastSeenAt?: string;
 };
 
+type EmployeeOption = {
+  email: string;
+  fullName: string;
+  employeeId: string;
+  department: string;
+  jobTitle: string;
+  isActive: boolean;
+};
+
 type ViewFilter = "all" | "admin" | "user" | "env";
 
 function formatDate(value?: string) {
@@ -36,10 +46,35 @@ function formatDate(value?: string) {
   return new Date(value).toLocaleString();
 }
 
-export function UserRolesClient({ users }: { users: UserRow[] }) {
+export function UserRolesClient({
+  users,
+  employeeOptions,
+}: {
+  users: UserRow[];
+  employeeOptions: EmployeeOption[];
+}) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
+
+  const selectedEmployee = useMemo(
+    () => employeeOptions.find((employee) => employee.email === selectedEmployeeEmail) ?? null,
+    [employeeOptions, selectedEmployeeEmail],
+  );
+  const employeeSelectOptions = useMemo(
+    () =>
+      employeeOptions
+        .filter((employee) => employee.isActive)
+        .map((employee) => ({
+          value: employee.email,
+          label:
+            `${employee.fullName} - ${employee.email}` +
+            `${employee.department ? ` - ${employee.department}` : ""}` +
+            `${employee.employeeId ? ` - ${employee.employeeId}` : ""}`,
+        })),
+    [employeeOptions],
+  );
 
   const filtered = useMemo(() => {
     return users.filter((user) => {
@@ -94,15 +129,39 @@ export function UserRolesClient({ users }: { users: UserRow[] }) {
               </button>
             </div>
             <form action={saveUserRole} className="max-w-4xl">
-              <PendingFormState className="grid gap-4 md:grid-cols-[1fr_1fr_180px_auto]">
-                <input name="name" placeholder="Full name (optional)" className="field-input" />
-                <input name="email" type="email" required placeholder="name@vienovo.ph" className="field-input" />
+              <PendingFormState className="grid gap-4">
+                <input name="name" type="hidden" value={selectedEmployee?.fullName ?? ""} />
+                <input name="email" type="hidden" value={selectedEmployee?.email ?? ""} />
+                <div>
+                  <label className="mb-1.5 block text-sm font-semibold text-surface-text">Search employee</label>
+                  <SearchableSelect
+                    value={selectedEmployeeEmail}
+                    onChange={setSelectedEmployeeEmail}
+                    options={employeeSelectOptions}
+                    placeholder="Select an employee from the employee table"
+                  />
+                </div>
+                {selectedEmployee ? (
+                  <div className="rounded-md border border-surface-border bg-slate-50 px-3 py-3 text-sm text-surface-text">
+                    <p className="font-semibold">{selectedEmployee.fullName}</p>
+                    <p className="text-surface-muted">{selectedEmployee.email}</p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      {selectedEmployee.department || "No department"}
+                      {selectedEmployee.employeeId ? ` • ${selectedEmployee.employeeId}` : ""}
+                      {selectedEmployee.jobTitle ? ` • ${selectedEmployee.jobTitle}` : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-surface-muted">Choose an employee so the role change uses the synced employee record instead of manual typing.</p>
+                )}
+                <div className="grid gap-4 md:grid-cols-[180px_auto]">
                 <select name="role" defaultValue="user" className="field-input">
                   <option value="user">Requester</option>
                   <option value="admin">Admin</option>
                 </select>
                 <PendingSubmitButton
                   type="submit"
+                  disabled={!selectedEmployee}
                   idleLabel={
                     <span className="inline-flex items-center gap-2">
                       <UserCog className="h-4 w-4" />
@@ -112,6 +171,7 @@ export function UserRolesClient({ users }: { users: UserRow[] }) {
                   pendingLabel="Saving..."
                   className="btn-primary"
                 />
+                </div>
               </PendingFormState>
             </form>
           </div>

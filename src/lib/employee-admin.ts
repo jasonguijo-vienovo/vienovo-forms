@@ -27,6 +27,15 @@ export type AdminEmployeeListRow = {
   };
 };
 
+export type AdminEmployeePickerOption = {
+  email: string;
+  fullName: string;
+  employeeId: string;
+  department: string;
+  jobTitle: string;
+  isActive: boolean;
+};
+
 export type AdminEmployeeDetail = {
   employee: AdminEmployeeListRow;
   requestSummary: {
@@ -201,6 +210,38 @@ export async function getAdminEmployeesDirectory() {
     if (byName !== 0) return byName;
     return a.email.localeCompare(b.email);
   });
+}
+
+export async function getAdminEmployeePickerOptions() {
+  await connectMongo();
+
+  const docs = await Employee.find({})
+    .sort({ fullName: 1, email: 1 })
+    .select({
+      email: 1,
+      fullName: 1,
+      employeeId: 1,
+      department: 1,
+      jobTitle: 1,
+      isActive: 1,
+    })
+    .lean();
+
+  return docs
+    .map((doc) => ({
+      email: normalizeEmail(doc.email),
+      fullName: String(doc.fullName ?? "").trim() || normalizeEmail(doc.email),
+      employeeId: String(doc.employeeId ?? "").trim(),
+      department: String(doc.department ?? "").trim(),
+      jobTitle: String(doc.jobTitle ?? "").trim(),
+      isActive: doc.isActive !== false,
+    }))
+    .filter((employee) => employee.email)
+    .sort((a, b) => {
+      const byName = a.fullName.localeCompare(b.fullName);
+      if (byName !== 0) return byName;
+      return a.email.localeCompare(b.email);
+    });
 }
 
 export async function getAdminEmployeeDetailByEmail(rawEmail: string): Promise<AdminEmployeeDetail | null> {

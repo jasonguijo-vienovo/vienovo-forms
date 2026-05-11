@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
@@ -11,6 +11,7 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
+import { SearchableSelect } from "@/components/searchable-select";
 import { addApprover, deleteApprover, toggleApprover, updateApprover } from "../approvers/actions";
 
 type ProcessorRow = {
@@ -22,13 +23,47 @@ type ProcessorRow = {
   department?: string;
 };
 
+type EmployeeOption = {
+  email: string;
+  fullName: string;
+  employeeId: string;
+  department: string;
+  jobTitle: string;
+  isActive: boolean;
+};
+
 type ViewFilter = "all" | "active" | "inactive" | "review";
 
-export function ProcessorsClient({ processors }: { processors: ProcessorRow[] }) {
+export function ProcessorsClient({
+  processors,
+  employeeOptions,
+}: {
+  processors: ProcessorRow[];
+  employeeOptions: EmployeeOption[];
+}) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
+
+  const selectedEmployee = useMemo(
+    () => employeeOptions.find((employee) => employee.email === selectedEmployeeEmail) ?? null,
+    [employeeOptions, selectedEmployeeEmail],
+  );
+  const employeeSelectOptions = useMemo(
+    () =>
+      employeeOptions
+        .filter((employee) => employee.isActive)
+        .map((employee) => ({
+          value: employee.email,
+          label:
+            `${employee.fullName} - ${employee.email}` +
+            `${employee.department ? ` - ${employee.department}` : ""}` +
+            `${employee.employeeId ? ` - ${employee.employeeId}` : ""}`,
+        })),
+    [employeeOptions],
+  );
 
   const filtered = processors.filter((processor) => {
     const matchesQuery =
@@ -77,11 +112,33 @@ export function ProcessorsClient({ processors }: { processors: ProcessorRow[] })
                 Close
               </button>
             </div>
-            <form action={addApprover} className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_2fr_auto]">
+            <form action={addApprover} className="space-y-3">
               <input type="hidden" name="role_processor" value="on" />
-              <input type="text" name="name" placeholder="Full name" required className="field-input" />
-              <input type="email" name="email" placeholder="email@vienovo.ph" className="field-input" />
-              <PendingSubmitButton type="submit" idleLabel="Add processor" pendingLabel="Adding..." className="btn-primary" />
+              <input type="hidden" name="name" value={selectedEmployee?.fullName ?? ""} />
+              <input type="hidden" name="email" value={selectedEmployee?.email ?? ""} />
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-surface-text">Search employee</label>
+                <SearchableSelect
+                  value={selectedEmployeeEmail}
+                  onChange={setSelectedEmployeeEmail}
+                  options={employeeSelectOptions}
+                  placeholder="Select an employee from the employee table"
+                />
+              </div>
+              {selectedEmployee ? (
+                <div className="rounded-md border border-surface-border bg-slate-50 px-3 py-3 text-sm text-surface-text">
+                  <p className="font-semibold">{selectedEmployee.fullName}</p>
+                  <p className="text-surface-muted">{selectedEmployee.email}</p>
+                  <p className="mt-1 text-xs text-surface-muted">
+                    {selectedEmployee.department || "No department"}
+                    {selectedEmployee.employeeId ? ` • ${selectedEmployee.employeeId}` : ""}
+                    {selectedEmployee.jobTitle ? ` • ${selectedEmployee.jobTitle}` : ""}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-surface-muted">Choose an employee so the processor name and email fill automatically.</p>
+              )}
+              <PendingSubmitButton type="submit" disabled={!selectedEmployee} idleLabel="Add processor" pendingLabel="Adding..." className="btn-primary" />
             </form>
           </div>
         </div>
