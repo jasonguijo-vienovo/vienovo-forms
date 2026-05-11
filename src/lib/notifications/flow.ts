@@ -91,6 +91,11 @@ function prependGreeting(opts: {
   return `${greeting}\n\nForm: ${opts.formName} (${opts.formSlug})\n\n${opts.body}`;
 }
 
+function extractFirstUrl(text: string) {
+  const match = String(text || "").match(/https?:\/\/[^\s]+/i);
+  return match?.[0] ?? "";
+}
+
 export async function listNotificationFlowSettings() {
   await connectMongo();
   const [forms, docs] = await Promise.all([
@@ -166,6 +171,7 @@ export async function sendFlowNotification(opts: {
     const roleHint = profile?.roles?.includes("hr") ? "hr" : profile?.roles?.[0] || "";
     const lastName = extractLastName(String(profile?.name || ""));
     const baseText = opts.text || "";
+    const detectedUrl = extractFirstUrl(baseText);
     const finalText = prependGreeting({
       body: baseText,
       roleHint,
@@ -173,12 +179,20 @@ export async function sendFlowNotification(opts: {
       formName: opts.formName,
       formSlug: opts.formSlug,
     });
+    const resolvedHtml =
+      opts.html ||
+      (opts.event === "next-approver" && detectedUrl
+        ? `<p>${finalText.replace(/\n/g, "<br />")}</p>
+           <p style="margin-top:14px;">
+             <a href="${detectedUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Review / Approve Request</a>
+           </p>`
+        : undefined);
     try {
       await sendNotificationEmail({
         to: recipient,
         subject: opts.subject,
         text: finalText,
-        html: opts.html,
+        html: resolvedHtml,
       });
       await NotificationDeliveryLog.create({
         formSlug: opts.formSlug,
