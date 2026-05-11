@@ -15,9 +15,28 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { AdminFilterTabs } from "@/components/admin-ui-client";
-import { getFormLaunchHref, isExternalFormLaunch, type AppFormDefinition } from "@/lib/form-definitions";
 
 type CatalogView = "all" | "ready" | "external" | "coming-soon";
+
+type CatalogForm = {
+  slug: string;
+  name: string;
+  description: string;
+  status: "draft" | "published" | "archived";
+  routePath: string;
+  externalFormUrl: string;
+  runtime: {
+    requesterCanOpen: boolean;
+  };
+};
+
+function getCatalogFormLaunchHref(form: Pick<CatalogForm, "slug" | "routePath" | "externalFormUrl">) {
+  return form.externalFormUrl || form.routePath || `/forms/${form.slug}`;
+}
+
+function isExternalCatalogFormLaunch(form: Pick<CatalogForm, "externalFormUrl">) {
+  return Boolean(String(form.externalFormUrl || "").trim());
+}
 
 function formIcon(slug: string) {
   if (slug.includes("travel")) return Plane;
@@ -29,7 +48,7 @@ function formIcon(slug: string) {
   return FileText;
 }
 
-export function FormsCatalogClient({ forms }: { forms: AppFormDefinition[] }) {
+export function FormsCatalogClient({ forms }: { forms: CatalogForm[] }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<CatalogView>("all");
 
@@ -113,14 +132,14 @@ function FormCard({
   routePath,
   runtime,
 }: Pick<
-  AppFormDefinition,
+  CatalogForm,
   "slug" | "name" | "description" | "status" | "externalFormUrl" | "routePath" | "runtime"
 >) {
   const available = runtime.requesterCanOpen;
   const Icon = formIcon(slug);
   const badgeText = status !== "published" ? "Pending" : "Coming soon";
-  const href = getFormLaunchHref({ slug, routePath, externalFormUrl });
-  const isExternal = isExternalFormLaunch({ externalFormUrl });
+  const href = getCatalogFormLaunchHref({ slug, routePath, externalFormUrl });
+  const isExternal = isExternalCatalogFormLaunch({ externalFormUrl });
 
   const inner = (
     <div
