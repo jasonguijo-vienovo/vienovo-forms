@@ -121,6 +121,24 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   padding: 3rem 1rem;
 }
 
+button,
+a[href],
+[role="button"],
+input[type="submit"],
+input[type="button"] {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a[href]:focus-visible,
+[role="button"]:focus-visible,
+input[type="submit"]:focus-visible,
+input[type="button"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .app-page--full {
   max-width: 1440px;
 }

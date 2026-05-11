@@ -41,6 +41,7 @@ function readFlashCookie() {
 export function SystemToast({ initialToast }: { initialToast: FlashToast | null }) {
   const [toast, setToast] = useState(initialToast);
   const [secondsLeft, setSecondsLeft] = useState(5);
+  const [visible, setVisible] = useState(Boolean(initialToast));
 
   useEffect(() => {
     if (!initialToast) return;
@@ -52,6 +53,8 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
       const nextToast = readFlashCookie();
       if (!nextToast) return;
       setToast(nextToast);
+      setVisible(false);
+      window.requestAnimationFrame(() => setVisible(true));
       clearFlashCookie();
     }
 
@@ -62,9 +65,13 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
 
   useEffect(() => {
     if (!toast) return;
+    setVisible(true);
     if (toast.persistent) return;
     setSecondsLeft(5);
-    const dismissTimer = window.setTimeout(() => setToast(null), 5000);
+    const dismissTimer = window.setTimeout(() => {
+      setVisible(false);
+      window.setTimeout(() => setToast(null), 220);
+    }, 5000);
     const countdownTimer = window.setInterval(() => {
       setSecondsLeft((current) => (current > 1 ? current - 1 : 1));
     }, 1000);
@@ -82,9 +89,13 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
       : "border-emerald-200 bg-emerald-50 text-emerald-900";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+    <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center px-4">
       <div
-        className={`w-full max-w-md rounded-2xl border px-5 py-4 shadow-2xl ${toneClass}`}
+        className={[
+          "pointer-events-auto w-full max-w-md rounded-2xl border px-5 py-4 shadow-2xl transition-all duration-200 ease-out",
+          visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-2 scale-95 opacity-0",
+          toneClass,
+        ].join(" ")}
         role="alertdialog"
         aria-live="polite"
         aria-modal="false"
@@ -106,7 +117,10 @@ export function SystemToast({ initialToast }: { initialToast: FlashToast | null 
         <div className="mt-4 flex justify-end">
           <button
             type="button"
-            onClick={() => setToast(null)}
+            onClick={() => {
+              setVisible(false);
+              window.setTimeout(() => setToast(null), 180);
+            }}
             className="rounded-xl border border-current/20 px-4 py-2 text-sm font-semibold transition hover:bg-black/5"
             aria-label="Okay"
           >
