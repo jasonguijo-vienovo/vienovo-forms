@@ -143,7 +143,7 @@ export async function updateResponseSheetStatusByReference(opts: {
   spreadsheetId: string;
   sheetTitle: string;
   referenceNo: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "returned";
 }) {
   const spreadsheetId = opts.spreadsheetId.trim();
   const sheetTitle = opts.sheetTitle.trim();

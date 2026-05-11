@@ -58,6 +58,8 @@ export type ApprovalQueueItem = {
     actedAt: string | null;
     comment: string;
   } | null;
+  ageHours: number;
+  urgency: "overdue" | "due-soon" | "normal";
 };
 
 export type ApprovalQueueData = {
@@ -66,6 +68,8 @@ export type ApprovalQueueData = {
   recentlyRejected: ApprovalQueueItem[];
   metrics: {
     pending: number;
+    overdue: number;
+    dueSoon: number;
     approvedRecently: number;
     rejectedRecently: number;
     actedRecently: number;
@@ -96,6 +100,20 @@ function compareByMostRecentAction(a: ApprovalQueueItem, b: ApprovalQueueItem) {
   return new Date(bValue ?? 0).getTime() - new Date(aValue ?? 0).getTime();
 }
 
+function ageHoursFrom(value: Date | string | null | undefined) {
+  const iso = toIso(value);
+  if (!iso) return 0;
+  const elapsed = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(elapsed) || elapsed < 0) return 0;
+  return Math.floor(elapsed / 3_600_000);
+}
+
+function urgencyForAge(ageHours: number): ApprovalQueueItem["urgency"] {
+  if (ageHours >= 48) return "overdue";
+  if (ageHours >= 24) return "due-soon";
+  return "normal";
+}
+
 function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
   const activeStep = doc.approvalChain.find((step) => step.step === doc.currentStep) ?? null;
   const matchingUserSteps = doc.approvalChain
@@ -107,6 +125,7 @@ function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
     });
 
   const latestUserDecision = matchingUserSteps[0] ?? null;
+  const ageHours = ageHoursFrom(activeStep?.actedAt ?? doc.updatedAt ?? doc.createdAt);
 
   return {
     id: String(doc._id),
@@ -142,6 +161,8 @@ function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
           comment: normalizeText(latestUserDecision.comment),
         }
       : null,
+    ageHours,
+    urgency: urgencyForAge(ageHours),
   };
 }
 
@@ -178,7 +199,13 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
       const activeStep = doc.approvalChain.find((step) => step.step === doc.currentStep);
       return activeStep?.approverEmail === email && activeStep?.status === "pending";
     })
-    .map((doc) => mapRequest(doc, email));
+    .map((doc) => mapRequest(doc, email))
+    .sort((left, right) => {
+      const urgencyRank = { overdue: 0, "due-soon": 1, normal: 2 };
+      const rankDelta = urgencyRank[left.urgency] - urgencyRank[right.urgency];
+      if (rankDelta !== 0) return rankDelta;
+      return right.ageHours - left.ageHours;
+    });
 
   const acted = actedDocs
     .map((doc) => mapRequest(doc, email))
@@ -197,6 +224,8 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
     recentlyRejected,
     metrics: {
       pending: pending.length,
+      overdue: pending.filter((item) => item.urgency === "overdue").length,
+      dueSoon: pending.filter((item) => item.urgency === "due-soon").length,
       approvedRecently: recentlyApproved.length,
       rejectedRecently: recentlyRejected.length,
       actedRecently: acted.length,

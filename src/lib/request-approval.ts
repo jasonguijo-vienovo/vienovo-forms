@@ -3,6 +3,7 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
 import { RequestModel } from "@/models/Request";
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
@@ -22,7 +23,7 @@ function isSalaryLoanRequest(formSlug: string, formName: string, referenceNo: st
   );
 }
 
-export type ApprovalDecision = "approve" | "reject";
+export type ApprovalDecision = "approve" | "reject" | "return";
 
 function normalizeComment(value: string | null | undefined) {
   return String(value ?? "").trim();
@@ -61,6 +62,10 @@ export async function applyApprovalDecision({
   }
 
   const isApprove = decision === "approve";
+  const isReturn = decision === "return";
+  if (isReturn && !note) {
+    throw new Error("A correction note is required when returning a request.");
+  }
   const isFinal = doc.currentStep >= doc.approvalChain.length;
   const nextStep = isFinal ? doc.currentStep : doc.currentStep + 1;
 
@@ -68,7 +73,7 @@ export async function applyApprovalDecision({
     if (step.step === doc.currentStep) {
       return {
         ...step,
-        status: isApprove ? "approved" : "rejected",
+        status: isApprove ? "approved" : isReturn ? "returned" : "rejected",
         actedAt: new Date(),
         comment: note,
       };
@@ -81,33 +86,41 @@ export async function applyApprovalDecision({
     }
     return step;
   });
+  const historyEntry = {
+    at: new Date(),
+    byEmail: normalizedEmail,
+    byName: normalizedName,
+    action: isApprove ? "approved" : isReturn ? "returned" : "rejected",
+    details: {
+      step: doc.currentStep,
+      role: current.role,
+      comment: note,
+    },
+  };
+  const nextStatus = isApprove ? (isFinal ? "approved" : doc.status) : isReturn ? "returned" : "rejected";
+  const nextCurrentStep = isApprove && !isFinal ? nextStep : doc.currentStep;
+  const nextHistory = [...(((doc as any).history ?? []) as any[]), historyEntry];
+  const queueFields = deriveRequestQueueFields({
+    status: nextStatus,
+    approvalChain,
+    currentStep: nextCurrentStep,
+    history: nextHistory,
+    createdAt: (doc as any).createdAt,
+    updatedAt: historyEntry.at,
+    submittedBy: doc.submittedBy,
+  });
 
   await RequestModel.updateOne(
     { _id: (doc as any)._id },
     {
       $set: {
         approvalChain,
-        ...(isApprove
-          ? {
-              currentStep: isFinal ? doc.currentStep : nextStep,
-              status: isFinal ? "approved" : doc.status,
-            }
-          : {
-              status: "rejected",
-            }),
+        currentStep: nextCurrentStep,
+        status: nextStatus,
+        ...queueFields,
       },
       $push: {
-        history: {
-          at: new Date(),
-          byEmail: normalizedEmail,
-          byName: normalizedName,
-          action: isApprove ? "approved" : "rejected",
-          details: {
-            step: doc.currentStep,
-            role: current.role,
-            comment: note,
-          },
-        },
+        history: historyEntry,
       },
     },
   );
@@ -136,7 +149,7 @@ export async function applyApprovalDecision({
       ? SALARY_LOAN_SHEET_NAME
       : configuredSheetTitle || (importedFormName ? `${importedFormName} Responses` : "");
 
-    const nextSheetStatus = isApprove ? (isFinal ? "approved" : "pending") : "rejected";
+    const nextSheetStatus = isApprove ? (isFinal ? "approved" : "pending") : isReturn ? "returned" : "rejected";
     if (writeResponsesToSheet && spreadsheetId && sheetTitle) {
       let synced = false;
       let attempts = 0;
@@ -232,6 +245,28 @@ export async function applyApprovalDecision({
             (requestUrl ? `Link: ${requestUrl}\n` : ""),
         });
       }
+    } else if (isReturn && submittedByEmail) {
+      await sendFlowNotification({
+        formSlug,
+        formName,
+        event: "returned",
+        to: submittedByEmail,
+        subject: `${formName} request returned for correction (${normalizedReference})`,
+        summary: `Your ${formName} request was returned for correction.`,
+        details: [
+          { label: "Reference No.", value: normalizedReference },
+          { label: "Status", value: "Returned for correction" },
+          { label: "Current role", value: current.role || "" },
+          { label: "Correction note", value: note },
+        ].filter((detail) => detail.value),
+        text:
+          `Your ${formName} request was returned for correction.\n\n` +
+          `Reference: ${normalizedReference}\n` +
+          `Correction note: ${note}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
     } else if (submittedByEmail) {
       await sendFlowNotification({
         formSlug,
@@ -253,7 +288,7 @@ export async function applyApprovalDecision({
       });
     }
   } catch (error) {
-    console.error(`${isApprove ? "Approval" : "Rejection"} notification failed:`, error);
+    console.error(`${isApprove ? "Approval" : isReturn ? "Return" : "Rejection"} notification failed:`, error);
   }
 
   console.log("applyApprovalDecision timing", {

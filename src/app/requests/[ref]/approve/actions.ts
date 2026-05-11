@@ -52,3 +52,28 @@ export async function rejectCurrentStep(referenceNo: string, formData: FormData)
   redirect(`/requests/${referenceNo}`);
 }
 
+export async function returnCurrentStep(referenceNo: string, formData: FormData) {
+  const session = await safeAuth();
+  const userEmail = session?.user?.email?.toLowerCase();
+  const userName = session?.user?.name ?? userEmail ?? "";
+  if (!userEmail) redirect("/sign-in");
+
+  const comment = s(formData, "comment");
+  if (!comment) {
+    await setFlashToast({ tone: "error", message: "Add a correction note before returning the request." });
+    redirect(`/requests/${referenceNo}/approve`);
+  }
+
+  await applyApprovalDecision({
+    referenceNo,
+    userEmail,
+    userName,
+    decision: "return",
+    comment,
+  });
+
+  await setFlashToast({ tone: "success", message: `Request returned for correction: ${referenceNo}` });
+
+  redirect(`/requests/${referenceNo}`);
+}
+

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, DatabaseZap, Eye, Layers3, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, DatabaseZap, Eye, Layers3, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { AdminEmptyState, AdminStatusPill } from "@/components/admin-ui";
@@ -27,7 +27,7 @@ function definitionLaunchHref(item: any, definition: any) {
 
 export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlugKey, statuses }: any) {
   const [q, setQ] = useState("");
-  const [view, setView] = useState<"all"|"needs_registry"|"needs_sync"|"live">("all");
+  const [view, setView] = useState<"all"|"blocked"|"needs_review"|"needs_registry"|"needs_sync"|"live">("all");
   const [selectedId, setSelectedId] = useState<string | null>(imports[0]?._id ? String(imports[0]._id) : null);
   const [limit, setLimit] = useState(30);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -38,8 +38,10 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
     const isLive = isDefinitionLive(definition);
     const matches = !q || [item.name, item.slug].join(" ").toLowerCase().includes(q.toLowerCase());
     if (!matches) return false;
+    if (view === "blocked") return item.readinessState === "blocked" || (item.parseDiagnostics?.blockerCount ?? 0) > 0;
+    if (view === "needs_review") return item.readinessState === "needs-review" || (item.parseDiagnostics?.warningCount ?? 0) > 0;
     if (view === "needs_registry") return !definition;
-    if (view === "needs_sync") return Boolean(item.spreadsheetId) && synced.valueCount === 0;
+    if (view === "needs_sync") return needsDropdownSync(item, synced);
     if (view === "live") return isLive;
     return true;
   }), [imports, definitionBySlug, syncedStatsBySlugKey, q, view]);
@@ -58,7 +60,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
       ) : null}
       <div className="mb-3 flex flex-col gap-3">
         <AdminSearchField value={q} onChange={setQ} placeholder="Search draft by name or form ID" />
-        <AdminFilterTabs value={view} onChange={setView} options={[{value:"all",label:"All"},{value:"needs_registry",label:"Needs registry"},{value:"needs_sync",label:"Needs sync"},{value:"live",label:"Live"}]} />
+        <AdminFilterTabs value={view} onChange={setView} options={[{value:"all",label:"All"},{value:"blocked",label:"Blocked"},{value:"needs_review",label:"Needs review"},{value:"needs_registry",label:"Needs registry"},{value:"needs_sync",label:"Needs sync"},{value:"live",label:"Live"}]} />
       </div>
 
       {filtered.length === 0 ? <AdminEmptyState title="No drafts found" description="Try changing filters or search." /> : (
@@ -75,6 +77,8 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
               const definition = definitionBySlug[item.slug];
               const synced = syncedStatsBySlugKey[normalizeLookupKey(item.slug)] ?? { valueCount: 0 };
               const isLive = isDefinitionLive(definition);
+              const blockerCount = item.parseDiagnostics?.blockerCount ?? item.parseDiagnostics?.blockers?.length ?? 0;
+              const warningCount = item.parseDiagnostics?.warningCount ?? item.parseDiagnostics?.warnings?.length ?? 0;
                 return <button key={String(item._id)} type="button" onClick={()=>setSelectedId(String(item._id))} className={`w-full border p-4 text-left ${String(item._id)===selectedId?"border-brand-400 ring-1 ring-brand-200":"border-surface-border"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <div>
@@ -82,16 +86,20 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
                     <p className="text-xs text-surface-muted">{item.slug}</p>
                   </div>
                   <div className="flex gap-1">
+                    <AdminStatusPill tone={blockerCount > 0 ? "danger" : warningCount > 0 ? "warn" : "ok"}>{readinessLabel(item)}</AdminStatusPill>
                     <AdminStatusPill tone={isLive?"ok":"warn"}>{isLive?"live":"internal"}</AdminStatusPill>
                     <AdminStatusPill tone={!definition?"warn":"brand"}>{!definition?"registry":"ready"}</AdminStatusPill>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-surface-muted">Synced values: {synced.valueCount ?? 0}</p>
+                <p className="mt-2 text-xs text-surface-muted">
+                  Fields: {item.parseDiagnostics?.parsedFieldCount ?? 0} detected · Synced values: {synced.valueCount ?? 0}
+                </p>
                 <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
                   <PipelineChip done label="Draft" />
                   <PipelineChip done={Boolean(definition)} label="Registry" />
-                  <PipelineChip done={!item.spreadsheetId || (synced.valueCount ?? 0) > 0} label="Sync" />
+                  <PipelineChip done={!needsDropdownSync(item, synced)} label="Sync" />
                   <PipelineChip done={Boolean(item.parseDiagnostics?.parsedFieldCount) || Boolean(String(item.externalFormUrl ?? "").trim())} label="Preview" />
+                  <PipelineChip done={blockerCount === 0} label="Preflight" />
                   <PipelineChip done={isLive} label="Live" />
                 </div>
               </button>;
@@ -100,7 +108,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
           </div>
 
           <aside className="admin-panel p-4">
-            {current ? <DraftPanel item={current} definition={definitionBySlug[current.slug]} statuses={statuses} /> : <p className="text-sm text-surface-muted">Select a draft.</p>}
+            {current ? <DraftPanel item={current} definition={definitionBySlug[current.slug]} synced={syncedStatsBySlugKey[normalizeLookupKey(current.slug)] ?? { valueCount: 0 }} statuses={statuses} /> : <p className="text-sm text-surface-muted">Select a draft.</p>}
           </aside>
         </div>
       )}
@@ -118,10 +126,12 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
   );
 }
 
-function DraftPanel({ item, definition, statuses }: any) {
+function DraftPanel({ item, definition, synced, statuses }: any) {
   const isLive = isDefinitionLive(definition);
-  const syncedNeeded = Boolean(item.spreadsheetId);
-  const nextAction = !definition ? "registry" : (syncedNeeded ? "sync" : (!isLive ? "publish" : "preview"));
+  const blockerCount = item.parseDiagnostics?.blockerCount ?? item.parseDiagnostics?.blockers?.length ?? 0;
+  const warningCount = item.parseDiagnostics?.warningCount ?? item.parseDiagnostics?.warnings?.length ?? 0;
+  const syncedNeeded = needsDropdownSync(item, synced);
+  const nextAction = blockerCount > 0 ? "fix" : !definition ? "registry" : (syncedNeeded ? "sync" : (!isLive ? "publish" : "preview"));
   const previewHref = definitionLaunchHref(item, definition);
   const previewLabel = definition?.externalFormUrl ? "Open external" : "Preview";
   const localDeleteMessage = `Delete the import draft for ${item.name} only? This keeps request data and may leave the registry record behind if it was created separately.`;
@@ -133,9 +143,11 @@ function DraftPanel({ item, definition, statuses }: any) {
       <Link href={previewHref} className="btn-secondary"><Eye className="h-4 w-4" />{previewLabel}</Link>
     </div>
     <div className="flex flex-wrap gap-2">
+      <AdminStatusPill tone={blockerCount > 0 ? "danger" : warningCount > 0 ? "warn" : "ok"}>{readinessLabel(item)}</AdminStatusPill>
       <AdminStatusPill tone={isLive?"ok":"warn"}>{isLive?"Live":"Internal only"}</AdminStatusPill>
       <AdminStatusPill tone="brand">{item.status}</AdminStatusPill>
     </div>
+    <ImportReadinessPanel item={item} definition={definition} synced={synced} />
     <details><summary className="cursor-pointer text-sm font-semibold text-brand-700">Status</summary>
       <form action={updateFormImportStatus} className="mt-2 space-y-2"><input type="hidden" name="id" value={String(item._id)} />
         <select name="status" defaultValue={item.status} className="field-input">{statuses.map((s:string)=><option key={s} value={s}>{s}</option>)}</select>
@@ -156,13 +168,15 @@ function DraftPanel({ item, definition, statuses }: any) {
       </form>
     </details>
     <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-surface-border bg-white pt-3">
+      {nextAction === "fix" ? <a href="#import-readiness" className="btn-primary"><AlertTriangle className="h-4 w-4" />Fix blockers first</a> : null}
       {nextAction === "registry" ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Add registry" pendingLabel="Working..." className="btn-primary" /></form> : null}
       {nextAction === "sync" ? <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Sync from spreadsheet" pendingLabel="Syncing..." className="btn-primary" /></form> : null}
       {nextAction === "publish" ? <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel="Next: Publish live" pendingLabel="Publishing..." className="btn-primary" /></form> : null}
       {nextAction === "preview" ? <Link href={previewHref} className="btn-primary"><Eye className="h-4 w-4" />{definition?.externalFormUrl ? "Next: Open external form" : "Next: Open preview"}</Link> : null}
+      <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><input type="hidden" name="dryRun" value="1" /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Preflight</span>} pendingLabel="Checking..." className="btn-secondary" /></form>
       {!definition ? <form action={createMissingRegistryEntry}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Layers3 className="h-4 w-4" />Add registry</span>} pendingLabel="Working..." className="btn-secondary" /></form> : null}
       <form action={syncImportedDropdowns}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><DatabaseZap className="h-4 w-4" />Sync</span>} pendingLabel="Syncing..." className="btn-secondary" /></form>
-      <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Publish</span>} pendingLabel="Publishing..." className="btn-primary" /></form>
+      <form action={publishFormImport}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" disabled={blockerCount > 0} idleLabel={<span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4" />Publish</span>} pendingLabel="Publishing..." className="btn-primary disabled:cursor-not-allowed disabled:opacity-50" /></form>
       <form action={deleteFormImport} onSubmit={(e)=>{ if (!confirm(localDeleteMessage)) e.preventDefault(); }}><input type="hidden" name="id" value={String(item._id)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete draft only</span>} pendingLabel="Deleting..." className="border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700" /></form>
       <form action={deleteFormEverywhere} onSubmit={(e)=>{ if (!confirm(globalDeleteMessage)) e.preventDefault(); }}><input type="hidden" name="id" value={String(item._id)} /><input type="hidden" name="slug" value={String(item.slug)} /><PendingSubmitButton type="submit" idleLabel={<span className="inline-flex items-center gap-2"><Trash2 className="h-4 w-4" />Delete everywhere</span>} pendingLabel="Deleting..." className="border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800" /></form>
     </div>
@@ -171,4 +185,58 @@ function DraftPanel({ item, definition, statuses }: any) {
 
 function PipelineChip({ done, label }: { done: boolean; label: string }) {
   return <span className={`rounded border px-2 py-0.5 ${done ? "border-green-200 bg-green-50 text-green-800" : "border-surface-border bg-white text-surface-muted"}`}>{label}</span>;
+}
+
+function readinessLabel(item: any) {
+  const blockers = item.parseDiagnostics?.blockerCount ?? item.parseDiagnostics?.blockers?.length ?? 0;
+  const warnings = item.parseDiagnostics?.warningCount ?? item.parseDiagnostics?.warnings?.length ?? 0;
+  if (blockers > 0 || item.readinessState === "blocked") return "blocked";
+  if (warnings > 0 || item.readinessState === "needs-review") return "needs review";
+  return "ready";
+}
+
+function needsDropdownSync(item: any, synced: any) {
+  const missingBindings = item.parseDiagnostics?.missingBindings?.length ?? 0;
+  return Boolean(item.spreadsheetId) && missingBindings > 0 && Number(synced?.valueCount ?? 0) === 0;
+}
+
+function ImportReadinessPanel({ item, definition, synced }: any) {
+  const blockers = item.parseDiagnostics?.blockers ?? [];
+  const warnings = item.parseDiagnostics?.warnings ?? [];
+  const missingBindings = item.parseDiagnostics?.missingBindings ?? [];
+  const hasIssues = blockers.length > 0 || warnings.length > 0 || missingBindings.length > 0 || !definition;
+
+  return (
+    <section id="import-readiness" className="rounded border border-surface-border bg-surface-subtle p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-surface-text">Publish readiness</p>
+          <p className="text-xs text-surface-muted">
+            {item.parseDiagnostics?.parsedFieldCount ?? 0} fields detected · {synced?.valueCount ?? 0} synced lookup values
+          </p>
+        </div>
+        <AdminStatusPill tone={blockers.length > 0 ? "danger" : warnings.length > 0 ? "warn" : "ok"}>{readinessLabel(item)}</AdminStatusPill>
+      </div>
+      {!hasIssues ? (
+        <p className="mt-3 text-sm text-green-800">No blockers found. This import can be published after final preview.</p>
+      ) : (
+        <div className="mt-3 space-y-2 text-sm">
+          {!definition ? <IssueLine tone="warn" text="Registry entry is missing. Use Add registry or the next-step button to repair it." /> : null}
+          {blockers.map((item: string) => <IssueLine key={`blocker-${item}`} tone="danger" text={item} />)}
+          {warnings.map((item: string) => <IssueLine key={`warning-${item}`} tone="warn" text={item} />)}
+          {missingBindings.length > 0 ? (
+            <IssueLine tone="warn" text={`Dropdown fields still need synced values: ${missingBindings.join(", ")}`} />
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IssueLine({ tone, text }: { tone: "danger" | "warn"; text: string }) {
+  return (
+    <div className={`rounded border px-3 py-2 ${tone === "danger" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+      {text}
+    </div>
+  );
 }

@@ -34,10 +34,17 @@ async function getApproverIdentity() {
   return { userEmail, userName };
 }
 
-async function handleSingleDecision(formData: FormData, decision: "approve" | "reject") {
+async function handleSingleDecision(formData: FormData, decision: "approve" | "reject" | "return") {
   const { userEmail, userName } = await getApproverIdentity();
   const referenceNo = readRequiredReference(formData);
   const comment = readComment(formData);
+  if (decision === "return" && !comment) {
+    await setFlashToast({
+      tone: "error",
+      message: "Add a correction note before returning a request.",
+    });
+    redirect("/approvals");
+  }
 
   await applyApprovalDecision({
     referenceNo,
@@ -49,13 +56,13 @@ async function handleSingleDecision(formData: FormData, decision: "approve" | "r
 
   await setFlashToast({
     tone: "success",
-    message: `${decision === "approve" ? "Approved" : "Rejected"} ${referenceNo}.`,
+    message: `${decision === "approve" ? "Approved" : decision === "return" ? "Returned for correction" : "Rejected"} ${referenceNo}.`,
   });
 
   redirect("/approvals");
 }
 
-async function handleBulkDecision(formData: FormData, decision: "approve" | "reject") {
+async function handleBulkDecision(formData: FormData, decision: "approve" | "reject" | "return") {
   const { userEmail, userName } = await getApproverIdentity();
   const references = readSelectedReferences(formData);
   const comment = readComment(formData);
@@ -64,6 +71,13 @@ async function handleBulkDecision(formData: FormData, decision: "approve" | "rej
     await setFlashToast({
       tone: "error",
       message: "Select at least one request first.",
+    });
+    redirect("/approvals");
+  }
+  if (decision === "return" && !comment) {
+    await setFlashToast({
+      tone: "error",
+      message: "Add a shared correction note before returning selected requests.",
     });
     redirect("/approvals");
   }
@@ -94,8 +108,8 @@ async function handleBulkDecision(formData: FormData, decision: "approve" | "rej
       tone: "success",
       message:
         failures.length > 0
-          ? `${decision === "approve" ? "Approved" : "Rejected"} ${successes.length} request(s). ${failures.length} skipped.`
-          : `${decision === "approve" ? "Approved" : "Rejected"} ${successes.length} request(s).`,
+          ? `${decision === "approve" ? "Approved" : decision === "return" ? "Returned" : "Rejected"} ${successes.length} request(s). ${failures.length} skipped.`
+          : `${decision === "approve" ? "Approved" : decision === "return" ? "Returned" : "Rejected"} ${successes.length} request(s).`,
     });
   } else {
     await setFlashToast({
@@ -115,10 +129,18 @@ export async function rejectFromQueue(formData: FormData) {
   await handleSingleDecision(formData, "reject");
 }
 
+export async function returnFromQueue(formData: FormData) {
+  await handleSingleDecision(formData, "return");
+}
+
 export async function bulkApproveFromQueue(formData: FormData) {
   await handleBulkDecision(formData, "approve");
 }
 
 export async function bulkRejectFromQueue(formData: FormData) {
   await handleBulkDecision(formData, "reject");
+}
+
+export async function bulkReturnFromQueue(formData: FormData) {
+  await handleBulkDecision(formData, "return");
 }

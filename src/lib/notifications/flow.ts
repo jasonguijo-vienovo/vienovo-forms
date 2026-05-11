@@ -5,7 +5,7 @@ import { Approver } from "@/models/Approver";
 import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 
-export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected";
+export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected" | "returned";
 export type NotificationDetail = {
   label: string;
   value: string;
@@ -62,7 +62,7 @@ function eventEnabled(flow: NotificationFlowSettings, event: NotificationEvent) 
   if (event === "submitted" || event === "resubmitted") return flow.notifyOnSubmit;
   if (event === "next-approver") return flow.notifyNextApprover;
   if (event === "approved") return flow.notifySubmitterOnApproved;
-  if (event === "rejected") return flow.notifySubmitterOnRejected;
+  if (event === "rejected" || event === "returned") return flow.notifySubmitterOnRejected;
   return true;
 }
 

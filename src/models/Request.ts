@@ -19,6 +19,7 @@ export const APPROVAL_STEP_STATUSES = [
   "pending",
   "approved",
   "rejected",
+  "returned",
   "edited",
   "skipped",
 ] as const;

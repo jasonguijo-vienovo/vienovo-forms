@@ -1,4 +1,4 @@
-import { BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
+import { AlertTriangle, BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
 import {
   AdminHelpPanel,
@@ -13,6 +13,8 @@ import { getSystemReadinessSnapshot } from "@/lib/system-readiness";
 import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
+import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
+import { RequestModel } from "@/models/Request";
 import { SeedButton } from "./seed-button";
 
 export default async function AdminOverviewPage() {
@@ -24,6 +26,11 @@ export default async function AdminOverviewPage() {
     approverNeedsReview,
     processorCount,
     importedDraftCount,
+    blockedImportCount,
+    reviewImportCount,
+    overdueApprovalCount,
+    returnedRequestCount,
+    failedNotificationCount,
     forms,
   ] = await Promise.all([
     Lookup.countDocuments({}),
@@ -31,6 +38,18 @@ export default async function AdminOverviewPage() {
     Approver.countDocuments({ emailNeedsReview: true }),
     Approver.countDocuments({ roles: "processor" }),
     FormImport.countDocuments({}),
+    FormImport.countDocuments({ readinessState: "blocked" }),
+    FormImport.countDocuments({ readinessState: "needs-review" }),
+    RequestModel.countDocuments({
+      status: "pending",
+      queueBucket: "pending-approval",
+      updatedAt: { $lte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    }),
+    RequestModel.countDocuments({ status: "returned" }),
+    NotificationDeliveryLog.countDocuments({
+      status: "failed",
+      sentAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }),
     getAllFormDefinitionsForAdmin(),
   ]);
 
@@ -49,7 +68,12 @@ export default async function AdminOverviewPage() {
 
   const nextSteps = buildNextSteps({
     importedDraftCount,
+    blockedImportCount,
+    reviewImportCount,
     approverNeedsReview,
+    overdueApprovalCount,
+    returnedRequestCount,
+    failedNotificationCount,
     liveFormCount,
   });
 
@@ -120,6 +144,38 @@ export default async function AdminOverviewPage() {
           description="Open this to check email, Sheets, Drive, auth, and database readiness in one place."
         />
       </div>
+
+      <AdminSection
+        title="Operational exceptions"
+        description="Issues that can block publishing, approvals, or reliable communication."
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ExceptionCard
+            href="/admin/form-imports?tab=manage"
+            label="Blocked imports"
+            value={blockedImportCount}
+            detail="Cannot publish until blockers are fixed."
+          />
+          <ExceptionCard
+            href="/admin/requests?view=pending-approval"
+            label="Overdue approvals"
+            value={overdueApprovalCount}
+            detail="Pending more than 48 hours."
+          />
+          <ExceptionCard
+            href="/admin/requests?status=returned"
+            label="Returned requests"
+            value={returnedRequestCount}
+            detail="Waiting for requester corrections."
+          />
+          <ExceptionCard
+            href="/admin/notifications"
+            label="Failed emails"
+            value={failedNotificationCount}
+            detail="Failures logged in the last 7 days."
+          />
+        </div>
+      </AdminSection>
 
       <AdminSection
         title="Recommended next steps"
@@ -314,23 +370,96 @@ function AdminCard({
   );
 }
 
+function ExceptionCard({
+  href,
+  label,
+  value,
+  detail,
+}: {
+  href: string;
+  label: string;
+  value: number;
+  detail: string;
+}) {
+  const active = value > 0;
+  return (
+    <Link
+      href={href}
+      className={`border p-4 transition hover:border-brand-300 hover:shadow-sm ${
+        active ? "border-amber-200 bg-amber-50" : "border-surface-border bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-surface-text">{label}</p>
+          <p className="mt-1 text-xs text-surface-muted">{detail}</p>
+        </div>
+        {active ? <AlertTriangle className="h-4 w-4 text-amber-700" /> : null}
+      </div>
+      <p className={`mt-3 text-2xl font-semibold ${active ? "text-amber-800" : "text-surface-text"}`}>
+        {value}
+      </p>
+    </Link>
+  );
+}
+
 function buildNextSteps({
   importedDraftCount,
+  blockedImportCount,
+  reviewImportCount,
   approverNeedsReview,
+  overdueApprovalCount,
+  returnedRequestCount,
+  failedNotificationCount,
   liveFormCount,
 }: {
   importedDraftCount: number;
+  blockedImportCount: number;
+  reviewImportCount: number;
   approverNeedsReview: number;
+  overdueApprovalCount: number;
+  returnedRequestCount: number;
+  failedNotificationCount: number;
   liveFormCount: number;
 }) {
   const steps: Array<{ title: string; description: string; href: string }> =
     [];
 
-  if (importedDraftCount > 0) {
+  if (blockedImportCount > 0) {
+    steps.push({
+      title: "Fix blocked imports",
+      description: `${blockedImportCount} import${blockedImportCount === 1 ? " has" : "s have"} publish blockers. Open the importer and review readiness.`,
+      href: "/admin/form-imports?tab=manage",
+    });
+  } else if (importedDraftCount > 0) {
     steps.push({
       title: "Review imported forms",
-      description: `${importedDraftCount} draft form${importedDraftCount === 1 ? "" : "s"} still need review, sync, or publishing.`,
-      href: "/admin/form-imports",
+      description: `${importedDraftCount} draft form${importedDraftCount === 1 ? "" : "s"} still need review, sync, or publishing. ${reviewImportCount} need extra review.`,
+      href: "/admin/form-imports?tab=manage",
+    });
+  }
+
+  if (overdueApprovalCount > 0) {
+    steps.push({
+      title: "Clear overdue approvals",
+      description: `${overdueApprovalCount} approval${overdueApprovalCount === 1 ? " is" : "s are"} older than 48 hours.`,
+      href: "/admin/requests?view=pending-approval",
+    });
+  }
+
+  if (returnedRequestCount > 0) {
+    steps.push({
+      title: "Monitor returned requests",
+      description: `${returnedRequestCount} request${returnedRequestCount === 1 ? " is" : "s are"} waiting for requester corrections.`,
+      href: "/admin/requests?status=returned",
+    });
+  }
+
+  if (failedNotificationCount > 0) {
+    steps.push({
+      title: "Review failed emails",
+      description: `${failedNotificationCount} notification failure${failedNotificationCount === 1 ? "" : "s"} were logged in the last 7 days.`,
+      href: "/admin/notifications",
     });
   }
 
