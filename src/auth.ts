@@ -2,6 +2,7 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
 import { connectMongo } from "@/lib/db/mongo";
+import { isKnownVienovoEmployee } from "@/lib/employee";
 import { isFirebaseAdminConfigured, verifyFirebaseIdToken } from "@/lib/firebase/admin";
 import { User } from "@/models/User";
 
@@ -9,6 +10,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      isEmployee?: boolean;
       role?: "user" | "approver" | "processor" | "admin";
     } & DefaultSession["user"];
   }
@@ -58,7 +60,7 @@ if (firebaseConfigured) {
         try {
           const decodedToken = await verifyFirebaseIdToken(idToken);
           const email = String(decodedToken.email ?? "").trim().toLowerCase();
-          if (!email.endsWith("@vienovo.ph")) return null;
+          if (!email) return null;
           if (!decodedToken.email_verified) return null;
 
           return {
@@ -83,7 +85,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async signIn({ user }) {
       const email = user?.email?.toLowerCase() ?? "";
-      if (!email.endsWith("@vienovo.ph")) return false;
+      if (!email) return false;
 
       try {
         await connectMongo();
@@ -128,12 +130,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           console.error("Auth role load failed:", error);
           token.role = configuredAdminEmails().has(email) ? "admin" : "user";
         }
+
+        try {
+          token.isEmployee = await isKnownVienovoEmployee(email);
+        } catch (error) {
+          console.error("Auth employee lookup failed:", error);
+          token.isEmployee = false;
+        }
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = (token.id as string) ?? token.sub ?? "";
+        session.user.isEmployee = Boolean(token.isEmployee);
         session.user.role =
           token.role === "admin"
             ? "admin"

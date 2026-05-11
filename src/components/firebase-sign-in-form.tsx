@@ -20,7 +20,6 @@ export function FirebaseSignInForm({ redirectTo, className }: FirebaseSignInForm
   const [isPending, startTransition] = useTransition();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({
-    hd: "vienovo.ph",
     prompt: "select_account",
   });
 
@@ -64,7 +63,7 @@ export function FirebaseSignInForm({ redirectTo, className }: FirebaseSignInForm
           <span>{isPending ? "Signing in..." : "Sign in with Google"}</span>
         </button>
         <p className="text-center text-xs text-gray-400">
-          Firebase Google sign-in must use a verified <strong>@vienovo.ph</strong> account.
+          Google sign-in is available for employees and external requesters. Vienovo employees are verified from the internal employee database.
         </p>
         {error ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">
