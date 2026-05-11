@@ -10,7 +10,9 @@ import { AdminSystemReadiness } from "@/components/admin-system-readiness";
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import { getSystemReadinessSnapshot } from "@/lib/system-readiness";
+import { AdminJob } from "@/models/AdminJob";
 import { Approver } from "@/models/Approver";
+import { Employee } from "@/models/Employee";
 import { FormImport } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
 import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
@@ -31,6 +33,11 @@ export default async function AdminOverviewPage() {
     overdueApprovalCount,
     returnedRequestCount,
     failedNotificationCount,
+    graphSyncedEmployeeCount,
+    lastGraphEmployeeSyncRow,
+    runningAdminJobCount,
+    failedAdminJobCount,
+    recentAdminJobs,
     forms,
   ] = await Promise.all([
     Lookup.countDocuments({}),
@@ -50,6 +57,21 @@ export default async function AdminOverviewPage() {
       status: "failed",
       sentAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
     }),
+    Employee.countDocuments({ syncSource: "graph" }),
+    Employee.findOne({ syncSource: "graph", lastSyncedAt: { $ne: null } })
+      .sort({ lastSyncedAt: -1 })
+      .select({ lastSyncedAt: 1, fullName: 1, email: 1 })
+      .lean(),
+    AdminJob.countDocuments({ status: "running" }),
+    AdminJob.countDocuments({
+      status: "failed",
+      startedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }),
+    AdminJob.find({})
+      .sort({ startedAt: -1 })
+      .limit(6)
+      .select({ type: 1, status: 1, actorEmail: 1, summary: 1, errorMessage: 1, startedAt: 1, finishedAt: 1, durationMs: 1 })
+      .lean(),
     getAllFormDefinitionsForAdmin(),
   ]);
 
@@ -65,6 +87,9 @@ export default async function AdminOverviewPage() {
       (!form.writeResponsesToSheet || !form.responseSpreadsheetId?.trim()),
   ).length;
   const readiness = getSystemReadinessSnapshot();
+  const lastEmployeeSyncAt = lastGraphEmployeeSyncRow?.lastSyncedAt ? new Date(lastGraphEmployeeSyncRow.lastSyncedAt) : null;
+  const employeeSyncIsStale =
+    !lastEmployeeSyncAt || Date.now() - lastEmployeeSyncAt.getTime() > 2 * 24 * 60 * 60 * 1000;
 
   const nextSteps = buildNextSteps({
     importedDraftCount,
@@ -74,6 +99,9 @@ export default async function AdminOverviewPage() {
     overdueApprovalCount,
     returnedRequestCount,
     failedNotificationCount,
+    employeeSyncIsStale,
+    runningAdminJobCount,
+    failedAdminJobCount,
     liveFormCount,
   });
 
@@ -126,6 +154,12 @@ export default async function AdminOverviewPage() {
           hint="Emails that likely need fixing"
         />
         <AdminMetricCard
+          label="Graph-synced employees"
+          value={graphSyncedEmployeeCount}
+          tone={graphSyncedEmployeeCount > 0 ? "ok" : "warn"}
+          hint="Profiles backed by Entra/Graph"
+        />
+        <AdminMetricCard
           label="Forms with response tabs"
           value={responseConnectedCount}
           tone={responseConnectedCount > 0 ? "ok" : "warn"}
@@ -174,7 +208,71 @@ export default async function AdminOverviewPage() {
             value={failedNotificationCount}
             detail="Failures logged in the last 7 days."
           />
+          <ExceptionCard
+            href="/admin/users"
+            label="Employee sync stale"
+            value={employeeSyncIsStale ? 1 : 0}
+            detail={
+              lastEmployeeSyncAt
+                ? `Last Graph sync: ${lastEmployeeSyncAt.toLocaleString()}`
+                : "No Graph-backed employee sync recorded yet."
+            }
+          />
+          <ExceptionCard
+            href="/admin/users"
+            label="Running admin jobs"
+            value={runningAdminJobCount}
+            detail="Tracked admin operations still in progress."
+          />
+          <ExceptionCard
+            href="/admin/users"
+            label="Failed admin jobs"
+            value={failedAdminJobCount}
+            detail="Failures logged in the last 7 days."
+          />
         </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Recent admin jobs"
+        description="Latest tracked admin operations, starting with employee sync work."
+      >
+        {recentAdminJobs.length === 0 ? (
+          <div className="border border-dashed border-surface-border bg-slate-50 px-6 py-10 text-center text-sm text-surface-muted">
+            No admin jobs have been recorded yet.
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {recentAdminJobs.map((job) => (
+              <Link
+                key={String(job._id)}
+                href={jobLink(job.type)}
+                className="border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-surface-text">
+                      {job.summary || humanizeJobType(job.type)}
+                    </p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      {job.actorEmail || "System"} · {formatJobTime(job.startedAt)}
+                    </p>
+                  </div>
+                  <span className={jobStatusBadgeClass(job.status)}>
+                    {job.status}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-surface-muted">
+                  {formatJobDuration(job.durationMs)}
+                  {job.finishedAt ? ` · finished ${formatJobTime(job.finishedAt)}` : ""}
+                </p>
+                {job.errorMessage ? (
+                  <p className="mt-2 text-xs text-red-700">{job.errorMessage}</p>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+        )}
       </AdminSection>
 
       <AdminSection
@@ -403,6 +501,40 @@ function ExceptionCard({
   );
 }
 
+function humanizeJobType(type: string) {
+  return type
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function jobLink(type: string) {
+  if (type === "employee-sync") return "/admin/users";
+  if (type === "import-sync" || type === "import-publish") return "/admin/form-imports?tab=manage";
+  if (type === "bulk-approval") return "/approvals";
+  return "/admin";
+}
+
+function formatJobTime(value: Date | string | null | undefined) {
+  if (!value) return "unknown time";
+  return new Date(value).toLocaleString();
+}
+
+function formatJobDuration(durationMs: number | null | undefined) {
+  if (!durationMs || durationMs < 1000) return "under 1s";
+  if (durationMs < 60_000) return `${Math.round(durationMs / 100) / 10}s`;
+  return `${Math.round(durationMs / 6000) / 10}m`;
+}
+
+function jobStatusBadgeClass(status: string) {
+  if (status === "succeeded") {
+    return "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200";
+  }
+  if (status === "failed") {
+    return "inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200";
+  }
+  return "inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200";
+}
+
 function buildNextSteps({
   importedDraftCount,
   blockedImportCount,
@@ -411,6 +543,9 @@ function buildNextSteps({
   overdueApprovalCount,
   returnedRequestCount,
   failedNotificationCount,
+  employeeSyncIsStale,
+  runningAdminJobCount,
+  failedAdminJobCount,
   liveFormCount,
 }: {
   importedDraftCount: number;
@@ -420,6 +555,9 @@ function buildNextSteps({
   overdueApprovalCount: number;
   returnedRequestCount: number;
   failedNotificationCount: number;
+  employeeSyncIsStale: boolean;
+  runningAdminJobCount: number;
+  failedAdminJobCount: number;
   liveFormCount: number;
 }) {
   const steps: Array<{ title: string; description: string; href: string }> =
@@ -460,6 +598,30 @@ function buildNextSteps({
       title: "Review failed emails",
       description: `${failedNotificationCount} notification failure${failedNotificationCount === 1 ? "" : "s"} were logged in the last 7 days.`,
       href: "/admin/notifications",
+    });
+  }
+
+  if (employeeSyncIsStale) {
+    steps.push({
+      title: "Refresh employee sync",
+      description: "Employee directory sync is stale or missing. Run a fresh Graph sync and review the recent job history.",
+      href: "/admin/users",
+    });
+  }
+
+  if (failedAdminJobCount > 0) {
+    steps.push({
+      title: "Inspect failed admin jobs",
+      description: `${failedAdminJobCount} admin job failure${failedAdminJobCount === 1 ? "" : "s"} were recorded in the last 7 days.`,
+      href: "/admin/users",
+    });
+  }
+
+  if (runningAdminJobCount > 0) {
+    steps.push({
+      title: "Watch running admin jobs",
+      description: `${runningAdminJobCount} admin job${runningAdminJobCount === 1 ? " is" : "s are"} still running.`,
+      href: "/admin/users",
     });
   }
 

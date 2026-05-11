@@ -67,6 +67,7 @@ Delivered in the first implementation slice:
 - admin operational exception cards for blocked imports, overdue approvals, returned requests, and failed notification deliveries
 - approver admin setup now supports employee-directory-backed selection and stores employee context alongside approver records
 - employee sync now records recent admin job runs with status, timing, actor, and failure context
+- admin overview now surfaces stale employee sync plus running and failed admin jobs
 
 Verified:
 
