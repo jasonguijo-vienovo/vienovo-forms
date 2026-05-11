@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ImportedFieldDefinition } from "@/lib/imported-forms";
 
 type ImportedFormFrameProps = {
+  slug?: string;
   htmlSource: string;
   fields: ImportedFieldDefinition[];
   submitAction: (formData: FormData) => void | Promise<void>;
@@ -222,7 +223,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   return `<!doctype html><html><head><meta charset="utf-8" /></head><body>${htmlSource}${bridgeScript}</body></html>`;
 }
 
-export function ImportedFormFrame({ htmlSource, fields, submitAction }: ImportedFormFrameProps) {
+export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
   const [height, setHeight] = useState(900);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
