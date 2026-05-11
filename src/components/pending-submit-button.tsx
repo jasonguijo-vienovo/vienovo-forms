@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { cn } from "@/lib/utils";
 
@@ -20,9 +21,20 @@ export function PendingSubmitButton({
   ...props
 }: PendingSubmitButtonProps) {
   const { pending } = useFormStatus();
-  const isBusy = pending;
-  const isDisabled = Boolean(disabled) || pending;
+  const [isInstantBusy, setIsInstantBusy] = useState(false);
+  const safetyUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isBusy = pending || isInstantBusy;
+  const isDisabled = Boolean(disabled) || isBusy;
   const resolvedPendingLabel = pendingLabel ?? "Processing...";
+
+  useEffect(() => {
+    if (pending) return;
+    setIsInstantBusy(false);
+    if (safetyUnlockTimerRef.current) {
+      clearTimeout(safetyUnlockTimerRef.current);
+      safetyUnlockTimerRef.current = null;
+    }
+  }, [pending]);
 
   return (
     <button
@@ -32,6 +44,12 @@ export function PendingSubmitButton({
           event.preventDefault();
           return;
         }
+        setIsInstantBusy(true);
+        if (safetyUnlockTimerRef.current) clearTimeout(safetyUnlockTimerRef.current);
+        safetyUnlockTimerRef.current = setTimeout(() => {
+          setIsInstantBusy(false);
+          safetyUnlockTimerRef.current = null;
+        }, 5000);
         props.onClick?.(event);
       }}
       disabled={isDisabled}

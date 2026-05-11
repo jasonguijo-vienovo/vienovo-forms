@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePathname, useSearchParams } from "next/navigation";
 import { SmoothPageLink } from "@/components/smooth-page-link";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
   AdminHelpPanel,
@@ -28,7 +29,12 @@ import {
 } from "@/components/admin-ui";
 import { humanizeQueueRole } from "@/lib/request-queue";
 import type { ParsedAdminRequestsQuery } from "./query";
-import { backfillSalaryLoanStatusesToSheet, rejectRequestFromQueue, syncRequestStatusToSheetNow } from "./actions";
+import {
+  backfillAllSheetStatuses,
+  backfillSalaryLoanStatusesToSheet,
+  rejectRequestFromQueue,
+  syncRequestStatusToSheetNow,
+} from "./actions";
 
 const ADMIN_REQUEST_STATUSES = ["all", "pending", "submitted", "approved", "returned", "rejected"] as const;
 const ADMIN_REQUEST_SORTS = ["createdAt", "updatedAt", "age"] as const;
@@ -143,6 +149,21 @@ export function RequestsClient({
         eyebrow="Operations"
         title="Admin queue"
         description="Server-backed queue navigation for every request across native and imported forms, with sharable filters and quick request context."
+        actions={
+          <form
+            action={async () => {
+              await backfillAllSheetStatuses();
+              router.refresh();
+            }}
+          >
+            <PendingSubmitButton
+              type="submit"
+              idleLabel="Sync all sheet statuses"
+              pendingLabel="Syncing all statuses..."
+              className="btn-secondary"
+            />
+          </form>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.9fr)]">
