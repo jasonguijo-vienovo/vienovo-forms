@@ -99,6 +99,24 @@ type RequestsClientProps = {
     rejected: number;
     submitted: number;
   };
+  analytics: {
+    volumeByForm: Array<{
+      formKey: string;
+      formLabel: string;
+      total: number;
+      open: number;
+      returned: number;
+    }>;
+    bottlenecks: Array<{
+      laneKey: string;
+      label: string;
+      role: string;
+      queueBucket: string;
+      count: number;
+      oldestCreatedAt: string;
+      newestUpdatedAt: string;
+    }>;
+  };
   formOptions: Array<{ value: string; label: string }>;
   assigneeOptions: Array<{ value: string; label: string }>;
   pageInfo: {
@@ -114,6 +132,7 @@ export function RequestsClient({
   filters,
   filteredCount,
   summary,
+  analytics,
   formOptions,
   assigneeOptions,
   pageInfo,
@@ -190,6 +209,72 @@ export function RequestsClient({
           place.
         </AdminHelpPanel>
       </div>
+
+      <AdminSection
+        title="Queue insights"
+        description="Quick signals for where request volume is landing and where work is starting to bunch up."
+      >
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="admin-panel overflow-hidden">
+            <div className="border-b border-surface-border bg-slate-50/70 px-4 py-3">
+              <h3 className="text-sm font-semibold text-surface-text">Volume by form</h3>
+              <p className="mt-1 text-xs text-surface-muted">Based on the current filter set.</p>
+            </div>
+            <div className="divide-y divide-surface-border">
+              {analytics.volumeByForm.length > 0 ? (
+                analytics.volumeByForm.map((item) => (
+                  <div key={item.formKey} className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-surface-text">{item.formLabel}</p>
+                      <p className="mt-1 text-xs text-surface-muted">
+                        {item.open} open
+                        {item.returned > 0 ? ` · ${item.returned} returned` : ""}
+                      </p>
+                    </div>
+                    <span className="text-xl font-semibold text-surface-text">{item.total}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-5 text-sm text-surface-muted">
+                  No request volume matches the current filters.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="admin-panel overflow-hidden">
+            <div className="border-b border-surface-border bg-slate-50/70 px-4 py-3">
+              <h3 className="text-sm font-semibold text-surface-text">Bottleneck lanes</h3>
+              <p className="mt-1 text-xs text-surface-muted">Open queues with the highest active load.</p>
+            </div>
+            <div className="divide-y divide-surface-border">
+              {analytics.bottlenecks.length > 0 ? (
+                analytics.bottlenecks.map((item) => (
+                  <div key={item.laneKey} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-surface-text">{item.label}</p>
+                        <p className="mt-1 text-xs text-surface-muted">
+                          {humanizeQueueRole(item.role || item.queueBucket || "unassigned")}
+                        </p>
+                      </div>
+                      <span className="text-xl font-semibold text-amber-700">{item.count}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-surface-muted">
+                      Oldest open: {formatAge(item.oldestCreatedAt)}
+                      {item.newestUpdatedAt ? ` · Last touched ${formatDateTime(item.newestUpdatedAt)}` : ""}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="px-4 py-5 text-sm text-surface-muted">
+                  No active bottlenecks in the current slice.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </AdminSection>
 
       <AdminSection
         title="Saved views"

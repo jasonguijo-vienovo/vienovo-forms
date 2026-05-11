@@ -14,6 +14,23 @@ import {
 import { RequestsClient, type RequestQueueRow } from "./RequestsClient";
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
+type RequestVolumeByForm = {
+  formKey: string;
+  formLabel: string;
+  total: number;
+  open: number;
+  returned: number;
+};
+
+type RequestBottleneck = {
+  laneKey: string;
+  label: string;
+  role: string;
+  queueBucket: string;
+  count: number;
+  oldestCreatedAt: string;
+  newestUpdatedAt: string;
+};
 
 export default async function AdminRequestsPage({
   searchParams,
@@ -58,7 +75,8 @@ export default async function AdminRequestsPage({
   const sortDirection = beforeCursor ? invertDirection(dbSort.direction) : dbSort.direction;
   const sortObject = buildSortObject(dbSort.field, sortDirection);
 
-  const [rawRows, filteredCount, summaryCounts, formOptions, assigneeOptions] = await Promise.all([
+  const [rawRows, filteredCount, summaryCounts, formOptions, assigneeOptions, volumeByForm, bottlenecks] =
+    await Promise.all([
     RequestModel.find(matchFilter)
       .sort(sortObject as any)
       .limit(queryLimit)
@@ -141,6 +159,50 @@ export default async function AdminRequestsPage({
       },
       { $sort: { name: 1, _id: 1 } },
     ]),
+    RequestModel.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: { formSlug: "$formSlug", formType: "$formType" },
+          formName: { $first: "$formName" },
+          total: { $sum: 1 },
+          open: {
+            $sum: {
+              $cond: [{ $in: ["$status", [...OPEN_REQUEST_STATUSES]] }, 1, 0],
+            },
+          },
+          returned: {
+            $sum: {
+              $cond: [{ $eq: ["$status", "returned"] }, 1, 0],
+            },
+          },
+        },
+      },
+      { $sort: { total: -1, "_id.formSlug": 1, "_id.formType": 1 } },
+      { $limit: 6 },
+    ]),
+    RequestModel.aggregate([
+      {
+        $match: {
+          $and: [filter, { status: { $in: [...OPEN_REQUEST_STATUSES] } }],
+        },
+      },
+      {
+        $group: {
+          _id: {
+            role: "$currentRole",
+            actorEmail: "$currentActorEmail",
+            actorName: "$currentActorName",
+            queueBucket: "$queueBucket",
+          },
+          count: { $sum: 1 },
+          oldestCreatedAt: { $min: "$createdAt" },
+          newestUpdatedAt: { $max: "$updatedAt" },
+        },
+      },
+      { $sort: { count: -1, oldestCreatedAt: 1 } },
+      { $limit: 6 },
+    ]),
   ]);
 
   const hasOverflow = rawRows.length > query.limit;
@@ -207,6 +269,10 @@ export default async function AdminRequestsPage({
         returned: Number(summary.returned ?? 0),
         rejected: Number(summary.rejected ?? 0),
         submitted: Number(summary.submitted ?? 0),
+      }}
+      analytics={{
+        volumeByForm: volumeByForm.map((item: any) => toVolumeByForm(item)),
+        bottlenecks: bottlenecks.map((item: any) => toBottleneck(item)),
       }}
       formOptions={formOptions.map((item) => ({
         value: String(item._id ?? item.formType ?? "").trim(),
@@ -284,4 +350,45 @@ function toQueueRow(request: any): RequestQueueRow {
 function toIso(value: Date | string | null | undefined) {
   if (!value) return "";
   return new Date(value).toISOString();
+}
+
+function toVolumeByForm(item: any): RequestVolumeByForm {
+  const slug = String(item?._id?.formSlug ?? "").trim();
+  const formType = String(item?._id?.formType ?? "").trim();
+  const formLabel = String(item?.formName || slug || formType || "Unknown form");
+
+  return {
+    formKey: slug || formType || formLabel.toLowerCase(),
+    formLabel,
+    total: Number(item?.total ?? 0),
+    open: Number(item?.open ?? 0),
+    returned: Number(item?.returned ?? 0),
+  };
+}
+
+function toBottleneck(item: any): RequestBottleneck {
+  const role = String(item?._id?.role ?? "").trim();
+  const actorEmail = String(item?._id?.actorEmail ?? "").trim();
+  const actorName = String(item?._id?.actorName ?? "").trim();
+  const queueBucket = String(item?._id?.queueBucket ?? "").trim();
+  const label = actorName || actorEmail || humanizeQueueLabel(queueBucket) || "Unassigned queue";
+
+  return {
+    laneKey: [role, actorEmail, queueBucket].filter(Boolean).join(":") || label,
+    label,
+    role,
+    queueBucket,
+    count: Number(item?.count ?? 0),
+    oldestCreatedAt: toIso(item?.oldestCreatedAt),
+    newestUpdatedAt: toIso(item?.newestUpdatedAt),
+  };
+}
+
+function humanizeQueueLabel(value: string) {
+  if (!value) return "";
+  return value
+    .split("-")
+    .filter(Boolean)
+    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }

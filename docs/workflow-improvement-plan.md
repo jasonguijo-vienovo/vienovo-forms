@@ -68,6 +68,7 @@ Delivered in the first implementation slice:
 - approver admin setup now supports employee-directory-backed selection and stores employee context alongside approver records
 - employee sync now records recent admin job runs with status, timing, actor, and failure context
 - admin overview now surfaces stale employee sync plus running and failed admin jobs
+- admin requests now surfaces volume-by-form and bottleneck-lane analytics for the current queue slice
 
 Verified:
 
