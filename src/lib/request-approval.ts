@@ -1,7 +1,9 @@
 "use server";
 
 import { connectMongo } from "@/lib/db/mongo";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { sendFlowNotification } from "@/lib/notifications/flow";
+import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
 import { RequestModel } from "@/models/Request";
 
 export type ApprovalDecision = "approve" | "reject";
@@ -93,13 +95,40 @@ export async function applyApprovalDecision({
     },
   );
 
+  // Keep response sheets in sync with approval decisions for all forms that write responses.
+  try {
+    const formSlug = String(doc.formSlug || doc.formType || "").trim();
+    const definition = formSlug ? await getFormDefinitionBySlug(formSlug) : null;
+    const writeResponsesToSheet = Boolean(definition?.writeResponsesToSheet);
+    const spreadsheetId =
+      String(definition?.responseSpreadsheetId ?? "").trim() ||
+      String((doc as any)?.formData?.spreadsheetId ?? "").trim() ||
+      String(process.env.GOOGLE_SHEETS_RESPONSES_ID ?? "").trim() ||
+      String(process.env.GOOGLE_SHEETS_MASTER_ID ?? "").trim();
+    const configuredSheetTitle = String(definition?.responseSheetName ?? "").trim();
+    const importedFormName = String((doc as any)?.formData?.importedFormName ?? "").trim();
+    const sheetTitle = configuredSheetTitle || (importedFormName ? `${importedFormName} Responses` : "");
+
+    const nextSheetStatus = isApprove ? (isFinal ? "approved" : "pending") : "rejected";
+    if (writeResponsesToSheet && spreadsheetId && sheetTitle) {
+      await updateResponseSheetStatusByReference({
+        spreadsheetId,
+        sheetTitle,
+        referenceNo: normalizedReference,
+        status: nextSheetStatus,
+      });
+    }
+  } catch (sheetSyncError) {
+    console.error("Response sheet status sync failed:", sheetSyncError);
+  }
+
   const formSlug = doc.formSlug || doc.formType;
   const formName = doc.formName || doc.formType;
   const submittedByEmail = doc.submittedBy?.email ?? "";
   const nextApprover = approvalChain.find((step) => step.step === nextStep) ?? null;
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
-  const requestUrl = appUrl ? `${appUrl}/requests/${normalizedReference}` : "";
-  const approveUrl = appUrl ? `${appUrl}/requests/${normalizedReference}/approve` : "";
+  const requestUrl = appUrl ? `${appUrl}/requests/${encodeURIComponent(normalizedReference)}` : "";
+  const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
 
   try {
     if (isApprove) {
@@ -111,9 +140,9 @@ export async function applyApprovalDecision({
           to: nextApprover.approverEmail,
           subject: `${formName} request needs your approval (${normalizedReference})`,
           text:
-            `${formName} request ${normalizedReference} moved to your approval step.\n\n` +
-            (approveUrl ? `Approve Link: ${approveUrl}\n` : "") +
-            (requestUrl ? `Link: ${requestUrl}\n` : ""),
+            `${formName} request ${normalizedReference} moved to your approval step.\n\n`,
+          ctaUrl: approvalsUrl || requestUrl,
+          ctaLabel: "Review / Approve Request",
         });
       } else if (submittedByEmail) {
         await sendFlowNotification({

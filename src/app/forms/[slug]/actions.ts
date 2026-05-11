@@ -666,8 +666,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
 
     try {
       const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
-      const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
-      const approveUrl = appUrl ? `${appUrl}/requests/${referenceNo}/approve` : "";
+      const requestUrl = appUrl ? `${appUrl}/requests/${encodeURIComponent(referenceNo)}` : "";
+      const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
       const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
       const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
       const hrRecipients = isEmployeeInformation
@@ -782,9 +782,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             `- Reference No: ${referenceNo}\n` +
             `- Requester: ${detailsName}\n` +
             `- Email: ${detailsEmail}\n` +
-            `- Status: pending\n` +
-            (approveUrl ? `- Approve Link: ${approveUrl}\n` : "") +
-            (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
+            `- Status: pending\n`;
 
           notificationJobs.push(
             sendFlowNotification({
@@ -794,6 +792,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               to: approverRecipients,
               subject: approverSubject,
               text: approverText,
+              ctaUrl: approvalsUrl || requestUrl,
+              ctaLabel: "Review / Approve Request",
             }),
           );
         }
