@@ -30,7 +30,12 @@ const DEFAULT_SETTINGS: Omit<NotificationFlowSettings, "formSlug" | "formName"> 
 };
 
 const APPROVER_CACHE_TTL_MS = 60_000;
-const approverCache = new Map<string, { at: number; value: any }>();
+type ApproverLookupRow = {
+  email?: string;
+  name?: string;
+  roles?: string[];
+};
+const approverCache = new Map<string, { at: number; value: ApproverLookupRow[] }>();
 
 function normalizeSettings(input: Partial<NotificationFlowSettings> & Pick<NotificationFlowSettings, "formSlug" | "formName">) {
   return {
@@ -113,18 +118,41 @@ function wrapBrandedEmail(opts: {
   bodyHtml: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  approveUrl?: string;
+  rejectUrl?: string;
+  viewAllUrl?: string;
   accent?: "brand" | "success" | "warn";
 }) {
   const logoUrl = opts.appUrl ? `${opts.appUrl}/icon` : "";
   const accentColor = opts.accent === "success" ? "#0f5f35" : opts.accent === "warn" ? "#b45309" : "#1e293b";
-  const ctaHtml =
-    opts.ctaUrl
-      ? `<p style="margin:20px 0 0;">
-          <a href="${opts.ctaUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;background:${accentColor};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
-            ${escapeHtml(opts.ctaLabel || "Open")}
-          </a>
-        </p>`
-      : "";
+  const primaryCtaHtml = opts.ctaUrl
+    ? `<a href="${opts.ctaUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;background:${accentColor};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
+         ${escapeHtml(opts.ctaLabel || "Open")}
+       </a>`
+    : "";
+  const approveHtml = opts.approveUrl
+    ? `<a href="${opts.approveUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;background:#0f5f35;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
+         Approve
+       </a>`
+    : "";
+  const rejectHtml = opts.rejectUrl
+    ? `<a href="${opts.rejectUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;background:#b91c1c;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
+         Reject
+       </a>`
+    : "";
+  const viewAllHtml = opts.viewAllUrl
+    ? `<a href="${opts.viewAllUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;">
+         View all approval views
+       </a>`
+    : "";
+  const ctaHtml = [approveHtml, rejectHtml, viewAllHtml, primaryCtaHtml].filter(Boolean).length
+    ? `<p style="margin:20px 0 0;display:flex;flex-wrap:wrap;gap:8px;">
+         ${approveHtml}
+         ${rejectHtml}
+         ${viewAllHtml}
+         ${primaryCtaHtml}
+       </p>`
+    : "";
 
   return `
     <div style="margin:0;padding:24px;background:#f3f6fb;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
@@ -196,6 +224,9 @@ export async function sendFlowNotification(opts: {
   html?: string;
   ctaUrl?: string;
   ctaLabel?: string;
+  approveUrl?: string;
+  rejectUrl?: string;
+  viewAllUrl?: string;
 }) {
   const startedAt = Date.now();
   const flow = await getNotificationFlowSettings(opts.formSlug, opts.formName);
@@ -231,7 +262,7 @@ export async function sendFlowNotification(opts: {
   const key = cacheKeyForRecipients(recipients);
   const cached = approverCache.get(key);
   const isFresh = cached && Date.now() - cached.at < APPROVER_CACHE_TTL_MS;
-  const approvers = isFresh
+  const approvers: ApproverLookupRow[] = isFresh
     ? cached.value
     : await Approver.find({ email: { $in: recipients } }).select({ email: 1, name: 1, roles: 1 }).lean();
   if (!isFresh) approverCache.set(key, { at: Date.now(), value: approvers });
@@ -257,6 +288,9 @@ export async function sendFlowNotification(opts: {
       bodyHtml,
       ctaUrl: opts.ctaUrl,
       ctaLabel: opts.ctaLabel,
+      approveUrl: opts.approveUrl,
+      rejectUrl: opts.rejectUrl,
+      viewAllUrl: opts.viewAllUrl,
       accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
     });
     try {

@@ -138,6 +138,12 @@ export async function applyApprovalDecision({
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${encodeURIComponent(normalizedReference)}` : "";
   const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+  const approveActionUrl = appUrl
+    ? `${appUrl}/approvals?ref=${encodeURIComponent(normalizedReference)}&action=approve`
+    : "";
+  const rejectActionUrl = appUrl
+    ? `${appUrl}/approvals?ref=${encodeURIComponent(normalizedReference)}&action=reject`
+    : "";
 
   try {
     if (isApprove) {
@@ -151,7 +157,10 @@ export async function applyApprovalDecision({
           text:
             `${formName} request ${normalizedReference} moved to your approval step.\n\n`,
           ctaUrl: approvalsUrl || requestUrl,
-          ctaLabel: "Review / Approve Request",
+          ctaLabel: "View all approval views",
+          approveUrl: approveActionUrl || `${requestUrl}/approve`,
+          rejectUrl: rejectActionUrl || `${requestUrl}/approve`,
+          viewAllUrl: approvalsUrl || requestUrl,
         });
       } else if (submittedByEmail) {
         await sendFlowNotification({
