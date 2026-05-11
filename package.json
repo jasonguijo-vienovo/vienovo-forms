@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "smoke:buttons": "node scripts/smoke-buttons.mjs",
+    "verify": "npm run typecheck && npm run build",
     "db:backfill-request-queue": "node scripts/backfill-request-queue-fields.mjs",
     "db:backfill-import-diagnostics": "node scripts/backfill-import-diagnostics.mjs",
     "db:validate-import-registry": "node scripts/validate-import-registry-consistency.mjs",
