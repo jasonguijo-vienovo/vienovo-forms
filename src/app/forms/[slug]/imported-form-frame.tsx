@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import type { ImportedFieldDefinition } from "@/lib/imported-forms";
 
 type ImportedFormFrameProps = {
+  slug?: string;
   htmlSource: string;
   fields: ImportedFieldDefinition[];
   submitAction: (formData: FormData) => void | Promise<void>;
@@ -22,7 +23,8 @@ function safeScriptJson(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[]) {
+function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[], slug = "") {
+  const isSalaryLoan = String(slug).trim().toLowerCase() === "salary-loan-application";
   const optionsByName = Object.fromEntries(
     fields.map((field) => [
       field.name,
@@ -50,12 +52,13 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   .vf-search-shell {
     position: relative;
     width: 100%;
+    margin-top: 4px;
   }
   .vf-search-input {
     width: 100%;
     border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    padding: 10px 12px;
+    border-radius: 12px;
+    padding: 11px 40px 11px 12px;
     font-size: 14px;
     line-height: 1.2;
     background: #fff;
@@ -72,7 +75,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     left: 0;
     right: 0;
     top: calc(100% + 4px);
-    max-height: 220px;
+    max-height: 260px;
     overflow: auto;
     background: #fff;
     border: 1px solid #cbd5e1;
@@ -84,7 +87,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     display: block;
   }
   .vf-search-item {
-    padding: 9px 12px;
+    padding: 10px 12px;
     font-size: 13px;
     line-height: 1.25;
     cursor: pointer;
@@ -92,6 +95,27 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }
   .vf-search-item:hover {
     background: #eff6ff;
+  }
+  .vf-search-clear {
+    position: absolute;
+    right: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .vf-search-clear[data-show="1"] {
+    display: inline-flex;
   }
 </style>
 <script>
@@ -153,7 +177,14 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     var menu = document.createElement("div");
     menu.className = "vf-search-menu";
     menu.setAttribute("data-open", "0");
+    var clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "vf-search-clear";
+    clear.textContent = "×";
+    clear.setAttribute("aria-label", "Clear search");
+    clear.setAttribute("data-show", "0");
     shell.appendChild(input);
+    shell.appendChild(clear);
     shell.appendChild(menu);
 
     select.style.display = "none";
@@ -185,6 +216,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
         menu.appendChild(item);
       });
       menu.setAttribute("data-open", options.length ? "1" : "0");
+      clear.setAttribute("data-show", q ? "1" : "0");
     }
 
     var current = allOptions().find(function (opt) { return opt.value === select.value; });
@@ -194,6 +226,14 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     input.addEventListener("input", function () { render(input.value); });
     input.addEventListener("blur", function () {
       setTimeout(function () { menu.setAttribute("data-open", "0"); }, 120);
+    });
+    clear.addEventListener("mousedown", function (event) {
+      event.preventDefault();
+      input.value = "";
+      select.value = "";
+      render("");
+      input.focus();
+      select.dispatchEvent(new Event("change", { bubbles: true }));
     });
   }
 
@@ -436,6 +476,9 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }
 
   window.addEventListener("load", function () {
+    if (${JSON.stringify(isSalaryLoan)}) {
+      document.body.classList.add("vf-salary-loan");
+    }
     populateNativeSelects();
     postHeight();
     setTimeout(postHeight, 300);
@@ -493,13 +536,13 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   return `<!doctype html><html><head><meta charset="utf-8" /></head><body>${htmlSource}${bridgeScript}</body></html>`;
 }
 
-export function ImportedFormFrame({ htmlSource, fields, submitAction }: ImportedFormFrameProps) {
+export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
   const [height, setHeight] = useState(900);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const submitLockRef = useRef(false);
-  const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields), [fields, htmlSource]);
+  const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields, slug), [fields, htmlSource, slug]);
 
   useEffect(() => {
     function onMessage(event: MessageEvent<ImportedFrameMessage>) {
@@ -562,3 +605,28 @@ function SubmitStateSync({ onPendingChange }: { onPendingChange: (pending: boole
 
   return null;
 }
+  body.vf-salary-loan {
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 55%);
+    padding: 16px 12px 24px;
+  }
+  body.vf-salary-loan form {
+    max-width: 940px;
+    margin: 0 auto;
+    border: 1px solid #dbe7f4;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 18px 16px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  }
+  body.vf-salary-loan label,
+  body.vf-salary-loan p,
+  body.vf-salary-loan span {
+    color: #0f172a;
+  }
+  body.vf-salary-loan input,
+  body.vf-salary-loan select,
+  body.vf-salary-loan textarea {
+    border-radius: 10px !important;
+    border-color: #c6d6e8 !important;
+    min-height: 40px;
+  }
