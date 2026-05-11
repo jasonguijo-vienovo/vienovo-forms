@@ -6,6 +6,10 @@ import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 
 export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected";
+export type NotificationDetail = {
+  label: string;
+  value: string;
+};
 
 export type NotificationFlowSettings = {
   formSlug: string;
@@ -144,13 +148,37 @@ function messageTextToHtml(text: string) {
 
 function looksLikeFullHtmlDocument(html: string) {
   const v = String(html || "").toLowerCase();
-  return v.includes("<table") || v.includes("<html") || v.includes("<body") || v.includes("vienovo forms");
+  return v.includes("<html") || v.includes("<body") || v.includes("<!doctype");
 }
 
-function wrapBrandedEmail(opts: {
-  appUrl: string;
+function notificationDetailsToHtml(details: NotificationDetail[]) {
+  if (!details.length) return "";
+  return `
+    <div style="margin:18px 0 0;border:1px solid #dbe4f0;border-radius:14px;overflow:hidden;background:#fbfdff;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+        ${details
+          .map(
+            (detail, index) => `
+              <tr>
+                <td style="width:34%;padding:12px 14px;border-bottom:${index === details.length - 1 ? "0" : "1px solid #e2e8f0"};background:#f8fafc;color:#64748b;font-size:12px;font-weight:700;letter-spacing:.02em;vertical-align:top;">
+                  ${escapeHtml(detail.label)}
+                </td>
+                <td style="padding:12px 14px;border-bottom:${index === details.length - 1 ? "0" : "1px solid #e2e8f0"};color:#0f172a;font-size:14px;line-height:1.55;vertical-align:top;">
+                  ${escapeHtml(detail.value)}
+                </td>
+              </tr>`,
+          )
+          .join("")}
+      </table>
+    </div>
+  `;
+}
+
+function buildNotificationBodyHtml(opts: {
   title: string;
-  bodyHtml: string;
+  summary?: string;
+  bodyHtml?: string;
+  details?: NotificationDetail[];
   ctaUrl?: string;
   ctaLabel?: string;
   approveUrl?: string;
@@ -158,8 +186,9 @@ function wrapBrandedEmail(opts: {
   viewAllUrl?: string;
   accent?: "brand" | "success" | "warn";
 }) {
-  const logoUrl = opts.appUrl ? `${opts.appUrl}/icon` : "";
   const accentColor = opts.accent === "success" ? "#0f5f35" : opts.accent === "warn" ? "#b45309" : "#1e293b";
+  const accentBg = opts.accent === "success" ? "#ecfdf3" : opts.accent === "warn" ? "#fff7ed" : "#eef4ff";
+  const accentText = opts.accent === "success" ? "#166534" : opts.accent === "warn" ? "#b45309" : "#1d4ed8";
   const primaryCtaHtml = opts.ctaUrl
     ? `<a href="${opts.ctaUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;background:${accentColor};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;">
          ${escapeHtml(opts.ctaLabel || "Open")}
@@ -190,33 +219,19 @@ function wrapBrandedEmail(opts: {
     : "";
 
   return `
-    <div style="margin:0;padding:24px;background:#f3f6fb;font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:14px;overflow:hidden;">
-        <tr>
-          <td style="padding:16px 20px;background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td style="vertical-align:middle;">
-                  <div style="font-size:16px;font-weight:700;letter-spacing:.2px;">Vienovo Forms</div>
-                  <div style="font-size:12px;opacity:.86;">Workflow Notification</div>
-                </td>
-                <td style="text-align:right;vertical-align:middle;">
-                  ${logoUrl ? `<img src="${logoUrl}" alt="Vienovo" width="38" height="38" style="border-radius:10px;background:#fff;padding:4px;" />` : ""}
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:20px;">
-            <h2 style="margin:0 0 10px;font-size:18px;line-height:1.35;color:#0f172a;">${escapeHtml(opts.title)}</h2>
-            <div style="font-size:14px;line-height:1.65;color:#334155;">
-              ${opts.bodyHtml}
-            </div>
-            ${ctaHtml}
-          </td>
-        </tr>
-      </table>
+    <div style="margin:0;">
+      ${
+        opts.summary
+          ? `<div style="margin:0 0 18px;padding:14px 16px;border-radius:14px;background:${accentBg};color:${accentText};font-size:14px;line-height:1.65;">
+               ${escapeHtml(opts.summary)}
+             </div>`
+          : ""
+      }
+      <div style="font-size:14px;line-height:1.7;color:#334155;">
+        ${opts.bodyHtml || ""}
+      </div>
+      ${opts.details?.length ? notificationDetailsToHtml(opts.details) : ""}
+      ${ctaHtml}
     </div>
   `;
 }
@@ -257,6 +272,8 @@ export async function sendFlowNotification(opts: {
   subject: string;
   text?: string;
   html?: string;
+  summary?: string;
+  details?: NotificationDetail[];
   ctaUrl?: string;
   ctaLabel?: string;
   approveUrl?: string;
@@ -308,20 +325,26 @@ export async function sendFlowNotification(opts: {
     const roleHint = profile?.roles?.includes("hr") ? "hr" : profile?.roles?.[0] || "";
     const lastName = extractLastName(String(profile?.name || ""));
     const baseText = opts.text || "";
+    const detailsText = opts.details?.length
+      ? `${opts.details.map((detail) => `${detail.label}: ${detail.value}`).join("\n")}\n`
+      : "";
+    const composedText = opts.summary
+      ? `${opts.summary}\n\n${detailsText}${baseText}`.trim()
+      : `${detailsText}${baseText}`.trim();
     const finalText = prependGreeting({
-      body: baseText,
+      body: composedText,
       roleHint,
       lastName,
       formName: opts.formName,
       formSlug: opts.formSlug,
     });
-    const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const resolvedHtml = opts.html && looksLikeFullHtmlDocument(opts.html)
       ? opts.html
-      : wrapBrandedEmail({
-          appUrl,
+      : buildNotificationBodyHtml({
           title: opts.subject,
-          bodyHtml: opts.html || messageTextToHtml(baseText),
+          summary: opts.summary,
+          bodyHtml: opts.html || (!opts.details?.length ? messageTextToHtml(baseText) : ""),
+          details: opts.details,
           ctaUrl: opts.ctaUrl,
           ctaLabel: opts.ctaLabel,
           approveUrl: opts.approveUrl,

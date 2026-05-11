@@ -16,6 +16,7 @@ import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { readSpreadsheetMatrix, writeSpreadsheetRow } from "@/lib/google/sheets";
+import { buildNotificationDetailsFromFieldMap, importedFieldMap } from "@/lib/request-fields";
 import { RequestModel } from "@/models/Request";
 import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
@@ -738,6 +739,9 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           </p>
         `
         : undefined;
+      const importedNotificationDetails = buildNotificationDetailsFromFieldMap(importedFieldMap({ fieldLabels: labels, values }), {
+        maxRows: 12,
+      });
       const notificationJobs: Array<Promise<unknown>> = [];
       notificationJobs.push(
         (async () => {
@@ -749,6 +753,14 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             subject: emailSubject,
             text: submitterText,
             html: submitterHtml,
+            summary: isEmployeeInformation ? undefined : `Your ${imported.name} form has been submitted successfully.`,
+            details: isEmployeeInformation
+              ? undefined
+              : [
+                  { label: "Reference No.", value: referenceNo },
+                  { label: "Requester", value: name || email },
+                  ...importedNotificationDetails,
+                ],
           });
           if (!sentSubmitterViaFlow && isEmployeeInformation) {
             await sendNotificationEmail({
@@ -818,6 +830,14 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               event: "next-approver",
               to: approverRecipients,
               subject: approverSubject,
+              summary: `A new ${imported.name} request is ready for your review.`,
+              details: [
+                { label: "Reference No.", value: referenceNo },
+                { label: "Requester", value: detailsName },
+                { label: "Email", value: detailsEmail },
+                { label: "Status", value: "Pending" },
+                ...importedNotificationDetails,
+              ],
               text: approverText,
               ctaUrl: approvalsUrl || requestUrl,
               ctaLabel: "View all approval views",
