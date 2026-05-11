@@ -645,7 +645,7 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
 
       if (message.type === "vienovo-imported-height") {
         const measured = Number(message.height) || 320;
-        const withPadding = measured + 1;
+        const withPadding = measured - 24;
         setHeight(Math.min(Math.max(withPadding, 100), 1400));
         return;
       }
