@@ -119,7 +119,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   }
   body.vf-salary-loan {
     background: #f8fafc;
-    padding: 18px 12px 28px;
+    padding: 14px 10px 8px;
   }
   body.vf-salary-loan form {
     max-width: 820px;
@@ -127,7 +127,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     border: 1px solid #d6e3ef;
     border-radius: 16px;
     background: #ffffff;
-    padding: 24px 20px;
+    padding: 20px 18px 14px;
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
   }
   body.vf-salary-loan h1,
@@ -618,7 +618,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 }
 
 export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
-  const [height, setHeight] = useState(640);
+  const [height, setHeight] = useState(520);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -631,9 +631,9 @@ export function ImportedFormFrame({ slug, htmlSource, fields, submitAction }: Im
       if (!message || typeof message !== "object") return;
 
       if (message.type === "vienovo-imported-height") {
-        const measured = Number(message.height) || 640;
-        const withPadding = measured + 8;
-        setHeight(Math.min(Math.max(withPadding, 360), 2200));
+        const measured = Number(message.height) || 520;
+        const withPadding = measured + 2;
+        setHeight(Math.min(Math.max(withPadding, 220), 1800));
         return;
       }
 
