@@ -76,6 +76,14 @@ function normalizeText(value: string | null | undefined, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+function normalizeEmail(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function escapeRegExp(input: string) {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function toIso(value: Date | string | null | undefined) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -97,9 +105,14 @@ function compareByMostRecentAction(a: ApprovalQueueItem, b: ApprovalQueueItem) {
 }
 
 function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
+  const normalizedEmail = normalizeEmail(email);
   const activeStep = doc.approvalChain.find((step) => step.step === doc.currentStep) ?? null;
   const matchingUserSteps = doc.approvalChain
-    .filter((step) => step.approverEmail === email && (step.status === "approved" || step.status === "rejected"))
+    .filter(
+      (step) =>
+        normalizeEmail(step.approverEmail) === normalizedEmail &&
+        (step.status === "approved" || step.status === "rejected"),
+    )
     .sort((left, right) => {
       const rightAt = new Date(right.actedAt ?? 0).getTime();
       const leftAt = new Date(left.actedAt ?? 0).getTime();
@@ -147,13 +160,15 @@ function mapRequest(doc: LeanRequest, email: string): ApprovalQueueItem {
 
 export async function getApprovalQueueData(email: string): Promise<ApprovalQueueData> {
   await connectMongo();
+  const normalizedEmail = normalizeEmail(email);
+  const emailMatch = new RegExp(`^${escapeRegExp(normalizedEmail)}$`, "i");
 
   const [pendingDocs, actedDocs] = await Promise.all([
     RequestModel.find({
       status: { $in: ["pending", "submitted", "returned"] },
       approvalChain: {
         $elemMatch: {
-          approverEmail: email,
+          approverEmail: emailMatch,
           status: "pending",
         },
       },
@@ -163,7 +178,7 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
     RequestModel.find({
       approvalChain: {
         $elemMatch: {
-          approverEmail: email,
+          approverEmail: emailMatch,
           status: { $in: ["approved", "rejected"] },
         },
       },
@@ -176,12 +191,15 @@ export async function getApprovalQueueData(email: string): Promise<ApprovalQueue
   const pending = pendingDocs
     .filter((doc) => {
       const activeStep = doc.approvalChain.find((step) => step.step === doc.currentStep);
-      return activeStep?.approverEmail === email && activeStep?.status === "pending";
+      return (
+        normalizeEmail(activeStep?.approverEmail) === normalizedEmail &&
+        activeStep?.status === "pending"
+      );
     })
-    .map((doc) => mapRequest(doc, email));
+    .map((doc) => mapRequest(doc, normalizedEmail));
 
   const acted = actedDocs
-    .map((doc) => mapRequest(doc, email))
+    .map((doc) => mapRequest(doc, normalizedEmail))
     .filter((doc) => doc.latestUserDecision);
 
   const recentlyApproved = acted
