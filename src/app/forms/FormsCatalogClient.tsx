@@ -64,6 +64,20 @@ export function FormsCatalogClient({ forms }: { forms: CatalogForm[] }) {
     });
   }, [forms, query, view]);
 
+  const fixedAssetSlugs = useMemo(
+    () =>
+      new Set([
+        "request-for-fixed-asset-item-code",
+        "departments-existing-fixed-asset-inventory",
+        "fixed-assets-additions-form",
+        "employee-assets-accountability-form",
+        "fixed-assets-control-log-form",
+      ]),
+    [],
+  );
+  const fixedAssetForms = filtered.filter((form) => fixedAssetSlugs.has(form.slug));
+  const otherForms = filtered.filter((form) => !fixedAssetSlugs.has(form.slug));
+
   const readyCount = forms.filter((form) => form.runtime.requesterCanOpen).length;
   const externalCount = forms.filter(
     (form) => form.runtime.requesterCanOpen && Boolean(form.externalFormUrl),
@@ -109,10 +123,34 @@ export function FormsCatalogClient({ forms }: { forms: CatalogForm[] }) {
       </div>
 
       {filtered.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {filtered.map((form) => (
-            <FormCard key={form.slug} {...form} />
-          ))}
+        <div className="space-y-6">
+          {fixedAssetForms.length > 0 ? (
+            <section>
+              <div className="mb-3">
+                <h2 className="text-base font-semibold text-surface-text">Fixed Assets Forms</h2>
+                <p className="text-sm text-surface-muted">Dedicated forms for Fixed Assets requests and logs.</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {fixedAssetForms.map((form) => (
+                  <FormCard key={form.slug} {...form} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {otherForms.length > 0 ? (
+            <section>
+              {fixedAssetForms.length > 0 ? (
+                <div className="mb-3">
+                  <h2 className="text-base font-semibold text-surface-text">Other Forms</h2>
+                </div>
+              ) : null}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {otherForms.map((form) => (
+                  <FormCard key={form.slug} {...form} />
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       ) : (
         <div className="app-panel p-10 text-center text-sm text-surface-muted">
