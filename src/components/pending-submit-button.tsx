@@ -24,7 +24,7 @@ export function PendingSubmitButton({
   const [isInstantBusy, setIsInstantBusy] = useState(false);
   const safetyUnlockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBusy = pending || isInstantBusy;
-  const isDisabled = Boolean(disabled) || isBusy;
+  const isDisabled = Boolean(disabled) || pending;
   const resolvedPendingLabel = pendingLabel ?? "Processing...";
 
   useEffect(() => {
@@ -40,10 +40,12 @@ export function PendingSubmitButton({
     <button
       {...props}
       onClick={(event) => {
-        if (isBusy) {
+        if (pending) {
           event.preventDefault();
           return;
         }
+        // Avoid disabling the button synchronously before form submission.
+        // Disabling too early can swallow submit/formAction events in some browsers.
         setIsInstantBusy(true);
         if (safetyUnlockTimerRef.current) clearTimeout(safetyUnlockTimerRef.current);
         safetyUnlockTimerRef.current = setTimeout(() => {
