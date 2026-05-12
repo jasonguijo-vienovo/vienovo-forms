@@ -31,6 +31,8 @@ export default async function AdminOverviewPage() {
     blockedImportCount,
     reviewImportCount,
     overdueApprovalCount,
+    needsProcessorCount,
+    staleReturnedCount,
     returnedRequestCount,
     failedNotificationCount,
     graphSyncedEmployeeCount,
@@ -49,8 +51,16 @@ export default async function AdminOverviewPage() {
     FormImport.countDocuments({ readinessState: "needs-review" }),
     RequestModel.countDocuments({
       status: "pending",
-      queueBucket: "pending-approval",
-      updatedAt: { $lte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+      queueBucket: { $in: ["pending-approval", "needs-processor"] },
+      lastActionAt: { $lte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    }),
+    RequestModel.countDocuments({
+      status: "pending",
+      queueBucket: "needs-processor",
+    }),
+    RequestModel.countDocuments({
+      status: "returned",
+      lastActionAt: { $lte: new Date(Date.now() - 72 * 60 * 60 * 1000) },
     }),
     RequestModel.countDocuments({ status: "returned" }),
     NotificationDeliveryLog.countDocuments({
@@ -97,6 +107,8 @@ export default async function AdminOverviewPage() {
     reviewImportCount,
     approverNeedsReview,
     overdueApprovalCount,
+    needsProcessorCount,
+    staleReturnedCount,
     returnedRequestCount,
     failedNotificationCount,
     employeeSyncIsStale,
@@ -197,10 +209,22 @@ export default async function AdminOverviewPage() {
             detail="Pending more than 48 hours."
           />
           <ExceptionCard
+            href="/admin/requests?view=needs-processor"
+            label="Needs processor"
+            value={needsProcessorCount}
+            detail="Approved queue items waiting for processor action."
+          />
+          <ExceptionCard
             href="/admin/requests?status=returned"
             label="Returned requests"
             value={returnedRequestCount}
             detail="Waiting for requester corrections."
+          />
+          <ExceptionCard
+            href="/admin/requests?status=returned"
+            label="Returned >72h"
+            value={staleReturnedCount}
+            detail="Returned requests with no activity for over 72 hours."
           />
           <ExceptionCard
             href="/admin/notifications"
@@ -541,6 +565,8 @@ function buildNextSteps({
   reviewImportCount,
   approverNeedsReview,
   overdueApprovalCount,
+  needsProcessorCount,
+  staleReturnedCount,
   returnedRequestCount,
   failedNotificationCount,
   employeeSyncIsStale,
@@ -553,6 +579,8 @@ function buildNextSteps({
   reviewImportCount: number;
   approverNeedsReview: number;
   overdueApprovalCount: number;
+  needsProcessorCount: number;
+  staleReturnedCount: number;
   returnedRequestCount: number;
   failedNotificationCount: number;
   employeeSyncIsStale: boolean;
@@ -585,10 +613,26 @@ function buildNextSteps({
     });
   }
 
+  if (needsProcessorCount > 0) {
+    steps.push({
+      title: "Process approved requests",
+      description: `${needsProcessorCount} request${needsProcessorCount === 1 ? " is" : "s are"} waiting for processor follow-through.`,
+      href: "/admin/requests?view=needs-processor",
+    });
+  }
+
   if (returnedRequestCount > 0) {
     steps.push({
       title: "Monitor returned requests",
       description: `${returnedRequestCount} request${returnedRequestCount === 1 ? " is" : "s are"} waiting for requester corrections.`,
+      href: "/admin/requests?status=returned",
+    });
+  }
+
+  if (staleReturnedCount > 0) {
+    steps.push({
+      title: "Escalate stale returns",
+      description: `${staleReturnedCount} returned request${staleReturnedCount === 1 ? " has" : "s have"} been inactive for over 72 hours.`,
       href: "/admin/requests?status=returned",
     });
   }
