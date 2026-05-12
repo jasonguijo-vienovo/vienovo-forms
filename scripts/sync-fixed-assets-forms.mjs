@@ -10,6 +10,8 @@ const FORMS = [
     sheet: "REQUEST FOR FIXED ASSET ITEM CODE",
     card: "card-c1",
     htmlSource: `
+<div class="page-wrap">
+<div class="form-card">
 <form>
   <h2>Request for Fixed Asset Item Code</h2>
   <label>CAPEX Budget<input name="capexBudget" required /></label>
@@ -28,7 +30,9 @@ const FORMS = [
   <label>Without Item Code<input name="withoutItemCode" type="number" min="0" /></label>
   <label>With Item Code<input name="withItemCode" type="number" min="0" /></label>
   <button type="submit">Submit Request</button>
-</form>`,
+</form>
+</div>
+</div>`,
   },
   {
     name: "Department's Existing Fixed Asset Inventory",
@@ -37,6 +41,8 @@ const FORMS = [
     sheet: "Existing Asset Inventory",
     card: "card-c2",
     htmlSource: `
+<div class="page-wrap">
+<div class="form-card">
 <form>
   <h2>Department's Existing Fixed Asset Inventory</h2>
   <label>Date of Inventory<input name="dateOfInventory" type="date" required /></label>
@@ -59,7 +65,9 @@ const FORMS = [
   <label>Assigned Personnel<input name="assignedPersonnel" /></label>
   <label>Remarks<input name="remarks" /></label>
   <button type="submit">Submit Inventory</button>
-</form>`,
+</form>
+</div>
+</div>`,
   },
   {
     name: "Fixed Assets Additions Form",
@@ -68,6 +76,8 @@ const FORMS = [
     sheet: "Fixed Assets Additions",
     card: "card-c3",
     htmlSource: `
+<div class="page-wrap">
+<div class="form-card">
 <form>
   <h2>Fixed Assets Additions Form</h2>
   <label>Date<input name="date" type="date" required /></label>
@@ -89,7 +99,9 @@ const FORMS = [
   <label>Received By<input name="receivedBy" /></label>
   <label>Remarks<textarea name="remarks"></textarea></label>
   <button type="submit">Submit Addition</button>
-</form>`,
+</form>
+</div>
+</div>`,
   },
   {
     name: "Employee Assets Accountability Form",
@@ -98,6 +110,8 @@ const FORMS = [
     sheet: "Employee Accountability",
     card: "card-c4",
     htmlSource: `
+<div class="page-wrap">
+<div class="form-card">
 <form>
   <h2>Employee Assets Accountability Form</h2>
   <label>Date Issued<input name="dateIssued" type="date" required /></label>
@@ -115,7 +129,9 @@ const FORMS = [
   <label>Acknowledgment<input name="acknowledgment" type="checkbox" value="Acknowledged" required /></label>
   <label>Remarks<textarea name="remarks"></textarea></label>
   <button type="submit">Submit Form</button>
-</form>`,
+</form>
+</div>
+</div>`,
   },
   {
     name: "Fixed Assets Control Log Form",
@@ -124,6 +140,8 @@ const FORMS = [
     sheet: "Control Log",
     card: "card-c5",
     htmlSource: `
+<div class="page-wrap">
+<div class="form-card">
 <form>
   <h2>Fixed Assets Control Log Form</h2>
   <label>Date<input name="date" type="date" required /></label>
@@ -141,7 +159,9 @@ const FORMS = [
   <label>Date Completed<input name="dateCompleted" type="date" /></label>
   <label>Remarks<textarea name="remarks"></textarea></label>
   <button type="submit">Submit Log Entry</button>
-</form>`,
+</form>
+</div>
+</div>`,
   },
 ];
 
