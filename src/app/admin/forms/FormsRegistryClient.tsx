@@ -14,7 +14,7 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
-import { deleteFormDefinition, deleteFormEverywhere, hideFormDefinition, updateFormDefinition } from "./actions";
+import { backfillFixedAssetItemCodeSheet, deleteFormDefinition, deleteFormEverywhere, hideFormDefinition, updateFormDefinition } from "./actions";
 
 type RegistryForm = {
   _id?: string;
@@ -174,6 +174,14 @@ export function FormsRegistryClient({
               <FileInput className="h-4 w-4" />
               Import form
             </Link>
+            <form action={backfillFixedAssetItemCodeSheet}>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel="Backfill Item Code Sheet"
+                pendingLabel="Backfilling..."
+                className="btn-secondary"
+              />
+            </form>
             <Link href="/admin/lookups" className="btn-secondary">
               Manage dropdowns
             </Link>
@@ -344,9 +352,9 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
   const launchUrl = form.externalFormUrl || form.routePath;
   const implementedRoute = (form.isImplemented || Boolean(form.externalFormUrl)) && launchUrl;
   const sourceExists = form.source === "native" || importedSet.has(form.slug);
-  const [openVisibility, setOpenVisibility] = useState(true);
-  const [openRouting, setOpenRouting] = useState(true);
-  const [openResponses, setOpenResponses] = useState(true);
+  const [openVisibility, setOpenVisibility] = useState(false);
+  const [openRouting, setOpenRouting] = useState(false);
+  const [openResponses, setOpenResponses] = useState(false);
   const [openAdvanced, setOpenAdvanced] = useState(false);
 
   const liveReason = liveForUsers
