@@ -30,6 +30,10 @@ function normalizeComment(value: string | null | undefined) {
   return String(value ?? "").trim();
 }
 
+function normalizeEmail(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 export async function applyApprovalDecision({
   referenceNo,
   userEmail,
@@ -46,7 +50,7 @@ export async function applyApprovalDecision({
   const startedAt = Date.now();
   await connectMongo();
 
-  const normalizedEmail = String(userEmail).trim().toLowerCase();
+  const normalizedEmail = normalizeEmail(userEmail);
   const normalizedName = String(userName ?? normalizedEmail).trim();
   const normalizedReference = String(referenceNo ?? "").trim();
   const note = normalizeComment(comment);
@@ -58,6 +62,7 @@ export async function applyApprovalDecision({
   if (!current || current.status !== "pending") {
     throw new Error("Nothing to act on.");
   }
+  if (normalizeEmail(current.approverEmail) !== normalizedEmail) {
   const activeDelegation =
     current.approverEmail === normalizedEmail
       ? null
@@ -221,7 +226,7 @@ export async function applyApprovalDecision({
           formSlug,
           formName,
           event: "next-approver",
-          to: nextApprover.approverEmail,
+          to: normalizeEmail(nextApprover.approverEmail),
           subject: `${formName} request needs your approval (${normalizedReference})`,
           summary: `A ${formName} request has advanced to your approval step.`,
           details: [
