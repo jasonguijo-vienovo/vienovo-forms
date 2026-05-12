@@ -1,4 +1,4 @@
-import { BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
+import { AlertTriangle, BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
 import {
   AdminHelpPanel,
@@ -10,9 +10,13 @@ import { AdminSystemReadiness } from "@/components/admin-system-readiness";
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import { getSystemReadinessSnapshot } from "@/lib/system-readiness";
+import { AdminJob } from "@/models/AdminJob";
 import { Approver } from "@/models/Approver";
+import { Employee } from "@/models/Employee";
 import { FormImport } from "@/models/FormImport";
 import { Lookup } from "@/models/Lookup";
+import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
+import { RequestModel } from "@/models/Request";
 import { SeedButton } from "./seed-button";
 
 export default async function AdminOverviewPage() {
@@ -24,6 +28,16 @@ export default async function AdminOverviewPage() {
     approverNeedsReview,
     processorCount,
     importedDraftCount,
+    blockedImportCount,
+    reviewImportCount,
+    overdueApprovalCount,
+    returnedRequestCount,
+    failedNotificationCount,
+    graphSyncedEmployeeCount,
+    lastGraphEmployeeSyncRow,
+    runningAdminJobCount,
+    failedAdminJobCount,
+    recentAdminJobs,
     forms,
   ] = await Promise.all([
     Lookup.countDocuments({}),
@@ -31,6 +45,33 @@ export default async function AdminOverviewPage() {
     Approver.countDocuments({ emailNeedsReview: true }),
     Approver.countDocuments({ roles: "processor" }),
     FormImport.countDocuments({}),
+    FormImport.countDocuments({ readinessState: "blocked" }),
+    FormImport.countDocuments({ readinessState: "needs-review" }),
+    RequestModel.countDocuments({
+      status: "pending",
+      queueBucket: "pending-approval",
+      updatedAt: { $lte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+    }),
+    RequestModel.countDocuments({ status: "returned" }),
+    NotificationDeliveryLog.countDocuments({
+      status: "failed",
+      sentAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }),
+    Employee.countDocuments({ syncSource: "graph" }),
+    Employee.findOne({ syncSource: "graph", lastSyncedAt: { $ne: null } })
+      .sort({ lastSyncedAt: -1 })
+      .select({ lastSyncedAt: 1, fullName: 1, email: 1 })
+      .lean(),
+    AdminJob.countDocuments({ status: "running" }),
+    AdminJob.countDocuments({
+      status: "failed",
+      startedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }),
+    AdminJob.find({})
+      .sort({ startedAt: -1 })
+      .limit(6)
+      .select({ type: 1, status: 1, actorEmail: 1, summary: 1, errorMessage: 1, startedAt: 1, finishedAt: 1, durationMs: 1 })
+      .lean(),
     getAllFormDefinitionsForAdmin(),
   ]);
 
@@ -46,10 +87,21 @@ export default async function AdminOverviewPage() {
       (!form.writeResponsesToSheet || !form.responseSpreadsheetId?.trim()),
   ).length;
   const readiness = getSystemReadinessSnapshot();
+  const lastEmployeeSyncAt = lastGraphEmployeeSyncRow?.lastSyncedAt ? new Date(lastGraphEmployeeSyncRow.lastSyncedAt) : null;
+  const employeeSyncIsStale =
+    !lastEmployeeSyncAt || Date.now() - lastEmployeeSyncAt.getTime() > 2 * 24 * 60 * 60 * 1000;
 
   const nextSteps = buildNextSteps({
     importedDraftCount,
+    blockedImportCount,
+    reviewImportCount,
     approverNeedsReview,
+    overdueApprovalCount,
+    returnedRequestCount,
+    failedNotificationCount,
+    employeeSyncIsStale,
+    runningAdminJobCount,
+    failedAdminJobCount,
     liveFormCount,
   });
 
@@ -102,6 +154,12 @@ export default async function AdminOverviewPage() {
           hint="Emails that likely need fixing"
         />
         <AdminMetricCard
+          label="Graph-synced employees"
+          value={graphSyncedEmployeeCount}
+          tone={graphSyncedEmployeeCount > 0 ? "ok" : "warn"}
+          hint="Profiles backed by Entra/Graph"
+        />
+        <AdminMetricCard
           label="Forms with response tabs"
           value={responseConnectedCount}
           tone={responseConnectedCount > 0 ? "ok" : "warn"}
@@ -120,6 +178,102 @@ export default async function AdminOverviewPage() {
           description="Open this to check email, Sheets, Drive, auth, and database readiness in one place."
         />
       </div>
+
+      <AdminSection
+        title="Operational exceptions"
+        description="Issues that can block publishing, approvals, or reliable communication."
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <ExceptionCard
+            href="/admin/form-imports?tab=manage"
+            label="Blocked imports"
+            value={blockedImportCount}
+            detail="Cannot publish until blockers are fixed."
+          />
+          <ExceptionCard
+            href="/admin/requests?view=pending-approval"
+            label="Overdue approvals"
+            value={overdueApprovalCount}
+            detail="Pending more than 48 hours."
+          />
+          <ExceptionCard
+            href="/admin/requests?status=returned"
+            label="Returned requests"
+            value={returnedRequestCount}
+            detail="Waiting for requester corrections."
+          />
+          <ExceptionCard
+            href="/admin/notifications"
+            label="Failed emails"
+            value={failedNotificationCount}
+            detail="Failures logged in the last 7 days."
+          />
+          <ExceptionCard
+            href="/admin/users"
+            label="Employee sync stale"
+            value={employeeSyncIsStale ? 1 : 0}
+            detail={
+              lastEmployeeSyncAt
+                ? `Last Graph sync: ${lastEmployeeSyncAt.toLocaleString()}`
+                : "No Graph-backed employee sync recorded yet."
+            }
+          />
+          <ExceptionCard
+            href="/admin/jobs"
+            label="Running admin jobs"
+            value={runningAdminJobCount}
+            detail="Tracked admin operations still in progress."
+          />
+          <ExceptionCard
+            href="/admin/jobs"
+            label="Failed admin jobs"
+            value={failedAdminJobCount}
+            detail="Failures logged in the last 7 days."
+          />
+        </div>
+      </AdminSection>
+
+      <AdminSection
+        title="Recent admin jobs"
+        description="Latest tracked admin operations, starting with employee sync work."
+      >
+        {recentAdminJobs.length === 0 ? (
+          <div className="border border-dashed border-surface-border bg-slate-50 px-6 py-10 text-center text-sm text-surface-muted">
+            No admin jobs have been recorded yet.
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {recentAdminJobs.map((job) => (
+              <Link
+                key={String(job._id)}
+                href={jobLink(job.type)}
+                className="border border-surface-border bg-white p-4 transition hover:border-brand-300 hover:shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-surface-text">
+                      {job.summary || humanizeJobType(job.type)}
+                    </p>
+                    <p className="mt-1 text-xs text-surface-muted">
+                      {job.actorEmail || "System"} · {formatJobTime(job.startedAt)}
+                    </p>
+                  </div>
+                  <span className={jobStatusBadgeClass(job.status)}>
+                    {job.status}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-surface-muted">
+                  {formatJobDuration(job.durationMs)}
+                  {job.finishedAt ? ` · finished ${formatJobTime(job.finishedAt)}` : ""}
+                </p>
+                {job.errorMessage ? (
+                  <p className="mt-2 text-xs text-red-700">{job.errorMessage}</p>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+        )}
+      </AdminSection>
 
       <AdminSection
         title="Recommended next steps"
@@ -175,6 +329,12 @@ export default async function AdminOverviewPage() {
             icon={<Cog className="h-5 w-5" />}
             title="Processors"
             description={`${processorCount} processors currently loaded for final handling steps.`}
+          />
+          <AdminCard
+            href="/admin/users"
+            icon={<Users className="h-5 w-5" />}
+            title="User info"
+            description="Browse employee profiles, recent requests, and Graph sync coverage in one admin page."
           />
           <AdminCard
             href="/admin/user-roles"
@@ -308,23 +468,160 @@ function AdminCard({
   );
 }
 
+function ExceptionCard({
+  href,
+  label,
+  value,
+  detail,
+}: {
+  href: string;
+  label: string;
+  value: number;
+  detail: string;
+}) {
+  const active = value > 0;
+  return (
+    <Link
+      href={href}
+      className={`border p-4 transition hover:border-brand-300 hover:shadow-sm ${
+        active ? "border-amber-200 bg-amber-50" : "border-surface-border bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-surface-text">{label}</p>
+          <p className="mt-1 text-xs text-surface-muted">{detail}</p>
+        </div>
+        {active ? <AlertTriangle className="h-4 w-4 text-amber-700" /> : null}
+      </div>
+      <p className={`mt-3 text-2xl font-semibold ${active ? "text-amber-800" : "text-surface-text"}`}>
+        {value}
+      </p>
+    </Link>
+  );
+}
+
+function humanizeJobType(type: string) {
+  return type
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function jobLink(type: string) {
+  if (type === "employee-sync") return "/admin/users";
+  if (type === "import-sync" || type === "import-publish") return "/admin/form-imports?tab=manage";
+  if (type === "bulk-approval") return "/approvals";
+  return "/admin/jobs";
+}
+
+function formatJobTime(value: Date | string | null | undefined) {
+  if (!value) return "unknown time";
+  return new Date(value).toLocaleString();
+}
+
+function formatJobDuration(durationMs: number | null | undefined) {
+  if (!durationMs || durationMs < 1000) return "under 1s";
+  if (durationMs < 60_000) return `${Math.round(durationMs / 100) / 10}s`;
+  return `${Math.round(durationMs / 6000) / 10}m`;
+}
+
+function jobStatusBadgeClass(status: string) {
+  if (status === "succeeded") {
+    return "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200";
+  }
+  if (status === "failed") {
+    return "inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200";
+  }
+  return "inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200";
+}
+
 function buildNextSteps({
   importedDraftCount,
+  blockedImportCount,
+  reviewImportCount,
   approverNeedsReview,
+  overdueApprovalCount,
+  returnedRequestCount,
+  failedNotificationCount,
+  employeeSyncIsStale,
+  runningAdminJobCount,
+  failedAdminJobCount,
   liveFormCount,
 }: {
   importedDraftCount: number;
+  blockedImportCount: number;
+  reviewImportCount: number;
   approverNeedsReview: number;
+  overdueApprovalCount: number;
+  returnedRequestCount: number;
+  failedNotificationCount: number;
+  employeeSyncIsStale: boolean;
+  runningAdminJobCount: number;
+  failedAdminJobCount: number;
   liveFormCount: number;
 }) {
   const steps: Array<{ title: string; description: string; href: string }> =
     [];
 
-  if (importedDraftCount > 0) {
+  if (blockedImportCount > 0) {
+    steps.push({
+      title: "Fix blocked imports",
+      description: `${blockedImportCount} import${blockedImportCount === 1 ? " has" : "s have"} publish blockers. Open the importer and review readiness.`,
+      href: "/admin/form-imports?tab=manage",
+    });
+  } else if (importedDraftCount > 0) {
     steps.push({
       title: "Review imported forms",
-      description: `${importedDraftCount} draft form${importedDraftCount === 1 ? "" : "s"} still need review, sync, or publishing.`,
-      href: "/admin/form-imports",
+      description: `${importedDraftCount} draft form${importedDraftCount === 1 ? "" : "s"} still need review, sync, or publishing. ${reviewImportCount} need extra review.`,
+      href: "/admin/form-imports?tab=manage",
+    });
+  }
+
+  if (overdueApprovalCount > 0) {
+    steps.push({
+      title: "Clear overdue approvals",
+      description: `${overdueApprovalCount} approval${overdueApprovalCount === 1 ? " is" : "s are"} older than 48 hours.`,
+      href: "/admin/requests?view=pending-approval",
+    });
+  }
+
+  if (returnedRequestCount > 0) {
+    steps.push({
+      title: "Monitor returned requests",
+      description: `${returnedRequestCount} request${returnedRequestCount === 1 ? " is" : "s are"} waiting for requester corrections.`,
+      href: "/admin/requests?status=returned",
+    });
+  }
+
+  if (failedNotificationCount > 0) {
+    steps.push({
+      title: "Review failed emails",
+      description: `${failedNotificationCount} notification failure${failedNotificationCount === 1 ? "" : "s"} were logged in the last 7 days.`,
+      href: "/admin/notifications",
+    });
+  }
+
+  if (employeeSyncIsStale) {
+    steps.push({
+      title: "Refresh employee sync",
+      description: "Employee directory sync is stale or missing. Run a fresh Graph sync and review the recent job history.",
+      href: "/admin/users",
+    });
+  }
+
+  if (failedAdminJobCount > 0) {
+    steps.push({
+      title: "Inspect failed admin jobs",
+      description: `${failedAdminJobCount} admin job failure${failedAdminJobCount === 1 ? "" : "s"} were recorded in the last 7 days.`,
+      href: "/admin/users",
+    });
+  }
+
+  if (runningAdminJobCount > 0) {
+    steps.push({
+      title: "Watch running admin jobs",
+      description: `${runningAdminJobCount} admin job${runningAdminJobCount === 1 ? " is" : "s are"} still running.`,
+      href: "/admin/users",
     });
   }
 

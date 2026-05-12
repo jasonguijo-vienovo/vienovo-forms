@@ -20,7 +20,7 @@ import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
-import { diffFields, travelBookingFieldMap } from "@/lib/request-fields";
+import { buildNotificationDetailsFromFieldMap, diffFields, travelBookingFieldMap } from "@/lib/request-fields";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -256,6 +256,22 @@ export async function submitTravelBooking(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
+      preferredKeys: [
+        "fullName",
+        "employeeId",
+        "department",
+        "landAir",
+        "tripType",
+        "origin",
+        "destination",
+        "departureDate",
+        "returnDate",
+        "travelPurpose",
+      ],
+      omitKeys: ["birthday", "contactNumber"],
+      maxRows: 10,
+    });
     await setFlashToast({ tone: "success", message: `Travel Booking submitted: ${referenceNo}` });
 
     try {
@@ -265,6 +281,12 @@ export async function submitTravelBooking(
         event: "submitted",
         to: [supervisor.email, processor.email, submitterEmail],
         subject: `Travel Booking request submitted (${referenceNo})`,
+        summary: "A Travel Booking request has been submitted and routed for review.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          ...notificationDetails,
+        ],
         text:
           `A Travel Booking request has been submitted.\n\n` +
           `Reference: ${referenceNo}\n` +

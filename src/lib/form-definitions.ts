@@ -6,6 +6,7 @@ import {
   type FormDefinitionStatus,
   type FormDefinitionVisibility,
 } from "@/models/FormDefinition";
+import { FormImport } from "@/models/FormImport";
 
 const DEFAULT_RESPONSE_SPREADSHEET_ID = process.env.GOOGLE_SHEETS_MASTER_ID ?? "";
 
@@ -193,12 +194,29 @@ function normalizeFormDefinitionRow(row: any): Omit<AppFormDefinition, "runtime"
   };
 }
 
+async function hasLiveImportedSource(row: any) {
+  if (!row || row.source !== "imported" || row.isDeleted) return false;
+
+  if (row.importSourceId) {
+    const byId = await FormImport.findById(row.importSourceId).select({ slug: 1 }).lean();
+    if (byId) {
+      return String(byId.slug ?? "").trim().toLowerCase() === String(row.slug ?? "").trim().toLowerCase();
+    }
+  }
+
+  const bySlug = await FormImport.exists({ slug: row.slug });
+  return Boolean(bySlug);
+}
+
 function mergeBuiltInWithOverride(
   builtin: Omit<AppFormDefinition, "runtime">,
   override?: any,
 ): Omit<AppFormDefinition, "runtime"> | null {
   if (override?.isDeleted) return null;
   if (!override) return builtin;
+  if (override.source === "imported") {
+    return normalizeFormDefinitionRow(override);
+  }
   const normalized = normalizeFormDefinitionRow(override);
   return {
     ...builtin,
@@ -306,6 +324,9 @@ export async function getFormDefinitionBySlug(slug: string): Promise<AppFormDefi
     }
 
     if (!row || row.isDeleted) return null;
+    if (row.source === "imported" && !(await hasLiveImportedSource(row))) {
+      return null;
+    }
     return withRuntime(normalizeFormDefinitionRow(row));
   } catch (error) {
     console.error("Form registry lookup failed:", error);
@@ -341,6 +362,19 @@ export async function getCatalogForms(opts?: {
         .lean(),
     ]);
 
+    const liveImportKeys = new Set(
+      (
+        await FormImport.find({
+          $or: [
+            { _id: { $in: importedRows.map((row) => row.importSourceId).filter(Boolean) } },
+            { slug: { $in: importedRows.map((row) => row.slug).filter(Boolean) } },
+          ],
+        })
+          .select({ _id: 1, slug: 1 })
+          .lean()
+      ).flatMap((row) => [String(row._id), String(row.slug).trim().toLowerCase()]),
+    );
+
     const builtInBySlug = new Map(builtinRows.map((row) => [row.slug, row]));
     const builtIns = BUILTIN_FORMS.map((form) => mergeBuiltInWithOverride(form, builtInBySlug.get(form.slug)))
       .filter(Boolean)
@@ -348,6 +382,11 @@ export async function getCatalogForms(opts?: {
       .filter((form) => shouldIncludeForCatalog(form, { includeAdminOnly, includeDrafts, includeUnavailable }));
 
     const imported = importedRows
+      .filter((row) => {
+        if (String(row.externalFormUrl ?? "").trim()) return true;
+        if (row.importSourceId && !liveImportKeys.has(String(row.importSourceId))) return false;
+        return liveImportKeys.has(String(row.slug).trim().toLowerCase());
+      })
       .map(normalizeFormDefinitionRow)
       .map(withRuntime)
       .filter((form) => shouldIncludeForCatalog(form, { includeAdminOnly, includeDrafts, includeUnavailable }));

@@ -4,10 +4,103 @@ export type FieldDiff = {
 };
 
 export type FieldMap = Record<string, string>;
+export type NotificationDetailRow = {
+  label: string;
+  value: string;
+};
+
+const NOTIFICATION_LABELS: Record<string, string> = {
+  employeeId: "Employee ID",
+  fullName: "Full name",
+  firstName: "First name",
+  lastName: "Last name",
+  department: "Department",
+  costCenter: "Cost center",
+  location: "Location",
+  jobTitle: "Job title",
+  payablesTo: "Payable to",
+  payeeName: "Payee name",
+  amount: "Amount",
+  reason: "Reason",
+  forApprovalNote: "Approval note",
+  formType: "Form type",
+  totalExpenses: "Total expenses",
+  cashAdvanceReferenceNo: "Cash advance ref. no.",
+  dateFrom: "Date from",
+  dateTo: "Date to",
+  liquidationType: "Liquidation type",
+  transactionNumber: "Transaction number",
+  psNumber: "PS number",
+  businessPartner: "Business partner",
+  jvNo: "JV no.",
+  landAir: "Travel type",
+  tripType: "Trip type",
+  origin: "Origin",
+  destination: "Destination",
+  departureDate: "Departure date",
+  returnDate: "Return date",
+  preferredTime: "Preferred time",
+  airline: "Airline",
+  travelPurpose: "Travel purpose",
+  baggage: "Baggage",
+  hotelAccommodation: "Hotel accommodation",
+  hotelOther: "Hotel details",
+  servicePickup: "Service / pickup",
+  activityScheduleFileName: "Activity schedule",
+  supportingFileName: "Supporting file",
+  agreedToAuthorization: "Authorization confirmed",
+  agreedToCertification: "Certification confirmed",
+};
 
 function s(v: unknown) {
   if (v == null) return "";
   return String(v);
+}
+
+function humanizeFieldKey(key: string) {
+  const mapped = NOTIFICATION_LABELS[key];
+  if (mapped) return mapped;
+  return String(key || "")
+    .replace(/^expense_/, "Expense ")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
+export function buildNotificationDetailsFromFieldMap(
+  fieldMap: FieldMap,
+  options?: {
+    preferredKeys?: string[];
+    omitKeys?: string[];
+    maxRows?: number;
+  },
+): NotificationDetailRow[] {
+  const preferredKeys = options?.preferredKeys ?? [];
+  const omitKeys = new Set(options?.omitKeys ?? []);
+  const maxRows = Math.max(1, options?.maxRows ?? 12);
+  const seen = new Set<string>();
+  const rows: NotificationDetailRow[] = [];
+
+  const pushRow = (key: string, value: string) => {
+    const normalizedValue = String(value ?? "").trim();
+    if (!normalizedValue || omitKeys.has(key) || seen.has(key)) return;
+    seen.add(key);
+    rows.push({
+      label: humanizeFieldKey(key),
+      value: normalizedValue,
+    });
+  };
+
+  for (const key of preferredKeys) {
+    pushRow(key, fieldMap[key] ?? "");
+  }
+
+  for (const [key, value] of Object.entries(fieldMap)) {
+    pushRow(key, value);
+    if (rows.length >= maxRows) break;
+  }
+
+  return rows.slice(0, maxRows);
 }
 
 export function formatMoney(v: unknown) {

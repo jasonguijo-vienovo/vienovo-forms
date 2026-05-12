@@ -45,6 +45,17 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
       hasValue(process.env.FIREBASE_ADMIN_CLIENT_EMAIL) &&
       hasValue(process.env.FIREBASE_ADMIN_PRIVATE_KEY),
   );
+  const employeeSyncConfigured = Boolean(
+    hasValue(process.env.GRAPH_TENANT_ID) &&
+      hasValue(process.env.GRAPH_CLIENT_ID) &&
+      hasValue(process.env.GRAPH_CLIENT_SECRET),
+  );
+  const employeeSyncEnabled = ["1", "true", "yes", "on"].includes(
+    String(process.env.INTUNE_SYNC_ENABLED ?? "").trim().toLowerCase(),
+  );
+  const employeeDeviceSyncEnabled = ["1", "true", "yes", "on"].includes(
+    String(process.env.INTUNE_SYNC_INCLUDE_DEVICES ?? "").trim().toLowerCase(),
+  );
 
   const items: SystemReadinessItem[] = [
     {
@@ -88,6 +99,18 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
           : firebaseReady
             ? "Firebase Authentication is configured."
             : "Microsoft Entra ID and Firebase Authentication are incomplete.",
+    },
+    {
+      key: "employee-sync",
+      label: "Employee sync",
+      ready: employeeSyncConfigured && employeeSyncEnabled,
+      detail: employeeSyncConfigured
+        ? employeeSyncEnabled
+          ? employeeDeviceSyncEnabled
+            ? "Microsoft Graph employee sync is configured and Intune device summaries are enabled."
+            : "Microsoft Graph employee sync is configured. Intune device summaries are optional and currently off."
+          : "Microsoft Graph credentials are set, but INTUNE_SYNC_ENABLED is still off."
+        : "Missing GRAPH_TENANT_ID, GRAPH_CLIENT_ID, or GRAPH_CLIENT_SECRET for employee sync."
     },
   ];
 

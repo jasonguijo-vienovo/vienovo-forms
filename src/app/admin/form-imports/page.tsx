@@ -3,6 +3,7 @@ import { AdminHelpPanel, AdminMetricCard, AdminPageHeader, AdminSection } from "
 import { connectMongo } from "@/lib/db/mongo";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormImport, FORM_IMPORT_STATUSES } from "@/models/FormImport";
+import { FormImportVersion } from "@/models/FormImportVersion";
 import { Lookup } from "@/models/Lookup";
 import { createFormImport } from "./actions";
 import { FormImportsClient } from "./FormImportsClient";
@@ -16,13 +17,18 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
   const resolved = (await searchParams) ?? {};
   const tab = String(resolved.tab ?? "create");
   await connectMongo();
-  const [imports, definitions, syncedLookupRows] = await Promise.all([
+  const [imports, definitions, syncedLookupRows, versionRows] = await Promise.all([
     FormImport.find({}).sort({ createdAt: -1 }).lean(),
     FormDefinition.find({ source: "imported" })
-      .select({ slug: 1, status: 1, visibility: 1, availability: 1, isImplemented: 1, externalFormUrl: 1 })
+      .select({ slug: 1, status: 1, visibility: 1, availability: 1, isImplemented: 1, externalFormUrl: 1, importSourceId: 1, routePath: 1, source: 1 })
       .lean(),
     Lookup.find({ category: /^imported:/, isActive: true })
       .select({ category: 1, value: 1 })
+      .lean(),
+    FormImportVersion.find({})
+      .sort({ createdAt: -1 })
+      .limit(160)
+      .select({ importId: 1, slug: 1, sourceVersion: 1, event: 1, readinessState: 1, createdByEmail: 1, createdAt: 1 })
       .lean(),
   ]);
 
@@ -44,6 +50,13 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
       syncedStatsBySlugKey[slugKey].categoryCount += 1;
     }
     syncedStatsBySlugKey[slugKey].valueCount += 1;
+  }
+  const versionsByImportId: Record<string, any[]> = {};
+  for (const row of versionRows) {
+    const key = String(row.importId ?? "");
+    if (!key) continue;
+    if (!versionsByImportId[key]) versionsByImportId[key] = [];
+    versionsByImportId[key].push(row);
   }
 
   const readyForReview = imports.filter((item) => Boolean(definitionBySlug[item.slug])).length;
@@ -88,6 +101,7 @@ export default async function FormImportsPage({ searchParams }: { searchParams?:
           imports={JSON.parse(JSON.stringify(imports))}
           definitionBySlug={definitionBySlug}
           syncedStatsBySlugKey={syncedStatsBySlugKey}
+          versionsByImportId={JSON.parse(JSON.stringify(versionsByImportId))}
           statuses={FORM_IMPORT_STATUSES}
         />
       </AdminSection> : null}

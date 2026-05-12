@@ -70,7 +70,7 @@ export default async function SignInPage({
                   className="w-full bg-[#2f2f2f] hover:bg-black text-white font-semibold py-2.5 rounded-lg transition"
                 />
                 <p className="text-xs text-gray-400 text-center">
-                  Only <strong>@vienovo.ph</strong> accounts can sign in.
+                  Microsoft sign-in is for Vienovo organization accounts.
                 </p>
               </PendingFormState>
             </form>
@@ -87,6 +87,12 @@ export default async function SignInPage({
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">
               Sign-in is not configured yet. Add Microsoft Entra ID or Firebase Authentication settings to enable access.
             </div>
+          ) : null}
+
+          {firebaseConfigured ? (
+            <p className="mt-6 text-center text-xs text-gray-400">
+              Your browser should keep you signed in after refresh. External Google users can sign in, while Vienovo employee status is verified from the employee database.
+            </p>
           ) : null}
         </div>
       </div>

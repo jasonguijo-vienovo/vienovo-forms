@@ -9,8 +9,10 @@ import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import {
   createImportedRegistryEntry,
+  deleteFormEverywhere as deleteFormEverywhereEntry,
   deleteImportedForm,
   publishImportedForm,
+  repairImportedFormLinkage,
   saveImportDraft,
   slugifyFormId,
   updateImportConfig,
@@ -124,8 +126,11 @@ function messageFromError(error: unknown) {
 }
 
 function revalidateImportSurfaces(scope: "all" | "importer" = "all") {
+  revalidatePath("/admin");
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/forms");
+  revalidatePath("/admin/requests");
+  revalidatePath("/approvals");
   if (scope === "importer") return;
   revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
@@ -283,110 +288,134 @@ export async function createFormImport(formData: FormData) {
 }
 
 export async function updateFormImportConfig(formData: FormData) {
-  const { email } = await requireAdmin();
-  await connectMongo();
-
   const id = s(formData, "id");
-  if (!id) return;
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
 
-  const result = await updateImportConfig({
-    id,
-    spreadsheetId: s(formData, "spreadsheetId"),
-    spreadsheetBindings: bindingsFromFormData(formData),
-    writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
-    responseSheetName: s(formData, "responseSheetName"),
-    externalFormUrl: s(formData, "externalFormUrl"),
-    notes: s(formData, "notes"),
-  });
+    if (!id) throw new Error("Import draft is missing its identity.");
 
-  await setFlashToast({ tone: "success", message: "Import settings saved." });
-  await writeAuditLog({
-    actorEmail: email,
-    action: "update_form_import_config",
-    targetType: "form-import",
-    targetId: id,
-    correlationId: randomUUID(),
-    before: result.before
-      ? {
-          spreadsheetId: result.before.spreadsheetId,
-          writeResponsesToSheet: result.before.writeResponsesToSheet,
-          responseSheetName: result.before.responseSheetName,
-          notes: result.before.notes,
-        }
-      : null,
-    after: result.after
-      ? {
-          spreadsheetId: result.after.spreadsheetId,
-          writeResponsesToSheet: result.after.writeResponsesToSheet,
-          responseSheetName: result.after.responseSheetName,
-          notes: result.after.notes,
-          readinessState: result.after.readinessState,
-        }
-      : null,
-    details: {
-      blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
-      warningCount: result.diagnostics.parseDiagnostics.warningCount,
-    },
-  });
+    const result = await updateImportConfig({
+      id,
+      spreadsheetId: s(formData, "spreadsheetId"),
+      spreadsheetBindings: bindingsFromFormData(formData),
+      writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
+      responseSheetName: s(formData, "responseSheetName"),
+      externalFormUrl: s(formData, "externalFormUrl"),
+      notes: s(formData, "notes"),
+    });
 
-  revalidateImportSurfaces();
+    await setFlashToast({
+      tone: result.diagnostics.parseDiagnostics.blockerCount > 0 ? "error" : "success",
+      message:
+        result.diagnostics.parseDiagnostics.blockerCount > 0
+          ? `Settings saved, but publish is blocked by ${result.diagnostics.parseDiagnostics.blockerCount} issue(s).`
+          : "Import settings saved.",
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "update_form_import_config",
+      targetType: "form-import",
+      targetId: id,
+      correlationId: randomUUID(),
+      before: result.before
+        ? {
+            spreadsheetId: result.before.spreadsheetId,
+            writeResponsesToSheet: result.before.writeResponsesToSheet,
+            responseSheetName: result.before.responseSheetName,
+            notes: result.before.notes,
+          }
+        : null,
+      after: result.after
+        ? {
+            spreadsheetId: result.after.spreadsheetId,
+            writeResponsesToSheet: result.after.writeResponsesToSheet,
+            responseSheetName: result.after.responseSheetName,
+            notes: result.after.notes,
+            readinessState: result.after.readinessState,
+          }
+        : null,
+      details: {
+        blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+        warningCount: result.diagnostics.parseDiagnostics.warningCount,
+      },
+    });
+
+    revalidateImportSurfaces();
+  } catch (error) {
+    console.error("updateFormImportConfig failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function publishFormImport(formData: FormData) {
-  const { email } = await requireAdmin();
-  await connectMongo();
-
   const id = s(formData, "id");
-  if (!id) return;
   const dryRun = bool(formData, "dryRun");
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
 
-  if (dryRun) {
-    const draft = await FormImport.findById(id).lean();
-    await setFlashToast({
-      tone: "success",
-      message: draft
-        ? `Dry run: ${draft.name} would be marked implemented and published to everyone.`
-        : "Dry run: draft not found.",
-    });
-    redirect(FORM_IMPORTS_PATH);
+    if (!id) throw new Error("Import draft is missing its identity.");
+
+    if (dryRun) {
+      const draft = await FormImport.findById(id).lean();
+      if (!draft) throw new Error("Import draft not found.");
+      const blockerCount = draft.parseDiagnostics?.blockerCount ?? draft.parseDiagnostics?.blockers?.length ?? 0;
+      const warningCount = draft.parseDiagnostics?.warningCount ?? draft.parseDiagnostics?.warnings?.length ?? 0;
+      await setFlashToast({
+        tone: blockerCount > 0 ? "error" : warningCount > 0 ? "success" : "success",
+        message:
+          blockerCount > 0
+            ? `Preflight blocked: ${blockerCount} issue(s) must be fixed before publishing.`
+            : warningCount > 0
+              ? `Preflight passed with ${warningCount} warning(s). Review before publishing.`
+              : `Preflight passed: ${draft.name} is ready to publish.`,
+      });
+      revalidatePath(FORM_IMPORTS_PATH);
+    } else {
+      const result = await publishImportedForm({ id, actorEmail: email });
+      await setFlashToast({
+        tone: "success",
+        message: `${result.importRecord.name} is now published for users.`,
+      });
+      await writeAuditLog({
+        actorEmail: email,
+        action: "publish_form_import",
+        targetType: "form-import",
+        targetId: String(result.importRecord._id),
+        correlationId: randomUUID(),
+        before: result.definitionBefore
+          ? {
+              status: result.definitionBefore.status,
+              visibility: result.definitionBefore.visibility,
+              availability: result.definitionBefore.availability,
+              isImplemented: result.definitionBefore.isImplemented,
+            }
+          : null,
+        after: result.definitionAfter
+          ? {
+              status: result.definitionAfter.status,
+              visibility: result.definitionAfter.visibility,
+              availability: result.definitionAfter.availability,
+              isImplemented: result.definitionAfter.isImplemented,
+            }
+          : null,
+        details: {
+          slug: result.importRecord.slug,
+          name: result.importRecord.name,
+          readinessState: result.diagnostics.readinessState,
+        },
+      });
+
+      revalidateImportSurfaces();
+    }
+  } catch (error) {
+    console.error("publishFormImport failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
   }
 
-  const result = await publishImportedForm({ id, actorEmail: email });
-  await setFlashToast({
-    tone: "success",
-    message: `${result.importRecord.name} is now published for users.`,
-  });
-  await writeAuditLog({
-    actorEmail: email,
-    action: "publish_form_import",
-    targetType: "form-import",
-    targetId: String(result.importRecord._id),
-    correlationId: randomUUID(),
-    before: result.definitionBefore
-      ? {
-          status: result.definitionBefore.status,
-          visibility: result.definitionBefore.visibility,
-          availability: result.definitionBefore.availability,
-          isImplemented: result.definitionBefore.isImplemented,
-        }
-      : null,
-    after: result.definitionAfter
-      ? {
-          status: result.definitionAfter.status,
-          visibility: result.definitionAfter.visibility,
-          availability: result.definitionAfter.availability,
-          isImplemented: result.definitionAfter.isImplemented,
-        }
-      : null,
-    details: {
-      slug: result.importRecord.slug,
-      name: result.importRecord.name,
-      readinessState: result.diagnostics.readinessState,
-    },
-  });
-
-  revalidateImportSurfaces();
   redirect(FORM_IMPORTS_PATH);
 }
 
@@ -448,28 +477,132 @@ export async function updateFormImportStatus(formData: FormData) {
 }
 
 export async function deleteFormImport(formData: FormData) {
+  const id = s(formData, "id");
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    if (!id) throw new Error("Import draft is missing its identity.");
+
+    const result = await deleteImportedForm({ id });
+    await setFlashToast({ tone: "success", message: `${result.importRecord.name} import was deleted.` });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "delete_form_import",
+      targetType: "form-import",
+      targetId: id,
+      correlationId: randomUUID(),
+      before: {
+        slug: result.importRecord.slug,
+        name: result.importRecord.name,
+        status: result.importRecord.status,
+      },
+    });
+
+    revalidateImportSurfaces();
+  } catch (error) {
+    console.error("deleteFormImport failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
+  redirect(FORM_IMPORTS_PATH);
+}
+
+export async function repairFormImport(formData: FormData) {
   const { email } = await requireAdmin();
   await connectMongo();
 
   const id = s(formData, "id");
   if (!id) return;
 
-  const result = await deleteImportedForm({ id });
-  await setFlashToast({ tone: "success", message: `${result.importRecord.name} import was deleted.` });
-  await writeAuditLog({
-    actorEmail: email,
-    action: "delete_form_import",
-    targetType: "form-import",
-    targetId: id,
-    correlationId: randomUUID(),
-    before: {
-      slug: result.importRecord.slug,
-      name: result.importRecord.name,
-      status: result.importRecord.status,
-    },
-  });
+  try {
+    const result = await repairImportedFormLinkage({ id });
+    await setFlashToast({
+      tone: result.diagnostics.parseDiagnostics.blockerCount > 0 ? "error" : "success",
+      message:
+        result.diagnostics.parseDiagnostics.blockerCount > 0
+          ? `Repair finished for ${result.importRecord?.name || "import draft"}, but ${result.diagnostics.parseDiagnostics.blockerCount} blocker(s) still need manual fixes.`
+          : `Repair finished for ${result.importRecord?.name || "import draft"}. Registry and runtime links were re-aligned.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "repair_form_import",
+      targetType: "form-import",
+      targetId: id,
+      correlationId: randomUUID(),
+      before: result.definitionBefore
+        ? {
+            slug: result.definitionBefore.slug,
+            routePath: result.definitionBefore.routePath,
+            importSourceId: result.definitionBefore.importSourceId
+              ? String(result.definitionBefore.importSourceId)
+              : "",
+          }
+        : null,
+      after: result.definitionAfter
+        ? {
+            slug: result.definitionAfter.slug,
+            routePath: result.definitionAfter.routePath,
+            importSourceId: result.definitionAfter.importSourceId
+              ? String(result.definitionAfter.importSourceId)
+              : "",
+          }
+        : null,
+      details: {
+        repaired: result.repaired,
+        blockerCount: result.diagnostics.parseDiagnostics.blockerCount,
+        warningCount: result.diagnostics.parseDiagnostics.warningCount,
+      },
+    });
+  } catch (error) {
+    console.error("repairFormImport failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
 
   revalidateImportSurfaces();
+  redirect(FORM_IMPORTS_PATH);
+}
+
+export async function deleteFormEverywhere(formData: FormData) {
+  const id = s(formData, "id");
+  const slug = s(formData, "slug");
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    if (!id && !slug) throw new Error("Import draft is missing its identity.");
+
+    const result = await deleteFormEverywhereEntry({ importId: id, slug });
+    await setFlashToast({
+      tone: "success",
+      message: `${result.targetName} was deleted globally. Removed ${result.deletedRequestCount} requests, ${result.deletedLookupCount} lookups, and ${result.deletedRegistryCount + result.archivedRegistryCount} registry records.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "delete_form_everywhere",
+      targetType: "form-import",
+      targetId: id || result.targetSlug,
+      correlationId: randomUUID(),
+      before: result.before,
+      details: {
+        slugs: result.slugs,
+        archivedRegistryCount: result.archivedRegistryCount,
+        deletedRegistryCount: result.deletedRegistryCount,
+        deletedImportCount: result.deletedImportCount,
+        deletedRequestCount: result.deletedRequestCount,
+        deletedNotificationFlowCount: result.deletedNotificationFlowCount,
+        deletedNotificationLogCount: result.deletedNotificationLogCount,
+        deletedLookupCount: result.deletedLookupCount,
+        droppedMirrorCollectionCount: result.droppedMirrorCollectionCount,
+      },
+    });
+
+    revalidateImportSurfaces();
+  } catch (error) {
+    console.error("deleteFormEverywhere (importer) failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
   redirect(FORM_IMPORTS_PATH);
 }
 

@@ -2,14 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckSquare, Clock3, MessageSquare, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, CheckSquare, Clock3, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   approveFromQueue,
   bulkApproveFromQueue,
   bulkRejectFromQueue,
+  bulkReturnFromQueue,
+  createApprovalDelegation,
   rejectFromQueue,
+  revokeApprovalDelegation,
+  returnFromQueue,
 } from "./actions";
 import type { ApprovalQueueData, ApprovalQueueItem } from "@/lib/approval-queue";
 
@@ -42,6 +46,9 @@ export function ApprovalsClient({ data }: Props) {
     () => data.recentlyRejected.filter((item) => matchesQuery(item, query)),
     [data.recentlyRejected, query],
   );
+  const overduePending = filteredPending.filter((item) => item.urgency === "overdue");
+  const dueSoonPending = filteredPending.filter((item) => item.urgency === "due-soon");
+  const normalPending = filteredPending.filter((item) => item.urgency === "normal");
 
   const visiblePendingRefs = filteredPending.map((item) => item.referenceNo);
   const allVisibleSelected =
@@ -87,10 +94,54 @@ export function ApprovalsClient({ data }: Props) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting for me" value={data.metrics.pending} tone="warn" />
+        <MetricCard label="Overdue" value={data.metrics.overdue} tone="danger" />
+        <MetricCard label="Due soon" value={data.metrics.dueSoon} tone="warn" />
         <MetricCard label="Recently approved" value={data.metrics.approvedRecently} tone="ok" />
-        <MetricCard label="Recently rejected" value={data.metrics.rejectedRecently} tone="danger" />
-        <MetricCard label="Recent actions" value={data.metrics.actedRecently} />
       </div>
+
+      <section className="app-panel p-5">
+        <div className="mb-4 flex flex-col gap-1">
+          <h2 className="text-base font-semibold text-surface-text">Delegation</h2>
+          <p className="text-sm text-surface-muted">
+            Temporarily let another approver act on requests assigned to you.
+          </p>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <form action={createApprovalDelegation} className="space-y-3 rounded border border-surface-border bg-slate-50 p-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate email</span>
+                <input name="delegateEmail" type="email" className="field-input" placeholder="approver@vienovo.ph" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate name</span>
+                <input name="delegateName" className="field-input" placeholder="Optional" />
+              </label>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Reason</span>
+                <input name="reason" className="field-input" placeholder="Leave, travel, temporary coverage" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Ends on</span>
+                <input name="endsAt" type="date" className="field-input" />
+              </label>
+            </div>
+            <PendingSubmitButton
+              type="submit"
+              idleLabel="Set delegation"
+              pendingLabel="Saving delegation..."
+              className="btn-primary"
+            />
+          </form>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <DelegationList title="Delegated to me" rows={data.delegations.toMe} mode="to-me" />
+            <DelegationList title="My delegation" rows={data.delegations.fromMe} mode="from-me" />
+          </div>
+        </div>
+      </section>
 
       <section className="app-panel p-5">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -168,6 +219,18 @@ export function ApprovalsClient({ data }: Props) {
                     pendingLabel="Rejecting..."
                     className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                   />
+                  <PendingSubmitButton
+                    type="submit"
+                    formAction={bulkReturnFromQueue}
+                    idleLabel={
+                      <span className="inline-flex items-center gap-2">
+                        <RotateCcw className="h-4 w-4" />
+                        Return selected
+                      </span>
+                    }
+                    pendingLabel="Returning..."
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                  />
                 </div>
               </div>
             </PendingFormState>
@@ -177,15 +240,10 @@ export function ApprovalsClient({ data }: Props) {
         {filteredPending.length === 0 ? (
           <EmptyState message={query ? "No pending approvals match this search." : "No requests are waiting for your action."} />
         ) : (
-          <div className="grid grid-cols-1 gap-4">
-            {filteredPending.map((item) => (
-              <PendingApprovalCard
-                key={item.referenceNo}
-                item={item}
-                selected={selected.includes(item.referenceNo)}
-                onToggle={() => toggle(item.referenceNo)}
-              />
-            ))}
+          <div className="space-y-5">
+            <PendingGroup title="Overdue" items={overduePending} selected={selected} onToggle={toggle} tone="danger" />
+            <PendingGroup title="Due soon" items={dueSoonPending} selected={selected} onToggle={toggle} tone="warn" />
+            <PendingGroup title="Normal queue" items={normalPending} selected={selected} onToggle={toggle} tone="neutral" />
           </div>
         )}
       </section>
@@ -205,6 +263,48 @@ export function ApprovalsClient({ data }: Props) {
         />
       </section>
     </main>
+  );
+}
+
+function PendingGroup({
+  title,
+  items,
+  selected,
+  onToggle,
+  tone,
+}: {
+  title: string;
+  items: ApprovalQueueItem[];
+  selected: string[];
+  onToggle: (referenceNo: string) => void;
+  tone: "danger" | "warn" | "neutral";
+}) {
+  if (items.length === 0) return null;
+  const toneClass =
+    tone === "danger"
+      ? "text-red-800"
+      : tone === "warn"
+        ? "text-amber-800"
+        : "text-surface-text";
+
+  return (
+    <section>
+      <div className={`mb-2 flex items-center gap-2 text-sm font-semibold ${toneClass}`}>
+        {tone !== "neutral" ? <AlertTriangle className="h-4 w-4" /> : null}
+        <span>{title}</span>
+        <span className="text-xs font-normal text-surface-muted">({items.length})</span>
+      </div>
+      <div className="grid grid-cols-1 gap-4">
+        {items.map((item) => (
+          <PendingApprovalCard
+            key={item.referenceNo}
+            item={item}
+            selected={selected.includes(item.referenceNo)}
+            onToggle={() => onToggle(item.referenceNo)}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -271,9 +371,14 @@ function PendingApprovalCard({
             <p className="mt-1 text-sm text-surface-muted">
               Waiting on step {item.activeStep?.step ?? item.currentStep} {item.activeStep?.role ? `(${item.activeStep.role})` : ""}
             </p>
+            {item.delegatedFromEmail ? (
+              <p className="mt-1 text-xs font-semibold text-brand-700">
+                Delegated from {item.delegatedFromName || item.delegatedFromEmail}
+              </p>
+            ) : null}
             <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
               <Clock3 className="h-3.5 w-3.5" />
-              Submitted {formatDate(item.createdAt)}
+              Submitted {formatDate(item.createdAt)} · waiting about {formatAge(item.ageHours)}
             </p>
           </div>
         </div>
@@ -324,6 +429,18 @@ function PendingApprovalCard({
             }
             pendingLabel="Rejecting..."
             className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+          />
+          <PendingSubmitButton
+            type="submit"
+            formAction={returnFromQueue}
+            idleLabel={
+              <span className="inline-flex items-center gap-2">
+                <RotateCcw className="h-4 w-4" />
+                Return for correction
+              </span>
+            }
+            pendingLabel="Returning..."
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
           />
         </div>
       </form>
@@ -394,9 +511,63 @@ function EmptyState({ message, className = "" }: { message: string; className?: 
   return <div className={`text-sm text-surface-muted ${className}`}>{message}</div>;
 }
 
+function DelegationList({
+  title,
+  rows,
+  mode,
+}: {
+  title: string;
+  rows: ApprovalQueueData["delegations"]["toMe"];
+  mode: "to-me" | "from-me";
+}) {
+  return (
+    <div className="rounded border border-surface-border bg-white p-4">
+      <p className="text-sm font-semibold text-surface-text">{title}</p>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-surface-muted">No active delegations.</p>
+      ) : (
+        <div className="mt-3 space-y-3">
+          {rows.map((row) => (
+            <div key={row.id} className="rounded border border-surface-border bg-slate-50 p-3">
+              <p className="text-sm font-semibold text-surface-text">
+                {mode === "to-me"
+                  ? row.delegatorName || row.delegatorEmail
+                  : row.delegateName || row.delegateEmail}
+              </p>
+              <p className="mt-1 text-xs text-surface-muted">
+                {mode === "to-me" ? row.delegatorEmail : row.delegateEmail}
+                {row.endsAt ? ` · until ${formatDate(row.endsAt)}` : ""}
+              </p>
+              {row.reason ? <p className="mt-1 text-xs text-surface-muted">{row.reason}</p> : null}
+              {mode === "from-me" ? (
+                <form action={revokeApprovalDelegation} className="mt-2">
+                  <input type="hidden" name="id" value={row.id} />
+                  <PendingSubmitButton
+                    type="submit"
+                    idleLabel="Revoke"
+                    pendingLabel="Revoking..."
+                    className="btn-secondary"
+                  />
+                </form>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatDate(value: string | null) {
   if (!value) return "unknown time";
   return new Date(value).toLocaleString();
+}
+
+function formatAge(ageHours: number) {
+  if (ageHours < 1) return "less than 1 hour";
+  if (ageHours < 24) return `${ageHours} hour${ageHours === 1 ? "" : "s"}`;
+  const days = Math.floor(ageHours / 24);
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 function matchesQuery(item: ApprovalQueueItem, query: string) {

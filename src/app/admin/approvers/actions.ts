@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { requireAdmin } from "@/lib/admin";
+import { Employee } from "@/models/Employee";
 import { Approver, APPROVER_ROLES, type ApproverRole } from "@/models/Approver";
 import { Lookup } from "@/models/Lookup";
 
@@ -66,28 +67,67 @@ async function syncAutoLookupRoles() {
   }
 }
 
+function normalizeEmail(value: string) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+async function resolveApproverProfile(input: {
+  name: string;
+  email: string;
+  department?: string;
+}) {
+  const email = normalizeEmail(input.email);
+  const employee = email
+    ? await Employee.findOne({ email })
+        .select({ fullName: 1, email: 1, employeeId: 1, department: 1, jobTitle: 1, isActive: 1 })
+        .lean()
+    : null;
+
+  return {
+    name: String(employee?.fullName ?? input.name ?? "").trim(),
+    email,
+    employeeId: String(employee?.employeeId ?? "").trim(),
+    department: String(employee?.department ?? input.department ?? "").trim(),
+    jobTitle: String(employee?.jobTitle ?? "").trim(),
+    employeeFound: Boolean(employee),
+    employeeIsActive: employee ? employee.isActive !== false : null,
+  };
+}
+
 export async function addApprover(formData: FormData) {
   await requireAdmin();
   await connectMongo();
-  const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  if (!name) {
+  const roles = parseRoles(formData);
+  const profile = await resolveApproverProfile({
+    name: String(formData.get("name") ?? "").trim(),
+    email: String(formData.get("email") ?? ""),
+    department: String(formData.get("department") ?? "").trim(),
+  });
+
+  if (!profile.name) {
     await setFlashToast({ tone: "error", message: "Name is required." });
     revalidatePath("/admin/approvers");
     return;
   }
-  const roles = parseRoles(formData);
 
   try {
     await Approver.create({
-      name,
-      email,
+      name: profile.name,
+      email: profile.email,
+      employeeId: profile.employeeId,
       roles,
-      emailNeedsReview: !email,
+      department: profile.department,
+      jobTitle: profile.jobTitle,
+      emailNeedsReview: !profile.email,
       isActive: true,
     });
     await syncAutoLookupRoles();
-    await setFlashToast({ tone: "success", message: `Approver ${name} added.` });
+    await setFlashToast({
+      tone: "success",
+      message: profile.employeeFound
+        ? `Approver ${profile.name} added from the employee directory.`
+        : `Approver ${profile.name} added.`,
+    });
   } catch (error) {
     const duplicateName =
       typeof error === "object" &&
@@ -97,7 +137,7 @@ export async function addApprover(formData: FormData) {
     await setFlashToast({
       tone: "error",
       message: duplicateName
-        ? `Approver "${name}" already exists. Use a different name or edit the existing record.`
+        ? `Approver "${profile.name}" already exists. Use a different name or edit the existing record.`
         : "Could not add approver. Please try again.",
     });
   }
@@ -109,17 +149,29 @@ export async function updateApprover(formData: FormData) {
   await requireAdmin();
   await connectMongo();
   const id = String(formData.get("id") ?? "");
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const department = String(formData.get("department") ?? "").trim();
   const roles = parseRoles(formData);
   const doc = await Approver.findById(id);
   if (!doc) return;
-  doc.email = email;
-  doc.department = department;
+  const profile = await resolveApproverProfile({
+    name: doc.name,
+    email: String(formData.get("email") ?? ""),
+    department: String(formData.get("department") ?? "").trim(),
+  });
+  doc.name = profile.name || doc.name;
+  doc.email = profile.email;
+  doc.employeeId = profile.employeeId;
+  doc.department = profile.department;
+  doc.jobTitle = profile.jobTitle;
   doc.roles = roles;
-  doc.emailNeedsReview = !email;
+  doc.emailNeedsReview = !profile.email;
   await doc.save();
   await syncAutoLookupRoles();
+  await setFlashToast({
+    tone: "success",
+    message: profile.employeeFound
+      ? `${doc.name} was refreshed from the employee directory.`
+      : `${doc.name} was updated.`,
+  });
   revalidatePath("/admin/approvers");
   revalidatePath("/admin/lookups");
 }
@@ -133,6 +185,10 @@ export async function toggleApprover(formData: FormData) {
   doc.isActive = !doc.isActive;
   await doc.save();
   await syncAutoLookupRoles();
+  await setFlashToast({
+    tone: "success",
+    message: `${doc.name} is now ${doc.isActive ? "active" : "inactive"}.`,
+  });
   revalidatePath("/admin/approvers");
   revalidatePath("/admin/lookups");
 }
@@ -141,8 +197,12 @@ export async function deleteApprover(formData: FormData) {
   await requireAdmin();
   await connectMongo();
   const id = String(formData.get("id") ?? "");
-  await Approver.findByIdAndDelete(id);
+  const doc = await Approver.findByIdAndDelete(id);
   await syncAutoLookupRoles();
+  await setFlashToast({
+    tone: "success",
+    message: doc ? `${doc.name} was removed.` : "Approver removed.",
+  });
   revalidatePath("/admin/approvers");
   revalidatePath("/admin/lookups");
 }
