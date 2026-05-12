@@ -15,6 +15,7 @@
     "db:validate-import-registry": "node scripts/validate-import-registry-consistency.mjs",
     "db:repair-import-registry": "node scripts/repair-import-registry-links.mjs --apply",
     "db:resync-builtins": "node scripts/resync-built-in-forms.mjs",
+    "db:sync-fixed-assets-forms": "node scripts/sync-fixed-assets-forms.mjs",
     "db:detect-orphaned-form-slugs": "node scripts/detect-orphaned-request-form-slugs.mjs",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",

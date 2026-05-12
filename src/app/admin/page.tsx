@@ -1,4 +1,4 @@
-import { AlertTriangle, BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
+﻿import { AlertTriangle, BellRing, Cog, FileInput, KeyRound, ListChecks, Route, Send, Users } from "lucide-react";
 import Link from "next/link";
 import {
   AdminHelpPanel,
@@ -87,6 +87,13 @@ export default async function AdminOverviewPage() {
 
   const liveFormCount = forms.filter(
     (form) => form.runtime.requesterCanOpen,
+  ).length;
+  const importedForms = forms.filter((form) => form.source === "imported");
+  const importedSheetRoutingIssues = importedForms.filter(
+    (form) =>
+      !form.writeResponsesToSheet ||
+      !String(form.responseSpreadsheetId ?? "").trim() ||
+      !String(form.responseSheetName ?? "").trim(),
   ).length;
   const responseConnectedCount = forms.filter(
     (form) => form.writeResponsesToSheet && Boolean(form.responseSpreadsheetId?.trim()),
@@ -182,6 +189,12 @@ export default async function AdminOverviewPage() {
           value={formsNeedingResponseSetup}
           tone={formsNeedingResponseSetup > 0 ? "warn" : "ok"}
           hint="Live forms missing response-sheet setup"
+        />
+        <AdminMetricCard
+          label="Imported routing issues"
+          value={importedSheetRoutingIssues}
+          tone={importedSheetRoutingIssues > 0 ? "warn" : "ok"}
+          hint="Imported forms with incomplete sheet routing"
         />
       </div>
       <div className="mt-4">
@@ -697,3 +710,4 @@ function buildNextSteps({
 
   return steps;
 }
+
