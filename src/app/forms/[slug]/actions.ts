@@ -20,6 +20,7 @@ import { buildNotificationDetailsFromFieldMap, importedFieldMap } from "@/lib/re
 import { RequestModel } from "@/models/Request";
 import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
+import { AuditLog } from "@/models/AuditLog";
 
 const EMPLOYEE_INFORMATION_SLUG = "employee-information";
 const EMPLOYEE_INFORMATION_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
@@ -68,6 +69,114 @@ const FIXED_ASSET_ITEM_CODE_HEADERS = [
   "ASSIGNED ITEM CODE",
   "PO NUMBER",
   "Email Status",
+] as const;
+const DEPARTMENTAL_INVENTORY_HEADERS = [
+  "Timestamp",
+  "FILLED-UP / COMPLETED BY",
+  "Email",
+  "DEPARMENT",
+  "Sub-Department",
+  "LOCATION",
+  "DEPARTMENT HEAD",
+  "ITEM DESCRIPTION",
+  "QNTY",
+  "YEAR PURCHASED/DELIVERED",
+  "CUSTODIAN",
+  "Ref",
+] as const;
+const FIXED_ASSET_ADDITIONS_HEADERS = [
+  "Timestamp",
+  "Submitted By",
+  "Email",
+  "PO #",
+  "Supplier",
+  "Invoice Date",
+  "Delivery Date",
+  "CAPEX Budget Ref#",
+  "Asset Type",
+  "Asset Item Code",
+  "Asset Description",
+  "Qnty",
+  "Price",
+  "Total Cost",
+  "Useful Life",
+  "Department",
+  "Sub-Department",
+  "Location",
+  "Asset Assignee",
+  "Assignee Email",
+  "Component Asset Tag",
+  "Attachment URL",
+  "Ack Token",
+  "RefID",
+  "Status",
+] as const;
+const EMPLOYEE_ASSET_ACCOUNTABILITY_HEADERS = [
+  "Timestamp",
+  "ID Number",
+  "Employee",
+  "Employee Email",
+  "Department",
+  "Location",
+  "Department Head",
+  "Department Head Email",
+  "Hardware Type",
+  "Brand",
+  "Model",
+  "Computer Serial Number",
+  "Computer Name",
+  "Processor",
+  "Storage",
+  "RAM",
+  "OS",
+  "License Key",
+  "Peripheral Type",
+  "Peripheral Description",
+  "Peripheral Brand/Model",
+  "Peripheral Quantity",
+  "Peripheral Serial Number",
+  "Peripheral Condition",
+  "RefID",
+  "Manager Status",
+  "Manager Timestamp",
+  "Manager Remarks",
+  "Processor Status,",
+  "Processor Timestamp",
+  "Remarks",
+  "Employee Ack Status",
+  "Employee Ack Timestamp",
+  "Dept Ack Status",
+  "Dept Ack Timestamp",
+  "Processor Status",
+  "Timestamp",
+] as const;
+const FIXED_ASSET_CHANGE_CONTROL_LOG_HEADERS = [
+  "Timestamp",
+  "RefID",
+  "Date of Change",
+  "Asset Tag / Asset No.",
+  "Asset Description",
+  "Type of Change",
+  "Old Value / Details",
+  "New Value / Details",
+  "Old Assignee",
+  "Reason for Change",
+  "Old Assignee Email",
+  "New Assignee",
+  "New Assignee Email",
+  "Requested By",
+  "Request by Email",
+  "Approved By",
+  "Approver Email",
+  "Supporting Documents",
+  "Status",
+  "Assignee Ack Timestamp",
+  "Approval Timestamp",
+  "Processed Timestamp",
+  "Processor Email",
+  "Assignee Token",
+  "Approve Token",
+  "Process Token",
 ] as const;
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
 const SALARY_LOAN_HEADERS = [
@@ -149,6 +258,231 @@ function buildFixedAssetItemCodeRow(opts: {
   };
 
   for (const header of FIXED_ASSET_ITEM_CODE_HEADERS) {
+    if (!(header in row)) row[header] = "";
+  }
+  return row;
+}
+
+function buildDepartmentalInventoryRow(opts: {
+  referenceNo: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const now = new Date();
+  const timestamp = now.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+
+  const row: Record<string, string> = {
+    Timestamp: timestamp,
+    "FILLED-UP / COMPLETED BY": findValue(opts.values, opts.labels, "preparedby", "prepared by") || opts.submittedByName,
+    Email: findValue(opts.values, opts.labels, "email", "emailaddress", "email address") || opts.submittedByEmail,
+    DEPARMENT: findValue(opts.values, opts.labels, "department"),
+    "Sub-Department": findValue(opts.values, opts.labels, "subdepartment", "sub-department"),
+    LOCATION: findValue(opts.values, opts.labels, "location"),
+    "DEPARTMENT HEAD": findValue(opts.values, opts.labels, "departmenthead", "department head"),
+    "ITEM DESCRIPTION": findValue(opts.values, opts.labels, "assetdescription", "asset description", "itemdescription", "item description"),
+    QNTY: findValue(opts.values, opts.labels, "quantity", "qnty"),
+    "YEAR PURCHASED/DELIVERED": findValue(
+      opts.values,
+      opts.labels,
+      "yearpurchaseddelivered",
+      "year purchased/delivered",
+      "dateacquired",
+      "date acquired",
+    ),
+    CUSTODIAN: findValue(opts.values, opts.labels, "custodian", "assignedpersonnel", "assigned personnel"),
+    Ref: opts.referenceNo,
+  };
+
+  for (const header of DEPARTMENTAL_INVENTORY_HEADERS) {
+    if (!(header in row)) row[header] = "";
+  }
+  return row;
+}
+
+function buildFixedAssetAdditionsRow(opts: {
+  referenceNo: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const now = new Date();
+  const timestamp = now.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+
+  const price = findValue(opts.values, opts.labels, "purchaseprice", "purchase price", "price");
+  const quantity = findValue(opts.values, opts.labels, "quantity", "qnty");
+  const totalCost = findValue(opts.values, opts.labels, "totalcost", "total cost") || (() => {
+    const p = Number(price);
+    const q = Number(quantity || "1");
+    if (!Number.isFinite(p)) return "";
+    return String(p * (Number.isFinite(q) ? q : 1));
+  })();
+
+  const row: Record<string, string> = {
+    Timestamp: timestamp,
+    "Submitted By": opts.submittedByName,
+    Email: opts.submittedByEmail,
+    "PO #": findValue(opts.values, opts.labels, "ponumber", "po #", "po number"),
+    Supplier: findValue(opts.values, opts.labels, "supplier"),
+    "Invoice Date": findValue(opts.values, opts.labels, "invoicedate", "invoice date"),
+    "Delivery Date": findValue(opts.values, opts.labels, "deliverydate", "delivery date"),
+    "CAPEX Budget Ref#": findValue(opts.values, opts.labels, "capexbudgetref", "capex budget ref#"),
+    "Asset Type": findValue(opts.values, opts.labels, "assettype", "asset type", "assetcategory", "asset category"),
+    "Asset Item Code": findValue(opts.values, opts.labels, "assetitemcode", "asset item code", "assetcode", "asset code"),
+    "Asset Description": findValue(opts.values, opts.labels, "assetdescription", "asset description"),
+    Qnty: quantity,
+    Price: price,
+    "Total Cost": totalCost,
+    "Useful Life": findValue(opts.values, opts.labels, "usefullife", "useful life", "useful life (years)"),
+    Department: findValue(opts.values, opts.labels, "department"),
+    "Sub-Department": findValue(opts.values, opts.labels, "subdepartment", "sub-department"),
+    Location: findValue(opts.values, opts.labels, "location"),
+    "Asset Assignee": findValue(opts.values, opts.labels, "assetassignee", "asset assignee", "receivedby", "received by"),
+    "Assignee Email": findValue(opts.values, opts.labels, "assigneeemail", "assignee email"),
+    "Component Asset Tag": findValue(opts.values, opts.labels, "componentassettag", "component asset tag"),
+    "Attachment URL": findValue(opts.values, opts.labels, "attachmenturl", "attachment url", "supportingdocument", "supporting document"),
+    "Ack Token": findValue(opts.values, opts.labels, "acktoken", "ack token"),
+    RefID: opts.referenceNo,
+    Status: "submitted",
+  };
+
+  for (const header of FIXED_ASSET_ADDITIONS_HEADERS) {
+    if (!(header in row)) row[header] = "";
+  }
+  return row;
+}
+
+function buildEmployeeAssetAccountabilityRow(opts: {
+  referenceNo: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const timestamp = new Date().toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+
+  const row: Record<string, string> = {
+    Timestamp: timestamp,
+    "ID Number": findValue(opts.values, opts.labels, "idnumber", "id number", "employeeid", "employee id"),
+    Employee: findValue(opts.values, opts.labels, "employeename", "employee name") || opts.submittedByName,
+    "Employee Email": findValue(opts.values, opts.labels, "employeeemail", "employee email", "email") || opts.submittedByEmail,
+    Department: findValue(opts.values, opts.labels, "department"),
+    Location: findValue(opts.values, opts.labels, "location"),
+    "Department Head": findValue(opts.values, opts.labels, "departmenthead", "department head"),
+    "Department Head Email": findValue(opts.values, opts.labels, "departmentheademail", "department head email"),
+    "Hardware Type": findValue(opts.values, opts.labels, "hardwaretype", "hardware type"),
+    Brand: findValue(opts.values, opts.labels, "brand"),
+    Model: findValue(opts.values, opts.labels, "model"),
+    "Computer Serial Number": findValue(opts.values, opts.labels, "computerserialnumber", "computer serial number", "serialnumber", "serial number"),
+    "Computer Name": findValue(opts.values, opts.labels, "computername", "computer name"),
+    Processor: findValue(opts.values, opts.labels, "processor"),
+    Storage: findValue(opts.values, opts.labels, "storage"),
+    RAM: findValue(opts.values, opts.labels, "ram"),
+    OS: findValue(opts.values, opts.labels, "os"),
+    "License Key": findValue(opts.values, opts.labels, "licensekey", "license key"),
+    "Peripheral Type": findValue(opts.values, opts.labels, "peripheraltype", "peripheral type"),
+    "Peripheral Description": findValue(opts.values, opts.labels, "peripheraldescription", "peripheral description"),
+    "Peripheral Brand/Model": findValue(opts.values, opts.labels, "peripheralbrandmodel", "peripheral brand/model"),
+    "Peripheral Quantity": findValue(opts.values, opts.labels, "peripheralquantity", "peripheral quantity", "quantity", "qnty"),
+    "Peripheral Serial Number": findValue(opts.values, opts.labels, "peripheralserialnumber", "peripheral serial number"),
+    "Peripheral Condition": findValue(opts.values, opts.labels, "peripheralcondition", "peripheral condition", "condition"),
+    RefID: opts.referenceNo,
+    "Manager Status": findValue(opts.values, opts.labels, "managerstatus", "manager status") || "pending",
+    "Manager Timestamp": findValue(opts.values, opts.labels, "managertimestamp", "manager timestamp"),
+    "Manager Remarks": findValue(opts.values, opts.labels, "managerremarks", "manager remarks"),
+    "Processor Status,": findValue(opts.values, opts.labels, "processorstatus", "processor status"),
+    "Processor Timestamp": findValue(opts.values, opts.labels, "processortimestamp", "processor timestamp"),
+    Remarks: findValue(opts.values, opts.labels, "remarks"),
+    "Employee Ack Status": findValue(opts.values, opts.labels, "employeeackstatus", "employee ack status"),
+    "Employee Ack Timestamp": findValue(opts.values, opts.labels, "employeeacktimestamp", "employee ack timestamp"),
+    "Dept Ack Status": findValue(opts.values, opts.labels, "deptackstatus", "dept ack status"),
+    "Dept Ack Timestamp": findValue(opts.values, opts.labels, "deptacktimestamp", "dept ack timestamp"),
+    "Processor Status": findValue(opts.values, opts.labels, "processorstatus", "processor status"),
+  };
+
+  for (const header of EMPLOYEE_ASSET_ACCOUNTABILITY_HEADERS) {
+    if (!(header in row)) row[header] = "";
+  }
+  return row;
+}
+
+function buildFixedAssetChangeControlLogRow(opts: {
+  referenceNo: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const timestamp = new Date().toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+
+  const row: Record<string, string> = {
+    Timestamp: timestamp,
+    RefID: opts.referenceNo,
+    "Date of Change": findValue(opts.values, opts.labels, "dateofchange", "date of change", "date"),
+    "Asset Tag / Asset No.": findValue(opts.values, opts.labels, "assettagassetno", "asset tag / asset no.", "assetcode", "asset code"),
+    "Asset Description": findValue(opts.values, opts.labels, "assetdescription", "asset description"),
+    "Type of Change": findValue(opts.values, opts.labels, "typeofchange", "type of change", "transactiontype", "transaction type"),
+    "Old Value / Details": findValue(opts.values, opts.labels, "oldvaluedetails", "old value / details", "fromlocation", "from location"),
+    "New Value / Details": findValue(opts.values, opts.labels, "newvaluedetails", "new value / details", "tolocation", "to location"),
+    "Old Assignee": findValue(opts.values, opts.labels, "oldassignee", "old assignee"),
+    "Reason for Change": findValue(opts.values, opts.labels, "reasonforchange", "reason for change", "reason"),
+    "Old Assignee Email": findValue(opts.values, opts.labels, "oldassigneeemail", "old assignee email"),
+    "New Assignee": findValue(opts.values, opts.labels, "newassignee", "new assignee", "receivedby", "received by"),
+    "New Assignee Email": findValue(opts.values, opts.labels, "newassigneeemail", "new assignee email"),
+    "Requested By": findValue(opts.values, opts.labels, "requestedby", "requested by") || opts.submittedByName,
+    "Request by Email": findValue(opts.values, opts.labels, "requestbyemail", "request by email", "email") || opts.submittedByEmail,
+    "Approved By": findValue(opts.values, opts.labels, "approvedby", "approved by", "authorizedby", "authorized by"),
+    "Approver Email": findValue(opts.values, opts.labels, "approveremail", "approver email"),
+    "Supporting Documents": findValue(opts.values, opts.labels, "supportingdocuments", "supporting documents", "supportingdocument", "supporting document"),
+    Status: findValue(opts.values, opts.labels, "status") || "submitted",
+    "Assignee Ack Timestamp": findValue(opts.values, opts.labels, "assigneeacktimestamp", "assignee ack timestamp"),
+    "Approval Timestamp": findValue(opts.values, opts.labels, "approvaltimestamp", "approval timestamp"),
+    "Processed Timestamp": findValue(opts.values, opts.labels, "processedtimestamp", "processed timestamp"),
+    "Processor Email": findValue(opts.values, opts.labels, "processoremail", "processor email"),
+    "Assignee Token": findValue(opts.values, opts.labels, "assigneetoken", "assignee token"),
+    "Approve Token": findValue(opts.values, opts.labels, "approvetoken", "approve token"),
+    "Process Token": findValue(opts.values, opts.labels, "processtoken", "process token"),
+  };
+
+  for (const header of FIXED_ASSET_CHANGE_CONTROL_LOG_HEADERS) {
     if (!(header in row)) row[header] = "";
   }
   return row;
@@ -479,6 +813,82 @@ function stringifyValue(value: unknown) {
   return String(value ?? "");
 }
 
+function normalizeEmailValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function normalizeDateValue(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeNumericValue(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const parsed = Number(raw.replace(/,/g, ""));
+  return Number.isFinite(parsed) ? String(parsed) : raw;
+}
+
+function normalizePayloadValues(values: Record<string, unknown>) {
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    const text = String(value ?? "");
+    const nk = normalizeKey(key);
+    if (nk.includes("email")) normalized[key] = normalizeEmailValue(text);
+    else if (nk.includes("date") || nk.includes("timestamp")) normalized[key] = normalizeDateValue(text);
+    else if (nk.includes("cost") || nk.includes("price") || nk.includes("qty") || nk.includes("quantity")) {
+      normalized[key] = normalizeNumericValue(text);
+    } else normalized[key] = text.trim();
+  }
+  return normalized;
+}
+
+function expectedHeadersBySlug(slug: string): readonly string[] | null {
+  if (slug === "request-for-fixed-asset-item-code") return FIXED_ASSET_ITEM_CODE_HEADERS;
+  if (slug === "departments-existing-fixed-asset-inventory") return DEPARTMENTAL_INVENTORY_HEADERS;
+  if (slug === "fixed-assets-additions-form") return FIXED_ASSET_ADDITIONS_HEADERS;
+  if (slug === "employee-assets-accountability-form") return EMPLOYEE_ASSET_ACCOUNTABILITY_HEADERS;
+  if (slug === "fixed-assets-control-log-form") return FIXED_ASSET_CHANGE_CONTROL_LOG_HEADERS;
+  return null;
+}
+
+async function ensureSheetHeaders(spreadsheetId: string, sheetTitle: string, expectedHeaders: readonly string[]) {
+  const headerRow = (await readSpreadsheetMatrix(spreadsheetId, `${sheetTitle}!A1:ZZ1`))[0] ?? [];
+  const existing = headerRow.map((h) => String(h ?? "").trim());
+  const missing = expectedHeaders.filter((h) => !existing.includes(h));
+  if (missing.length > 0) {
+    throw new Error(`Sheet header mismatch on "${sheetTitle}". Missing columns: ${missing.join(", ")}`);
+  }
+}
+
+async function logSheetWriteAudit(input: {
+  actorEmail: string;
+  correlationId: string;
+  slug: string;
+  sheetTitle: string;
+  spreadsheetId: string;
+  outcome: "success" | "failed";
+  details: Record<string, unknown>;
+}) {
+  await AuditLog.create({
+    actorEmail: input.actorEmail || "system@local",
+    action: "sheet-write",
+    targetType: "imported-form-submission",
+    targetId: input.slug,
+    correlationId: input.correlationId,
+    outcome: input.outcome,
+    context: {
+      sheetTitle: input.sheetTitle,
+      spreadsheetId: input.spreadsheetId,
+      mappingVersion: "fixed-assets-v3",
+    },
+    details: input.details,
+  });
+}
+
 async function writeImportedSubmissionToSheet(opts: {
   spreadsheetId: string;
   sheetTitle: string;
@@ -490,19 +900,53 @@ async function writeImportedSubmissionToSheet(opts: {
   labels: Record<string, string>;
   values: Record<string, unknown>;
 }) {
-  await appendResponseSheetRow({
-    spreadsheetId: opts.spreadsheetId,
-    sheetTitle: opts.sheetTitle,
-    rowValues: buildResponseSheetRows({
-      referenceNo: opts.referenceNo,
-      formSlug: opts.slug,
-      formName: opts.importedName,
-      submittedByEmail: opts.submittedByEmail,
-      submittedByName: opts.submittedByName,
-      labels: opts.labels,
-      values: opts.values,
-    }),
+  const expectedHeaders = expectedHeadersBySlug(opts.slug);
+  if (expectedHeaders) {
+    await ensureSheetHeaders(opts.spreadsheetId, opts.sheetTitle, expectedHeaders);
+  }
+  const rowValues = buildResponseSheetRows({
+    referenceNo: opts.referenceNo,
+    formSlug: opts.slug,
+    formName: opts.importedName,
+    submittedByEmail: opts.submittedByEmail,
+    submittedByName: opts.submittedByName,
+    labels: opts.labels,
+    values: opts.values,
   });
+  try {
+    await appendResponseSheetRow({
+      spreadsheetId: opts.spreadsheetId,
+      sheetTitle: opts.sheetTitle,
+      rowValues,
+    });
+    const verifyRows = await readSpreadsheetMatrix(opts.spreadsheetId, `${opts.sheetTitle}!A1:ZZ5000`);
+    const headers = (verifyRows[0] ?? []).map((v) => String(v ?? "").trim());
+    const last = verifyRows[verifyRows.length - 1] ?? [];
+    const refIndex = headers.findIndex((h) => ["Reference", "Ref", "RefID", "Ref #"].includes(h));
+    if (refIndex >= 0 && String(last[refIndex] ?? "").trim() !== opts.referenceNo) {
+      throw new Error(`Post-write verification failed for ${opts.sheetTitle}: reference mismatch.`);
+    }
+    await logSheetWriteAudit({
+      actorEmail: opts.submittedByEmail,
+      correlationId: opts.referenceNo,
+      slug: opts.slug,
+      sheetTitle: opts.sheetTitle,
+      spreadsheetId: opts.spreadsheetId,
+      outcome: "success",
+      details: { verified: true },
+    });
+  } catch (error) {
+    await logSheetWriteAudit({
+      actorEmail: opts.submittedByEmail,
+      correlationId: opts.referenceNo,
+      slug: opts.slug,
+      sheetTitle: opts.sheetTitle,
+      spreadsheetId: opts.spreadsheetId,
+      outcome: "failed",
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
+    throw error;
+  }
 }
 
 export async function submitImportedForm(slug: string, formData: FormData) {
@@ -561,6 +1005,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     if (missing.length > 0) {
       throw new Error(`Missing required fields: ${missing.join(", ")}`);
     }
+    Object.assign(values, normalizePayloadValues(values));
     await enforceFixedAssetDuplicateGuard(slug, values, labels);
 
     const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
@@ -792,6 +1237,82 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         });
       } else if (slug === "request-for-fixed-asset-item-code") {
         const row = buildFixedAssetItemCodeRow({
+          referenceNo,
+          submittedByName: name || "",
+          submittedByEmail: email || "",
+          values,
+          labels,
+        });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: row,
+        });
+      } else if (slug === "departments-existing-fixed-asset-inventory") {
+        const row = buildDepartmentalInventoryRow({
+          referenceNo,
+          submittedByName: name || "",
+          submittedByEmail: email || "",
+          values,
+          labels,
+        });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: row,
+        });
+      } else if (slug === "fixed-assets-additions-form") {
+        const row = buildFixedAssetAdditionsRow({
+          referenceNo,
+          submittedByName: name || "",
+          submittedByEmail: email || "",
+          values,
+          labels,
+        });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: row,
+        });
+      } else if (slug === "employee-assets-accountability-form") {
+        const row = buildEmployeeAssetAccountabilityRow({
+          referenceNo,
+          submittedByName: name || "",
+          submittedByEmail: email || "",
+          values,
+          labels,
+        });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: row,
+        });
+      } else if (slug === "fixed-assets-control-log-form") {
+        const row = buildFixedAssetChangeControlLogRow({
           referenceNo,
           submittedByName: name || "",
           submittedByEmail: email || "",

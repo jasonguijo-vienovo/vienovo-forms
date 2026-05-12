@@ -15,6 +15,17 @@ type Props = {
   className?: string;
 };
 
+function isOtherOption(option: Option) {
+  const normalized = `${option.label} ${option.value}`.trim().toLowerCase();
+  return normalized === "other" || normalized === "others";
+}
+
+function sortOtherLast(options: Option[]) {
+  const regular = options.filter((option) => !isOtherOption(option));
+  const others = options.filter((option) => isOtherOption(option));
+  return [...regular, ...others];
+}
+
 export function SearchableSelect({
   name,
   value,
@@ -31,14 +42,14 @@ export function SearchableSelect({
 
   const selected = useMemo(() => options.find((o) => o.value === value) ?? null, [options, value]);
   const normalized = useMemo(
-    () => options.map((o) => ({ ...o, n: `${o.label} ${o.value}`.toLowerCase() })),
+    () => sortOtherLast(options).map((o) => ({ ...o, n: `${o.label} ${o.value}`.toLowerCase() })),
     [options]
   );
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
+    if (!q) return normalized.map(({ value: v, label }) => ({ value: v, label }));
     return normalized.filter((o) => o.n.includes(q)).map(({ value: v, label }) => ({ value: v, label }));
-  }, [normalized, options, query]);
+  }, [normalized, query]);
 
   return (
     <div ref={rootRef} className="relative">
