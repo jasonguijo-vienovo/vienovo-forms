@@ -106,6 +106,10 @@ function resolveFixedAssetsSheet(slug: string) {
   return FIXED_ASSETS_SHEET_BY_SLUG[String(slug || "").trim().toLowerCase()] ?? "";
 }
 
+function isFixedAssetsImportedForm(slug: string) {
+  return Boolean(resolveFixedAssetsSheet(slug));
+}
+
 function buildFixedAssetItemCodeRow(opts: {
   referenceNo: string;
   submittedByName: string;
@@ -579,7 +583,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     }
 
     const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
-    const requiresApproval = !isEmployeeInformation;
+    const requiresApproval = !isEmployeeInformation && !isFixedAssetsImportedForm(slug);
     const selectedApproverRaw = requiresApproval
       ? findValue(
           values,
