@@ -67,6 +67,28 @@ function normalizeKey(input: string) {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+const FORCED_DROPDOWN_KEYS = new Set(
+  [
+    "assetclass",
+    "department",
+    "subdepartment",
+    "location",
+    "capexbudgetref",
+    "description",
+    "approvedby",
+    "approvedbyemail",
+    "departmenthead",
+    "departmentheademail",
+    "typeofchange",
+    "additionalcapexbudgetwapprovalbysirmat",
+  ].map(normalizeKey)
+);
+
+function isForcedDropdownField(field: ImportedFieldDefinition) {
+  const keys = [field.name, field.label].map((value) => normalizeKey(String(value || "")));
+  return keys.some((key) => FORCED_DROPDOWN_KEYS.has(key));
+}
+
 function parseAttributes(source: string) {
   const attrs: Record<string, string> = {};
   const regex = /([A-Za-z_:][A-Za-z0-9_:\-.]*)(?:=(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g;
@@ -387,9 +409,18 @@ export async function hydrateImportedFormRuntime(opts: {
   }
 
   for (const field of runtime.fields) {
+    if (isForcedDropdownField(field) && field.type !== "select") {
+      field.type = "select";
+      field.options = field.options ?? [];
+    }
+  }
+
+  for (const field of runtime.fields) {
     if (!["select", "radio", "checkbox-group"].includes(field.type)) continue;
 
-    const syncedOptions = importedLookupOptions.get(normalizeKey(field.name));
+    const syncedOptions =
+      importedLookupOptions.get(normalizeKey(field.name)) ||
+      importedLookupOptions.get(normalizeKey(field.label));
     if (syncedOptions?.length) {
       field.options = syncedOptions.map((value) => ({ value, label: value }));
       continue;
