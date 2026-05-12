@@ -43,6 +43,14 @@ const EMPLOYEE_INFORMATION_HEADERS = [
   "Job Title",
   "Status",
 ] as const;
+const FIXED_ASSETS_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
+const FIXED_ASSETS_SHEET_BY_SLUG: Record<string, string> = {
+  "request-for-fixed-asset-item-code": "REQUEST FOR FIXED ASSET ITEM CODE",
+  "departments-existing-fixed-asset-inventory": "Existing Asset Inventory",
+  "fixed-assets-additions-form": "Fixed Assets Additions",
+  "employee-assets-accountability-form": "Employee Accountability",
+  "fixed-assets-control-log-form": "Control Log",
+};
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
 const SALARY_LOAN_HEADERS = [
   "Timestamp",
@@ -74,6 +82,47 @@ function isSalaryLoanForm(slug: string, formName: string) {
     nameKey.includes("salaryloanapplication") ||
     nameKey.includes("salaryloan")
   );
+}
+
+function resolveFixedAssetsSheet(slug: string) {
+  return FIXED_ASSETS_SHEET_BY_SLUG[String(slug || "").trim().toLowerCase()] ?? "";
+}
+
+async function enforceFixedAssetDuplicateGuard(slug: string, values: Record<string, unknown>, labels: Record<string, string>) {
+  const keyedSlugs = new Set([
+    "departments-existing-fixed-asset-inventory",
+    "fixed-assets-additions-form",
+    "fixed-assets-control-log-form",
+  ]);
+  if (!keyedSlugs.has(slug)) return;
+
+  const assetCode = findValue(values, labels, "assetcode", "asset code").toLowerCase();
+  const dateValue = findValue(
+    values,
+    labels,
+    "date",
+    "dateofinventory",
+    "dateofrequest",
+    "purchasedate",
+    "dateissued",
+    "datecompleted",
+  );
+  if (!assetCode || !dateValue) return;
+
+  const duplicate = await RequestModel.exists({
+    formSlug: slug,
+    "formData.values.assetCode": { $regex: `^${assetCode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+    $or: [
+      { "formData.values.date": dateValue },
+      { "formData.values.dateOfInventory": dateValue },
+      { "formData.values.purchaseDate": dateValue },
+      { "formData.values.dateIssued": dateValue },
+      { "formData.values.dateCompleted": dateValue },
+    ],
+  });
+  if (duplicate) {
+    throw new Error("Possible duplicate submission detected for this asset code and date.");
+  }
 }
 
 function generateSlaCode(length = 6) {
@@ -446,6 +495,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     if (missing.length > 0) {
       throw new Error(`Missing required fields: ${missing.join(", ")}`);
     }
+    await enforceFixedAssetDuplicateGuard(slug, values, labels);
 
     const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
     let employeeRow: Record<string, string> | null = null;
@@ -595,8 +645,12 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       updatedAt: createdRequest.updatedAt,
     });
 
+    const fixedAssetsSheetName = resolveFixedAssetsSheet(slug);
+    const isFixedAssetsForm = Boolean(fixedAssetsSheetName);
     const responseSpreadsheetId = isEmployeeInformation
       ? EMPLOYEE_INFORMATION_SPREADSHEET_ID
+      : isFixedAssetsForm
+      ? FIXED_ASSETS_SPREADSHEET_ID
       : definition.responseSpreadsheetId?.trim() ||
         imported.spreadsheetId?.trim() ||
         process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
@@ -604,12 +658,16 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         "";
     const responseSheetName = isEmployeeInformation
       ? EMPLOYEE_INFORMATION_SHEET_NAME
+      : isFixedAssetsForm
+      ? fixedAssetsSheetName
       : isSalaryLoan
       ? SALARY_LOAN_SHEET_NAME
       : definition.responseSheetName?.trim() ||
         (imported as any).responseSheetName?.trim() ||
         `${imported.name} Responses`;
     const shouldWriteResponses = isEmployeeInformation
+      ? true
+      : isFixedAssetsForm
       ? true
       : isSalaryLoan
       ? true

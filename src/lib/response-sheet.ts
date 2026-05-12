@@ -91,6 +91,11 @@ export function buildResponseSheetRows(opts: {
 
   return {
     Timestamp: timestampText,
+    "Ref #": opts.referenceNo,
+    "Form Slug": opts.formSlug,
+    "Form Name": opts.formName,
+    "Submitted By Email": opts.submittedByEmail,
+    "Submitted By Name": opts.submittedByName,
     Status: opts.status || "submitted",
     ...flattenObject(opts.values, "", opts.labels ?? {}),
   };
