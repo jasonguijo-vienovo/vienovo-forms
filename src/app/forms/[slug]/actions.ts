@@ -51,6 +51,24 @@ const FIXED_ASSETS_SHEET_BY_SLUG: Record<string, string> = {
   "employee-assets-accountability-form": "Employee Accountability",
   "fixed-assets-control-log-form": "Control Log",
 };
+const FIXED_ASSET_ITEM_CODE_HEADERS = [
+  "Timestamp",
+  "Reference",
+  "Requester Name",
+  "Requester Email",
+  "CAPEX BUDGET",
+  "Item Description",
+  "Asset Class",
+  "Department",
+  "Sub-Department",
+  "Location",
+  "Project Name",
+  "Total Cost",
+  "Supporting Document",
+  "ASSIGNED ITEM CODE",
+  "PO NUMBER",
+  "Email Status",
+] as const;
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
 const SALARY_LOAN_HEADERS = [
   "Timestamp",
@@ -86,6 +104,50 @@ function isSalaryLoanForm(slug: string, formName: string) {
 
 function resolveFixedAssetsSheet(slug: string) {
   return FIXED_ASSETS_SHEET_BY_SLUG[String(slug || "").trim().toLowerCase()] ?? "";
+}
+
+function buildFixedAssetItemCodeRow(opts: {
+  referenceNo: string;
+  submittedByName: string;
+  submittedByEmail: string;
+  values: Record<string, unknown>;
+  labels: Record<string, string>;
+}) {
+  const now = new Date();
+  const timestamp = now.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+
+  const row: Record<string, string> = {
+    Timestamp: timestamp,
+    Reference: opts.referenceNo,
+    "Requester Name": opts.submittedByName,
+    "Requester Email": opts.submittedByEmail,
+    "CAPEX BUDGET": findValue(opts.values, opts.labels, "capexbudget", "capex budget"),
+    "Item Description": findValue(opts.values, opts.labels, "description", "itemdescription", "item description"),
+    "Asset Class": findValue(opts.values, opts.labels, "assetclass", "asset class", "assetcategory", "asset category"),
+    Department: findValue(opts.values, opts.labels, "department"),
+    "Sub-Department": findValue(opts.values, opts.labels, "subdepartment", "sub-department"),
+    Location: findValue(opts.values, opts.labels, "location"),
+    "Project Name": findValue(opts.values, opts.labels, "projectname", "project name"),
+    "Total Cost": findValue(opts.values, opts.labels, "totalcost", "total cost", "approvedannualbudget", "approved annual budget"),
+    "Supporting Document": findValue(opts.values, opts.labels, "supportingdocument", "supporting document"),
+    "ASSIGNED ITEM CODE": findValue(opts.values, opts.labels, "assigneditemcode", "assigned item code"),
+    "PO NUMBER": findValue(opts.values, opts.labels, "ponumber", "po number"),
+    "Email Status": findValue(opts.values, opts.labels, "emailstatus", "email status"),
+  };
+
+  for (const header of FIXED_ASSET_ITEM_CODE_HEADERS) {
+    if (!(header in row)) row[header] = "";
+  }
+  return row;
 }
 
 async function enforceFixedAssetDuplicateGuard(slug: string, values: Record<string, unknown>, labels: Record<string, string>) {
@@ -723,6 +785,25 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           submittedByName: name,
           labels: {},
           values: salaryLoanRow,
+        });
+      } else if (slug === "request-for-fixed-asset-item-code") {
+        const row = buildFixedAssetItemCodeRow({
+          referenceNo,
+          submittedByName: name || "",
+          submittedByEmail: email || "",
+          values,
+          labels,
+        });
+        await writeImportedSubmissionToSheet({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle: responseSheetName,
+          referenceNo,
+          slug,
+          importedName: imported.name,
+          submittedByEmail: email,
+          submittedByName: name,
+          labels: {},
+          values: row,
         });
       } else {
         await writeImportedSubmissionToSheet({
