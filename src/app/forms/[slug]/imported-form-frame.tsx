@@ -28,7 +28,7 @@ function safeScriptJson(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[]) {
+function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[], slug?: string) {
   const optionsByName = Object.fromEntries(
     fields.map((field) => [
       field.name,
@@ -39,7 +39,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     ])
   );
   const labelsByName = Object.fromEntries(fields.map((field) => [field.name, field.label]));
-  const bridgeData = safeScriptJson({ optionsByName, labelsByName });
+  const bridgeData = safeScriptJson({ optionsByName, labelsByName, slug: slug ?? "" });
 
   const bridgeScript = `
 <style>
@@ -140,6 +140,26 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
   function optionValue(option) {
     return typeof option === "string" ? option : option.value || option.label || "";
+  }
+
+  function isOtherText(value) {
+    var normalized = String(value || "").trim().toLowerCase();
+    return normalized === "other" || normalized === "others";
+  }
+
+  function sortOptionsOtherLast(options) {
+    var regular = [];
+    var others = [];
+    (options || []).forEach(function (option) {
+      var label = optionLabel(option);
+      var value = optionValue(option);
+      if (isOtherText(label) || isOtherText(value)) {
+        others.push(option);
+      } else {
+        regular.push(option);
+      }
+    });
+    return regular.concat(others);
   }
 
   function isSearchableField(name) {
@@ -266,7 +286,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       var options = findOptions(name);
       if (!options.length) return;
       select.innerHTML = select.required ? "" : '<option value="">-- Select --</option>';
-      options.forEach(function (option) {
+      sortOptionsOtherLast(options).forEach(function (option) {
         var node = document.createElement("option");
         node.value = optionValue(option);
         node.textContent = optionLabel(option);
@@ -275,6 +295,27 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       select.disabled = false;
       select.removeAttribute("readonly");
       attachSearchableSelect(select);
+    });
+  }
+
+  function hideReferenceFieldsForControlLog() {
+    if (String(bridge.slug || "") !== "fixed-assets-control-log-form") return;
+    var patterns = ["reference", "refid", "ref id", "ref#"];
+    var controls = document.querySelectorAll("input[name], input[id], textarea[name], textarea[id], select[name], select[id]");
+    Array.prototype.forEach.call(controls, function (control) {
+      var key = normalize((control.name || "") + " " + (control.id || ""));
+      var labelText = normalize(labelFor(control));
+      var isRef = patterns.some(function (p) {
+        var n = normalize(p);
+        return key.indexOf(n) >= 0 || labelText.indexOf(n) >= 0;
+      });
+      if (!isRef) return;
+      var wrapper = control.closest("label") || control.closest(".form-group") || control.parentElement;
+      if (wrapper) {
+        wrapper.style.display = "none";
+      } else {
+        control.style.display = "none";
+      }
     });
   }
 
@@ -436,6 +477,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
   window.addEventListener("load", function () {
     populateNativeSelects();
+    hideReferenceFieldsForControlLog();
     window.parent.postMessage({ type: "vienovo-imported-ready" }, "*");
     queueHeightPost();
     setTimeout(queueHeightPost, 300);
@@ -489,7 +531,7 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields), [fields, htmlSource]);
+  const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields, _slug), [fields, htmlSource, _slug]);
   const draftKey = `vienovo:imported-draft:${_slug || "unknown"}`;
 
   useEffect(() => {
