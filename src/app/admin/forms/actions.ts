@@ -8,6 +8,11 @@ import { writeAuditLog } from "@/lib/audit";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import {
+  appendSpreadsheetRow,
+  readSpreadsheetMatrix,
+  writeSpreadsheetRow,
+} from "@/lib/google/sheets";
+import {
   deleteFormEverywhere as deleteFormEverywhereEntry,
   deleteFormDefinitionEntry,
   hideFormDefinitionEntry,
@@ -22,6 +27,7 @@ import {
   type FormDefinitionStatus,
   type FormDefinitionVisibility,
 } from "@/models/FormDefinition";
+import { RequestModel } from "@/models/Request";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -57,6 +63,142 @@ function redirectToRegistry(input?: { slug?: string; openSettings?: boolean }) {
   if (input?.openSettings) params.set("settings", "open");
   const query = params.toString();
   redirect(query ? `/admin/forms?${query}` : "/admin/forms");
+}
+
+const FIXED_ASSET_ITEM_CODE_SHEET = "REQUEST FOR FIXED ASSET ITEM CODE";
+const FIXED_ASSET_ITEM_CODE_SPREADSHEET_ID = "1-Ml75zLsLUvackWpjnitqcfJwaL1OtBBKyq7PRZ82vM";
+const FIXED_ASSET_ITEM_CODE_SLUG = "request-for-fixed-asset-item-code";
+const FIXED_ASSET_ITEM_CODE_HEADERS = [
+  "Timestamp",
+  "Reference",
+  "Requester Name",
+  "Requester Email",
+  "CAPEX BUDGET",
+  "Item Description",
+  "Asset Class",
+  "Department",
+  "Sub-Department",
+  "Location",
+  "Project Name",
+  "Total Cost",
+  "Supporting Document",
+  "ASSIGNED ITEM CODE",
+  "PO NUMBER",
+  "Email Status",
+] as const;
+
+function norm(input: unknown) {
+  return String(input ?? "").trim();
+}
+function normRef(input: unknown) {
+  return norm(input).toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+function normKey(input: unknown) {
+  return norm(input).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+function findFieldValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
+  const wanted = aliases.map(normKey);
+  for (const [key, value] of Object.entries(values ?? {})) {
+    const keyNorm = normKey(key);
+    const labelNorm = normKey(labels?.[key] ?? "");
+    if (wanted.some((item) => item === keyNorm || item === labelNorm)) return norm(value);
+  }
+  return "";
+}
+
+export async function backfillFixedAssetItemCodeSheet() {
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    const existing = await readSpreadsheetMatrix(
+      FIXED_ASSET_ITEM_CODE_SPREADSHEET_ID,
+      `${FIXED_ASSET_ITEM_CODE_SHEET}!A1:Z5000`,
+    );
+    const currentHeaders = (existing[0] ?? []).map(norm);
+    if (
+      currentHeaders.length !== FIXED_ASSET_ITEM_CODE_HEADERS.length ||
+      FIXED_ASSET_ITEM_CODE_HEADERS.some((header, i) => currentHeaders[i] !== header)
+    ) {
+      await writeSpreadsheetRow({
+        spreadsheetId: FIXED_ASSET_ITEM_CODE_SPREADSHEET_ID,
+        range: `${FIXED_ASSET_ITEM_CODE_SHEET}!A1`,
+        values: [...FIXED_ASSET_ITEM_CODE_HEADERS],
+      });
+    }
+    const existingRefs = new Set(existing.slice(1).map((row) => normRef(row?.[1])).filter(Boolean));
+
+    const requests = await RequestModel.find(
+      { formSlug: FIXED_ASSET_ITEM_CODE_SLUG },
+      {
+        referenceNo: 1,
+        submittedBy: 1,
+        formData: 1,
+        createdAt: 1,
+      },
+    )
+      .sort({ createdAt: 1 })
+      .lean();
+
+    let inserted = 0;
+    for (const req of requests) {
+      const ref = norm(req.referenceNo);
+      if (!ref || existingRefs.has(normRef(ref))) continue;
+      const values = ((req as any).formData?.values ?? {}) as Record<string, unknown>;
+      const labels = ((req as any).formData?.fieldLabels ?? {}) as Record<string, string>;
+      const row = [
+        new Date((req as any).createdAt ?? Date.now()).toLocaleString("en-PH", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+          timeZone: "Asia/Manila",
+        }),
+        ref,
+        norm((req as any).submittedBy?.name),
+        norm((req as any).submittedBy?.email),
+        findFieldValue(values, labels, "capexbudget", "capex budget"),
+        findFieldValue(values, labels, "description", "itemdescription", "item description"),
+        findFieldValue(values, labels, "assetclass", "asset class", "assetcategory", "asset category"),
+        findFieldValue(values, labels, "department"),
+        findFieldValue(values, labels, "subdepartment", "sub-department"),
+        findFieldValue(values, labels, "location"),
+        findFieldValue(values, labels, "projectname", "project name"),
+        findFieldValue(values, labels, "totalcost", "total cost", "approvedannualbudget", "approved annual budget"),
+        findFieldValue(values, labels, "supportingdocument", "supporting document"),
+        findFieldValue(values, labels, "assigneditemcode", "assigned item code"),
+        findFieldValue(values, labels, "ponumber", "po number"),
+        findFieldValue(values, labels, "emailstatus", "email status"),
+      ];
+      await appendSpreadsheetRow({
+        spreadsheetId: FIXED_ASSET_ITEM_CODE_SPREADSHEET_ID,
+        sheetTitle: FIXED_ASSET_ITEM_CODE_SHEET,
+        values: row,
+      });
+      inserted += 1;
+    }
+
+    await setFlashToast({
+      tone: "success",
+      message: `Backfill complete. ${inserted} row(s) added to ${FIXED_ASSET_ITEM_CODE_SHEET}.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "backfill_fixed_asset_item_code_sheet",
+      targetType: "spreadsheet",
+      targetId: FIXED_ASSET_ITEM_CODE_SPREADSHEET_ID,
+      correlationId: randomUUID(),
+      details: { inserted, sheet: FIXED_ASSET_ITEM_CODE_SHEET },
+    });
+    revalidateFormSurfaces();
+  } catch (error) {
+    console.error("backfillFixedAssetItemCodeSheet failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+  redirectToRegistry();
 }
 
 export async function updateFormDefinition(formData: FormData) {
