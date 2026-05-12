@@ -62,15 +62,15 @@ export async function applyApprovalDecision({
   if (!current || current.status !== "pending") {
     throw new Error("Nothing to act on.");
   }
-  if (normalizeEmail(current.approverEmail) !== normalizedEmail) {
+  const currentApproverEmail = normalizeEmail(current.approverEmail);
   const activeDelegation =
-    current.approverEmail === normalizedEmail
+    currentApproverEmail === normalizedEmail
       ? null
       : await findActiveDelegation({
-          delegatorEmail: current.approverEmail,
+          delegatorEmail: currentApproverEmail,
           delegateEmail: normalizedEmail,
         });
-  if (current.approverEmail !== normalizedEmail && !activeDelegation) {
+  if (currentApproverEmail !== normalizedEmail && !activeDelegation) {
     throw new Error("Forbidden: not the current approver.");
   }
 
