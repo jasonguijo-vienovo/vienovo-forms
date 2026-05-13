@@ -13,7 +13,7 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { SearchableSelect } from "@/components/searchable-select";
-import { addApprover, addApproverRole, deleteApprover, toggleApprover, updateApprover } from "./actions";
+import { addApprover, addApproverRole, deleteApprover, deleteApproverRole, editApproverRole, toggleApprover, updateApprover } from "./actions";
 
 type ApproverRow = {
   _id: string;
@@ -75,6 +75,7 @@ export function ApproversClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [editingRole, setEditingRole] = useState<string | null>(null);
   const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
@@ -248,6 +249,63 @@ export function ApproversClient({
       ) : null}
 
       <AdminSection
+        title="Role management"
+        description="Edit or delete role tags used in the roles column."
+        meta={`${roles.length} role(s)`}
+      >
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+              <tr>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Tags (roles column)</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-border">
+              {roles.map((role) => (
+                <tr key={role} className="bg-white">
+                  <td className="px-4 py-4 text-sm text-surface-text">{roleLabel(role)}</td>
+                  <td className="px-4 py-4">
+                    {editingRole === role ? (
+                      <input form={`edit-role-${role}`} name="tags" defaultValue={role} className="field-input w-[240px]" />
+                    ) : (
+                      <span className="text-sm text-surface-text">{role}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      {editingRole === role ? (
+                        <>
+                          <form id={`edit-role-${role}`} action={editApproverRole}>
+                            <input type="hidden" name="previousRole" value={role} />
+                            <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50" />
+                          </form>
+                          <button type="button" onClick={() => setEditingRole(null)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button type="button" onClick={() => setEditingRole(role)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                          Edit
+                        </button>
+                      )}
+                      <form action={deleteApproverRole} onSubmit={(event) => {
+                        if (!confirm(`Delete role "${role}" from all approvers?`)) event.preventDefault();
+                      }}>
+                        <input type="hidden" name="role" value={role} />
+                        <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50" />
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </AdminSection>
+
+      <AdminSection
         title="Approver list"
         description="Search people, fix emails that need review, and switch people on or off."
         meta={`${filtered.length} of ${approvers.length} shown`}
@@ -341,8 +399,10 @@ export function ApproversClient({
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {approver.roles.length > 0 ? (
-                            approver.roles.map((role) => (
+                          {approver.roles.filter((role) => role.trim().toLowerCase() !== "far").length > 0 ? (
+                            approver.roles
+                              .filter((role) => role.trim().toLowerCase() !== "far")
+                              .map((role) => (
                               <span
                                 key={role}
                                 className={`inline-flex items-center rounded border px-2 py-1 text-xs font-medium capitalize ${

@@ -10,7 +10,9 @@ export default async function ApproversPage() {
     getAdminEmployeePickerOptions(),
   ]);
   const dynamicRoles = Array.from(new Set(all.flatMap((item) => item.roles || []).filter(Boolean))).sort();
-  const roles = Array.from(new Set([...APPROVER_ROLES, ...dynamicRoles]));
+  const roles = Array.from(new Set([...APPROVER_ROLES, ...dynamicRoles])).filter(
+    (role) => String(role).trim().toLowerCase() !== "far",
+  );
 
   return (
     <ApproversClient
