@@ -17,7 +17,16 @@ export default async function ApproversPage() {
   const dynamicRoles = Array.from(new Set(all.flatMap((item) => item.roles || []).filter(Boolean))).sort();
   const storedRoles = Array.isArray(storedRoleDoc?.value)
     ? Array.from(new Set((storedRoleDoc.value as unknown[]).map((item) => String(item ?? "").trim()).filter(Boolean)))
-    : [];
+    : typeof storedRoleDoc?.value === "string"
+      ? Array.from(
+          new Set(
+            storedRoleDoc.value
+              .split(/[\n,;]+/g)
+              .map((item) => String(item ?? "").trim())
+              .filter(Boolean),
+          ),
+        )
+      : [];
   const roles = Array.from(new Set([...APPROVER_ROLES, ...dynamicRoles, ...storedRoles])).filter(
     (role) => String(role).trim().toLowerCase() !== "far",
   );

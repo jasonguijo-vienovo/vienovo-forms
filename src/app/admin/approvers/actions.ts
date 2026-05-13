@@ -22,8 +22,20 @@ function normalizeRoleTag(value: string) {
 
 async function getStoredCustomRoles() {
   const doc = await SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean();
-  if (!Array.isArray(doc?.value)) return [] as string[];
-  return Array.from(new Set((doc.value as unknown[]).map((item) => normalizeRoleTag(String(item))).filter(Boolean)));
+  if (Array.isArray(doc?.value)) {
+    return Array.from(new Set((doc.value as unknown[]).map((item) => normalizeRoleTag(String(item))).filter(Boolean)));
+  }
+  if (typeof doc?.value === "string") {
+    return Array.from(
+      new Set(
+        doc.value
+          .split(/[\n,;]+/g)
+          .map((item) => normalizeRoleTag(item))
+          .filter(Boolean),
+      ),
+    );
+  }
+  return [] as string[];
 }
 
 async function saveStoredCustomRoles(roles: string[]) {
