@@ -134,26 +134,45 @@ async function syncRoleDrivenLookupCategories() {
       if (!isEmail) continue;
       if (!desiredEmails.has(email)) toDeleteIds.push(String(entry._id));
     }
-    if (toDeleteIds.length > 0) await Lookup.deleteMany({ _id: { $in: toDeleteIds } });
+    const ops: Array<Record<string, unknown>> = [];
+    if (toDeleteIds.length > 0) {
+      ops.push({ deleteMany: { filter: { _id: { $in: toDeleteIds } } } });
+    }
 
     const lastOrder = existing.length > 0 ? Math.max(...existing.map((entry) => entry.sortOrder ?? 0)) : -1;
     let nextOrder = lastOrder + 1;
     for (const [email, name] of desired) {
       const found = existingByEmail.get(email);
       if (!found) {
-        await Lookup.create({
-          category,
-          value: email,
-          label: name,
-          sortOrder: nextOrder,
-          isActive: true,
+        ops.push({
+          insertOne: {
+            document: {
+              category,
+              value: email,
+              label: name,
+              sortOrder: nextOrder,
+              isActive: true,
+            },
+          },
         });
         nextOrder += 1;
         continue;
       }
       if ((found.label ?? "") !== name || !found.isActive) {
-        await Lookup.updateOne({ _id: found._id }, { $set: { label: name, isActive: true } });
+        ops.push({
+          updateOne: {
+            filter: { _id: found._id },
+            update: { $set: { label: name, isActive: true } },
+          },
+        });
       }
+    }
+
+    if (ops.length > 0) {
+      await Lookup.bulkWrite(
+        ops as Parameters<typeof Lookup.bulkWrite>[0],
+        { ordered: false },
+      );
     }
   }
 }

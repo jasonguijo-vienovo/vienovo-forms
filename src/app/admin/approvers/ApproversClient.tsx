@@ -76,9 +76,15 @@ export function ApproversClient({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [showRoleManagement, setShowRoleManagement] = useState(false);
+  const [showApproverList, setShowApproverList] = useState(true);
   const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
+  const visibleRoles = useMemo(
+    () => roles.filter((role) => role.trim().toLowerCase() !== "far"),
+    [roles],
+  );
 
   const selectedEmployee = useMemo(
     () => employeeOptions.find((employee) => employee.email === selectedEmployeeEmail) ?? null,
@@ -211,7 +217,7 @@ export function ApproversClient({
                 </div>
               )}
               <div className="flex flex-wrap gap-3 text-sm text-surface-text">
-                {roles.map((role) => (
+                {visibleRoles.map((role) => (
                   <label key={role} className="flex items-center gap-1.5">
                     <input type="checkbox" name={`role_${role}`} className="accent-brand-600" />
                     <span className="capitalize">{role}</span>
@@ -251,58 +257,67 @@ export function ApproversClient({
       <AdminSection
         title="Role management"
         description="Edit or delete role tags used in the roles column."
-        meta={`${roles.length} role(s)`}
+        meta={`${visibleRoles.length} role(s)`}
       >
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
-              <tr>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Tags (roles column)</th>
-                <th className="px-4 py-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
-              {roles.map((role) => (
-                <tr key={role} className="bg-white">
-                  <td className="px-4 py-4 text-sm text-surface-text">{roleLabel(role)}</td>
-                  <td className="px-4 py-4">
-                    {editingRole === role ? (
-                      <input form={`edit-role-${role}`} name="tags" defaultValue={role} className="field-input w-[240px]" />
-                    ) : (
-                      <span className="text-sm text-surface-text">{role}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      {editingRole === role ? (
-                        <>
-                          <form id={`edit-role-${role}`} action={editApproverRole}>
-                            <input type="hidden" name="previousRole" value={role} />
-                            <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50" />
-                          </form>
-                          <button type="button" onClick={() => setEditingRole(null)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button type="button" onClick={() => setEditingRole(role)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
-                          Edit
-                        </button>
-                      )}
-                      <form action={deleteApproverRole} onSubmit={(event) => {
-                        if (!confirm(`Delete role "${role}" from all approvers?`)) event.preventDefault();
-                      }}>
-                        <input type="hidden" name="role" value={role} />
-                        <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50" />
-                      </form>
-                    </div>
-                  </td>
+        <button
+          type="button"
+          onClick={() => setShowRoleManagement((prev) => !prev)}
+          className="mb-3 border border-surface-border bg-white px-3 py-1.5 text-xs font-semibold text-surface-text transition hover:bg-slate-50"
+        >
+          {showRoleManagement ? "Collapse role management" : "Expand role management"}
+        </button>
+        {showRoleManagement ? (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                <tr>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Tags (roles column)</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-surface-border">
+                {visibleRoles.map((role) => (
+                  <tr key={role} className="bg-white">
+                    <td className="px-4 py-4 text-sm text-surface-text">{roleLabel(role)}</td>
+                    <td className="px-4 py-4">
+                      {editingRole === role ? (
+                        <input form={`edit-role-${role}`} name="tags" defaultValue={role} className="field-input w-[240px]" />
+                      ) : (
+                        <span className="text-sm text-surface-text">{role}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        {editingRole === role ? (
+                          <>
+                            <form id={`edit-role-${role}`} action={editApproverRole}>
+                              <input type="hidden" name="previousRole" value={role} />
+                              <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50" />
+                            </form>
+                            <button type="button" onClick={() => setEditingRole(null)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" onClick={() => setEditingRole(role)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                            Edit
+                          </button>
+                        )}
+                        <form action={deleteApproverRole} onSubmit={(event) => {
+                          if (!confirm(`Delete role "${role}" from all approvers?`)) event.preventDefault();
+                        }}>
+                          <input type="hidden" name="role" value={role} />
+                          <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50" />
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </AdminSection>
 
       <AdminSection
@@ -310,6 +325,15 @@ export function ApproversClient({
         description="Search people, fix emails that need review, and switch people on or off."
         meta={`${filtered.length} of ${approvers.length} shown`}
       >
+        <button
+          type="button"
+          onClick={() => setShowApproverList((prev) => !prev)}
+          className="mb-3 border border-surface-border bg-white px-3 py-1.5 text-xs font-semibold text-surface-text transition hover:bg-slate-50"
+        >
+          {showApproverList ? "Collapse approver list" : "Expand approver list"}
+        </button>
+        {showApproverList ? (
+          <>
         <div className="mb-5 flex flex-col gap-3">
           <AdminSearchField value={query} onChange={setQuery} placeholder="Search by name, email, or role" />
           <AdminFilterTabs
@@ -328,7 +352,7 @@ export function ApproversClient({
             onChange={setRoleFilter}
             options={[
               { value: "all", label: "All roles" },
-              ...roles.map((role) => ({ value: role, label: roleLabel(role) })),
+              ...visibleRoles.map((role) => ({ value: role, label: roleLabel(role) })),
             ]}
           />
         </div>
@@ -381,7 +405,7 @@ export function ApproversClient({
                     <td className="px-4 py-4">
                       {editingId === approver._id ? (
                         <div className="flex flex-wrap gap-2">
-                          {roles.map((role) => (
+                          {visibleRoles.map((role) => (
                             <label
                               key={role}
                               className="inline-flex items-center gap-1 rounded border border-surface-border bg-white px-2 py-1 text-xs"
@@ -480,6 +504,8 @@ export function ApproversClient({
             </table>
           </div>
         )}
+          </>
+        ) : null}
       </AdminSection>
     </div>
   );
