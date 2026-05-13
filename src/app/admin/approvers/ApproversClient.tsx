@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -13,7 +14,16 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { SearchableSelect } from "@/components/searchable-select";
-import { addApprover, addApproverRole, deleteApprover, deleteApproverRole, editApproverRole, toggleApprover, updateApprover } from "./actions";
+import {
+  addApprover,
+  addApproverRole,
+  deleteApprover,
+  deleteApproverRole,
+  editApproverRole,
+  syncApproversFromIntune,
+  toggleApprover,
+  updateApprover,
+} from "./actions";
 
 type ApproverRow = {
   _id: string;
@@ -64,10 +74,14 @@ export function ApproversClient({
   approvers,
   roles,
   employeeOptions,
+  graphReady,
+  syncEnabled,
 }: {
   approvers: ApproverRow[];
   roles: string[];
   employeeOptions: EmployeeOption[];
+  graphReady: boolean;
+  syncEnabled: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -132,6 +146,20 @@ export function ApproversClient({
         description="Manage the people who approve requests. This page controls who can appear in approval steps, without changing the approval logic itself."
         actions={
           <>
+            <form action={syncApproversFromIntune}>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel={
+                  <span className="inline-flex items-center gap-2">
+                    <RefreshCcw className="h-4 w-4" />
+                    <span>Sync from Intune</span>
+                  </span>
+                }
+                pendingLabel="Syncing approvers..."
+                className="btn-secondary"
+                disabled={!graphReady || !syncEnabled}
+              />
+            </form>
             <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
               Add a new approver
             </button>
@@ -153,6 +181,11 @@ export function ApproversClient({
           Use this page when someone should be available as an approver, supervisor, department head,
           cash advance approver, or final approver. If an email needs review, fix it here before relying
           on notification emails.
+          {!graphReady ? " Microsoft Graph credentials are still missing for Intune-based sync." : ""}
+          {graphReady && !syncEnabled ? " Intune sync is configured but disabled because INTUNE_SYNC_ENABLED is off." : ""}
+          {graphReady && syncEnabled
+            ? " Sync from Intune refreshes the employee directory first, then updates matching approver profile fields without changing roles."
+            : ""}
         </AdminHelpPanel>
       </div>
 

@@ -1,5 +1,6 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { getAdminEmployeePickerOptions } from "@/lib/employee-admin";
+import { isEmployeeDirectorySyncConfigured, isEmployeeDirectorySyncEnabled } from "@/lib/employee-sync";
 import { Approver, APPROVER_ROLES } from "@/models/Approver";
 import { ApproversClient } from "./ApproversClient";
 
@@ -29,6 +30,8 @@ export default async function ApproversPage() {
       }))}
       roles={roles}
       employeeOptions={employeeOptions}
+      graphReady={isEmployeeDirectorySyncConfigured()}
+      syncEnabled={isEmployeeDirectorySyncEnabled()}
     />
   );
 }
