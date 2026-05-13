@@ -13,7 +13,7 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { SearchableSelect } from "@/components/searchable-select";
-import { addApprover, addApproverRole, deleteApprover, deleteApproverRole, editApproverRole, toggleApprover, updateApprover } from "./actions";
+import { addApprover, addApproverRole, deleteApprover, deleteApproverRole, editApproverRole, recoverApproverEmails, toggleApprover, updateApprover } from "./actions";
 
 type ApproverRow = {
   _id: string;
@@ -135,6 +135,14 @@ export function ApproversClient({
             <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
               Add a new approver
             </button>
+            <form action={recoverApproverEmails}>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel="Recover emails"
+                pendingLabel="Recovering..."
+                className="btn-secondary"
+              />
+            </form>
             <Link href="/admin/processors" className="btn-secondary">
               Open processors list
             </Link>
