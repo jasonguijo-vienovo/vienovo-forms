@@ -20,6 +20,7 @@ import {
   deleteApprover,
   deleteApproverRole,
   editApproverRole,
+  recoverApproverEmails,
   syncApproversFromIntune,
   toggleApprover,
   updateApprover,
