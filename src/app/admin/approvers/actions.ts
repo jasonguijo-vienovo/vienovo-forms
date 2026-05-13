@@ -14,7 +14,10 @@ import { SystemSetting } from "@/models/SystemSetting";
 const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
 
 function normalizeRoleTag(value: string) {
-  return String(value ?? "").trim().replace(/\s+/g, "");
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase();
 }
 
 async function getStoredCustomRoles() {
@@ -400,7 +403,12 @@ export async function addApproverRole(formData: FormData) {
     return;
   }
   const [allRoles, stored] = await Promise.all([Approver.distinct("roles"), getStoredCustomRoles()]);
-  if (allRoles.includes(role) || stored.includes(role) || APPROVER_ROLES.includes(role as ApproverRole)) {
+  const allRoleKeys = new Set([
+    ...allRoles.map((item) => normalizeRoleTag(String(item))),
+    ...stored.map((item) => normalizeRoleTag(item)),
+    ...APPROVER_ROLES.map((item) => normalizeRoleTag(String(item))),
+  ]);
+  if (allRoleKeys.has(role)) {
     await setFlashToast({ tone: "success", message: `Role "${role}" already exists.` });
     revalidatePath("/admin/approvers");
     return;
@@ -478,7 +486,8 @@ export async function editApproverRole(formData: FormData) {
     return;
   }
 
-  if (previousRole === nextRole) {
+  const previousRoleKey = normalizeRoleTag(previousRole);
+  if (previousRoleKey === nextRole) {
     await setFlashToast({ tone: "success", message: "No changes detected for this role." });
     revalidatePath("/admin/approvers");
     return;
@@ -489,7 +498,7 @@ export async function editApproverRole(formData: FormData) {
     { $addToSet: { roles: nextRole }, $pull: { roles: previousRole } },
   );
   const stored = await getStoredCustomRoles();
-  const nextStored = stored.map((item) => (item === previousRole ? nextRole : item));
+  const nextStored = stored.map((item) => (normalizeRoleTag(item) === previousRoleKey ? nextRole : item));
   await saveStoredCustomRoles(nextStored);
   await syncAutoLookupRoles();
   await setFlashToast({
