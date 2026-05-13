@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { requireAdmin } from "@/lib/admin";
-import { APPROVER_ROLES, Approver, type ApproverRole } from "@/models/Approver";
+import { APPROVER_ROLES, Approver } from "@/models/Approver";
 import { Lookup, parseImportedLookupCategory, type LookupCategory } from "@/models/Lookup";
+import { SystemSetting } from "@/models/SystemSetting";
+
+const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
+const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
 
 function parseCategory(value: FormDataEntryValue | null): LookupCategory {
   const v = String(value ?? "");
@@ -17,11 +21,103 @@ function normalizeKey(input: string) {
   return input.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function normalizeRoleTag(input: string) {
+  return String(input ?? "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+async function getKnownApproverRoles() {
+  const [dynamicRoles, storedRoleDoc] = await Promise.all([
+    Approver.distinct("roles"),
+    SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean(),
+  ]);
+
+  const storedRoles = Array.isArray(storedRoleDoc?.value)
+    ? (storedRoleDoc.value as unknown[]).map((item) => String(item ?? "").trim()).filter(Boolean)
+    : typeof storedRoleDoc?.value === "string"
+      ? storedRoleDoc.value
+          .split(/[\n,;]+/g)
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      : [];
+  const roleMap = new Map<string, string>();
+  for (const role of [...APPROVER_ROLES, ...dynamicRoles.map((item) => String(item ?? "").trim()), ...storedRoles]) {
+    const value = String(role ?? "").trim();
+    const key = normalizeRoleTag(value);
+    if (!key) continue;
+    if (!roleMap.has(key)) roleMap.set(key, value);
+  }
+  return [...roleMap.values()];
+}
+
+function parseApproverSyncMeta(value: unknown) {
+  if (!value || typeof value !== "object") return {} as Record<string, string>;
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const category = String(key ?? "").trim();
+    const at = String(raw ?? "").trim();
+    if (!category || !at) continue;
+    out[category] = at;
+  }
+  return out;
+}
+
+async function markLookupCategoriesSynced(categories: string[]) {
+  const unique = Array.from(new Set(categories.map((item) => String(item ?? "").trim()).filter(Boolean)));
+  if (unique.length === 0) return;
+
+  const doc = await SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean();
+  const current = parseApproverSyncMeta(doc?.value);
+  const now = new Date().toISOString();
+  for (const category of unique) current[category] = now;
+
+  await SystemSetting.updateOne(
+    { key: LOOKUP_APPROVER_SYNC_KEY },
+    { $set: { key: LOOKUP_APPROVER_SYNC_KEY, value: current } },
+    { upsert: true },
+  );
+}
+
+async function clearLookupCategoriesSynced(categories: string[]) {
+  const unique = Array.from(new Set(categories.map((item) => String(item ?? "").trim()).filter(Boolean)));
+  if (unique.length === 0) return;
+  const doc = await SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean();
+  if (!doc?.value || typeof doc.value !== "object") return;
+
+  const current = parseApproverSyncMeta(doc.value);
+  let changed = false;
+  for (const category of unique) {
+    if (!(category in current)) continue;
+    delete current[category];
+    changed = true;
+  }
+  if (!changed) return;
+
+  await SystemSetting.updateOne(
+    { key: LOOKUP_APPROVER_SYNC_KEY },
+    { $set: { key: LOOKUP_APPROVER_SYNC_KEY, value: current } },
+    { upsert: true },
+  );
+}
+
 async function resequenceCategoryAlphabetically(category: string) {
-  const docs = await Lookup.find({ category }).sort({ value: 1, _id: 1 });
-  for (let idx = 0; idx < docs.length; idx += 1) {
-    docs[idx].sortOrder = idx;
-    await docs[idx].save();
+  const docs = await Lookup.find({ category })
+    .select({ _id: 1, sortOrder: 1 })
+    .sort({ value: 1, _id: 1 })
+    .lean();
+  const ops = docs
+    .map((doc, idx) =>
+      (doc.sortOrder ?? -1) === idx
+        ? null
+        : {
+            updateOne: {
+              filter: { _id: doc._id },
+              update: { $set: { sortOrder: idx } },
+            },
+          },
+    )
+    .filter(Boolean);
+  if (ops.length > 0) {
+    await Lookup.bulkWrite(ops as Parameters<typeof Lookup.bulkWrite>[0], { ordered: false });
   }
 }
 
@@ -40,6 +136,105 @@ async function resolveImportedCategoryAlias(category: LookupCategory) {
   });
 
   return exact || category;
+}
+
+type ApproverSyncRow = {
+  name?: string;
+  email?: string;
+  roles?: string[];
+};
+
+async function syncLookupCategoryFromRoles(input: {
+  category: string;
+  targetRoles: string[];
+  approvers?: ApproverSyncRow[];
+}) {
+  const targetRoleSet = new Set(input.targetRoles.map((role) => normalizeRoleTag(role)).filter(Boolean));
+  if (targetRoleSet.size === 0) {
+    return { candidateCount: 0, addedCount: 0, updatedCount: 0, changed: false };
+  }
+
+  const rawApprovers =
+    input.approvers ??
+    (await Approver.find({
+      isActive: true,
+      email: { $ne: "" },
+      roles: { $in: [...targetRoleSet] },
+    })
+      .select({ name: 1, email: 1, roles: 1 })
+      .lean());
+
+  const matchedApprovers = rawApprovers.filter((approver) => {
+    const roles = Array.isArray(approver.roles) ? approver.roles : [];
+    return roles.some((role) => targetRoleSet.has(normalizeRoleTag(String(role))));
+  });
+
+  if (matchedApprovers.length === 0) {
+    return { candidateCount: 0, addedCount: 0, updatedCount: 0, changed: false };
+  }
+
+  const existing = await Lookup.find({ category: input.category }).sort({ sortOrder: 1, value: 1 }).lean();
+  const existingByKey = new Map(existing.map((item) => [normalizeKey(String(item.value ?? "")), item]));
+  const seenIncoming = new Set<string>();
+  const toInsert: Array<{ value: string; label: string }> = [];
+  const ops: Array<Record<string, unknown>> = [];
+  let updatedCount = 0;
+
+  for (const approver of matchedApprovers) {
+    const value = String(approver.email ?? "").trim().toLowerCase();
+    const label = String(approver.name ?? "").trim();
+    const key = normalizeKey(value);
+    if (!key || seenIncoming.has(key)) continue;
+    seenIncoming.add(key);
+
+    const existingItem = existingByKey.get(key);
+    if (!existingItem) {
+      toInsert.push({ value, label });
+      continue;
+    }
+
+    if ((existingItem.label ?? "") !== label || !existingItem.isActive) {
+      ops.push({
+        updateOne: {
+          filter: { _id: existingItem._id },
+          update: { $set: { label, isActive: true } },
+        },
+      });
+      updatedCount += 1;
+    }
+  }
+
+  if (toInsert.length > 0) {
+    const last = existing[existing.length - 1];
+    const startOrder = (last?.sortOrder ?? -1) + 1;
+    for (const [idx, entry] of toInsert.entries()) {
+      ops.push({
+        insertOne: {
+          document: {
+            category: input.category,
+            value: entry.value,
+            label: entry.label,
+            sortOrder: startOrder + idx,
+            isActive: true,
+          },
+        },
+      });
+    }
+  }
+
+  if (ops.length > 0) {
+    await Lookup.bulkWrite(ops as Parameters<typeof Lookup.bulkWrite>[0], { ordered: false });
+    if (toInsert.length > 0) {
+      await resequenceCategoryAlphabetically(String(input.category));
+    }
+  }
+
+  return {
+    candidateCount: matchedApprovers.length,
+    addedCount: toInsert.length,
+    updatedCount,
+    changed: ops.length > 0,
+  };
 }
 
 export async function addLookup(formData: FormData) {
@@ -161,73 +356,97 @@ export async function addLookupFromApproverRole(formData: FormData) {
     await connectMongo();
     const rawCategory = parseCategory(formData.get("category"));
     const category = await resolveImportedCategoryAlias(rawCategory);
-    const role = String(formData.get("approverRole") ?? "").trim() as ApproverRole;
+    const selectedRole = String(formData.get("approverRole") ?? "").trim();
     if (!category) {
       await setFlashToast({ tone: "error", message: "Missing dropdown category." });
       revalidatePath("/admin/lookups");
       return;
     }
 
-    if (!APPROVER_ROLES.includes(role)) {
+    const knownRoles = await getKnownApproverRoles();
+    const role = knownRoles.find((item) => normalizeRoleTag(item) === normalizeRoleTag(selectedRole));
+    if (!role) {
       await setFlashToast({ tone: "error", message: "Choose a valid approver role." });
       revalidatePath("/admin/lookups");
       return;
     }
 
-    const approvers = await Approver.find({ isActive: true, roles: role }).select({ name: 1, email: 1 }).lean();
-    if (approvers.length === 0) {
+    const result = await syncLookupCategoryFromRoles({
+      category: String(category),
+      targetRoles: [role],
+    });
+
+    if (result.candidateCount === 0) {
       await setFlashToast({ tone: "success", message: `No active approver emails found for role "${role}".` });
       revalidatePath("/admin/lookups");
       return;
     }
 
-  const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
-  const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
-  const seenIncoming = new Set<string>();
-  const toInsert: Array<{ value: string; label: string }> = [];
+    if (result.changed) {
+      await markLookupCategoriesSynced([String(category)]);
+    }
 
-  for (const approver of approvers) {
-    const value = String(approver.email ?? "").trim().toLowerCase();
-    const label = String(approver.name ?? "").trim();
-    const key = normalizeKey(value);
-    if (!key) continue;
-    if (seenIncoming.has(key)) continue;
-    seenIncoming.add(key);
-    if (existingKeys.has(key)) continue;
-    toInsert.push({ value, label });
-  }
-
-  if (toInsert.length === 0) {
     await setFlashToast({
       tone: "success",
-      message: `No new values added from role "${role}". Existing dropdown values already match.`,
-    });
-    revalidatePath("/admin/lookups");
-    return;
-  }
-
-  const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 }).lean();
-  const startOrder = (last?.sortOrder ?? -1) + 1;
-  await Lookup.insertMany(
-    toInsert.map((entry, idx) => ({
-      category,
-      value: entry.value,
-      label: entry.label,
-      sortOrder: startOrder + idx,
-      isActive: true,
-    })),
-  );
-
-    await resequenceCategoryAlphabetically(String(category));
-    await setFlashToast({
-      tone: "success",
-      message: `Added ${toInsert.length} approver email value(s) from role "${role}".`,
+      message:
+        result.addedCount === 0 && result.updatedCount === 0
+          ? `No changes needed for role "${role}".`
+          : `Synced role "${role}": ${result.addedCount} added, ${result.updatedCount} refreshed.`,
     });
     revalidatePath("/admin/lookups");
   } catch (error) {
     await setFlashToast({
       tone: "error",
       message: error instanceof Error ? error.message : "Failed to add values from approver role.",
+    });
+    revalidatePath("/admin/lookups");
+  }
+}
+
+export async function syncLookupCategoryFromApprovers(formData: FormData) {
+  try {
+    await requireAdmin();
+    await connectMongo();
+    const rawCategory = parseCategory(formData.get("category"));
+    const category = await resolveImportedCategoryAlias(rawCategory);
+    const knownRoles = await getKnownApproverRoles();
+
+    const sample = await Lookup.findOne({ category }).select({ label: 1 }).lean();
+    const categoryLabel = String(sample?.label ?? "");
+    const targetRoles = inferRolesForCategory(String(category), categoryLabel, knownRoles);
+
+    if (targetRoles.length === 0) {
+      await setFlashToast({
+        tone: "success",
+        message: "This dropdown group does not match approver-role sync rules.",
+      });
+      revalidatePath("/admin/lookups");
+      return;
+    }
+
+    const result = await syncLookupCategoryFromRoles({
+      category: String(category),
+      targetRoles,
+    });
+
+    if (result.changed) {
+      await markLookupCategoriesSynced([String(category)]);
+    }
+
+    await setFlashToast({
+      tone: "success",
+      message:
+        result.candidateCount === 0
+          ? "No active approvers found for this dropdown role mapping."
+          : result.addedCount === 0 && result.updatedCount === 0
+            ? "No changes needed for this dropdown group."
+            : `Category synced: ${result.addedCount} added, ${result.updatedCount} refreshed.`,
+    });
+    revalidatePath("/admin/lookups");
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message: error instanceof Error ? error.message : "Failed to sync dropdown category from approvers.",
     });
     revalidatePath("/admin/lookups");
   }
@@ -276,6 +495,7 @@ export async function deleteLookupCategory(formData: FormData) {
   const rawCategory = parseCategory(formData.get("category"));
   const category = await resolveImportedCategoryAlias(rawCategory);
   const result = await Lookup.deleteMany({ category });
+  await clearLookupCategoriesSynced([String(category)]);
   await setFlashToast({
     tone: "success",
     message: `Deleted ${result.deletedCount ?? 0} value(s) from dropdown group.`,
@@ -295,7 +515,7 @@ function categoryLooksRoleDriven(category: string) {
   );
 }
 
-function inferRolesForCategory(category: string, label: string): ApproverRole[] {
+function inferRolesForCategory(category: string, label: string, knownRoles: string[]): string[] {
   const key = `${normalizeKey(category)} ${normalizeKey(label)}`;
   if (key.includes("manager") || key.includes("supervisor")) return ["supervisor", "head", "sla"];
   if (key.includes("processor")) return ["processor"];
@@ -303,7 +523,7 @@ function inferRolesForCategory(category: string, label: string): ApproverRole[] 
   if (key.includes("hr")) return ["hr"];
   if (key.includes("head")) return ["head"];
   if (key.includes("sla")) return ["sla"];
-  if (key.includes("approver")) return [...APPROVER_ROLES];
+  if (key.includes("approver")) return knownRoles;
   return [];
 }
 
@@ -321,55 +541,51 @@ export async function scanRolesLookups() {
   const approvers = await Approver.find({ isActive: true, email: { $ne: "" } })
     .select({ email: 1, name: 1, roles: 1 })
     .lean();
+  const knownRoles = await getKnownApproverRoles();
 
   let addedCount = 0;
+  let refreshedCount = 0;
   let touchedCategories = 0;
+  const syncedCategories: string[] = [];
 
   for (const category of categories) {
     const sample = await Lookup.findOne({ category }).select({ label: 1 }).lean();
     const categoryLabel = String(sample?.label ?? "");
-    const targetRoles = inferRolesForCategory(String(category), categoryLabel);
+    const targetRoles = inferRolesForCategory(String(category), categoryLabel, knownRoles);
     if (targetRoles.length === 0) continue;
-    const existing = await Lookup.find({ category }).select({ value: 1 }).lean();
-    const existingKeys = new Set(existing.map((item) => normalizeKey(String(item.value))));
-    const toInsert: Array<{ value: string; label: string }> = [];
-    const seenIncoming = new Set<string>();
-
-    for (const approver of approvers) {
-      const roles = Array.isArray(approver.roles) ? (approver.roles as ApproverRole[]) : [];
-      const matches = roles.some((role) => targetRoles.includes(role));
-      if (!matches) continue;
-      const value = String(approver.email ?? "").trim().toLowerCase();
-      const label = String(approver.name ?? "").trim();
-      const key = normalizeKey(value);
-      if (!key || existingKeys.has(key) || seenIncoming.has(key)) continue;
-      seenIncoming.add(key);
-      toInsert.push({ value, label });
-    }
-
-    if (toInsert.length === 0) continue;
-    const last = await Lookup.findOne({ category }).sort({ sortOrder: -1 }).lean();
-    const startOrder = (last?.sortOrder ?? -1) + 1;
-    await Lookup.insertMany(
-      toInsert.map((entry, idx) => ({
-        category,
-        value: entry.value,
-        label: entry.label,
-        sortOrder: startOrder + idx,
-        isActive: true,
+    const result = await syncLookupCategoryFromRoles({
+      category: String(category),
+      targetRoles,
+      approvers: approvers.map((approver) => ({
+        name: String(approver.name ?? ""),
+        email: String(approver.email ?? ""),
+        roles: Array.isArray(approver.roles) ? approver.roles.map((role) => String(role)) : [],
       })),
-    );
-    await resequenceCategoryAlphabetically(String(category));
-    addedCount += toInsert.length;
-    touchedCategories += 1;
+    });
+
+    if (!result.changed) continue;
+    if (result.addedCount > 0) {
+      addedCount += result.addedCount;
+    }
+    if (result.updatedCount > 0) {
+      refreshedCount += result.updatedCount;
+    }
+    if (result.addedCount > 0 || result.updatedCount > 0) {
+      touchedCategories += 1;
+      syncedCategories.push(String(category));
+    }
+  }
+
+  if (syncedCategories.length > 0) {
+    await markLookupCategoriesSynced(syncedCategories);
   }
 
   await setFlashToast({
     tone: "success",
     message:
-      addedCount > 0
-        ? `Scan complete: added ${addedCount} role-based value(s) across ${touchedCategories} dropdown group(s).`
-        : "Scan complete: no new role-based values were found.",
+      addedCount > 0 || refreshedCount > 0
+        ? `Scan complete: added ${addedCount} and refreshed ${refreshedCount} role-based value(s) across ${touchedCategories} dropdown group(s).`
+        : "Scan complete: no role-based changes were needed.",
   });
   revalidatePath("/admin/lookups");
 }

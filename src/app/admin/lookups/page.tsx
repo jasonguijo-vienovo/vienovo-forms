@@ -1,8 +1,13 @@
-﻿import { connectMongo } from "@/lib/db/mongo";
+import { connectMongo } from "@/lib/db/mongo";
 import { parseImportedFormHtml } from "@/lib/imported-forms";
-import { Lookup, LOOKUP_CATEGORIES, parseImportedLookupCategory } from "@/models/Lookup";
+import { APPROVER_ROLES, Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
+import { Lookup, LOOKUP_CATEGORIES, parseImportedLookupCategory } from "@/models/Lookup";
+import { SystemSetting } from "@/models/SystemSetting";
 import LookupsClient, { type LookupAdminGroup } from "./LookupsClient";
+
+const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
+const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
 
 const CATEGORY_LABELS: Record<string, string> = {
   department: "Departments",
@@ -51,10 +56,52 @@ const FORM_GROUPS: Array<{
 
 export default async function LookupsPage() {
   await connectMongo();
-  const [all, imports] = await Promise.all([
+  const [all, imports, dynamicApproverRoles, storedRoleDoc, approverSyncDoc] = await Promise.all([
     Lookup.find({}).sort({ category: 1, sortOrder: 1 }).lean(),
     FormImport.find({}).select({ slug: 1, name: 1, htmlSource: 1 }).lean(),
+    Approver.distinct("roles"),
+    SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean(),
+    SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean(),
   ]);
+  const approverSyncByCategory =
+    approverSyncDoc?.value && typeof approverSyncDoc.value === "object"
+      ? Object.fromEntries(
+          Object.entries(approverSyncDoc.value as Record<string, unknown>)
+            .map(([category, value]) => [String(category ?? "").trim(), String(value ?? "").trim()])
+            .filter(([category, value]) => Boolean(category) && Boolean(value)),
+        )
+      : {};
+
+  const storedRoles = Array.isArray(storedRoleDoc?.value)
+    ? (storedRoleDoc.value as unknown[]).map((item) => String(item ?? "").trim()).filter(Boolean)
+    : typeof storedRoleDoc?.value === "string"
+      ? storedRoleDoc.value
+          .split(/[\n,;]+/g)
+          .map((item) => String(item ?? "").trim())
+          .filter(Boolean)
+      : [];
+
+  const knownRoleMap = new Map<string, string>();
+  for (const role of [
+    ...APPROVER_ROLES,
+    ...dynamicApproverRoles.map((item) => String(item ?? "").trim()).filter(Boolean),
+    ...storedRoles,
+  ]) {
+    const value = String(role ?? "").trim();
+    const key = value.replace(/\s+/g, "").toLowerCase();
+    if (!key) continue;
+    if (!knownRoleMap.has(key)) knownRoleMap.set(key, value);
+  }
+  const baseRoleKeys = new Set(APPROVER_ROLES.map((role) => role.replace(/\s+/g, "").toLowerCase()));
+  const baseRoles = APPROVER_ROLES.filter((role) =>
+    knownRoleMap.has(role.replace(/\s+/g, "").toLowerCase()),
+  );
+  const customRoles = [...knownRoleMap.entries()]
+    .filter(([key]) => !baseRoleKeys.has(key))
+    .map(([, value]) => value)
+    .sort((a, b) => a.localeCompare(b));
+  const knownApproverRoles = [...baseRoles, ...customRoles];
+
   const importNameBySlugKey = new Map(
     imports.map((item) => [item.slug.toLowerCase().replace(/[^a-z0-9]+/g, ""), item.name])
   );
@@ -156,7 +203,15 @@ export default async function LookupsPage() {
       : []),
   ];
 
-  return <LookupsClient categoryLabels={categoryLabels} groups={groupsToRender} itemsByCategory={itemsByCategory} />;
+  return (
+    <LookupsClient
+      categoryLabels={categoryLabels}
+      groups={groupsToRender}
+      itemsByCategory={itemsByCategory}
+      approverRoles={knownApproverRoles}
+      approverSyncByCategory={approverSyncByCategory}
+    />
+  );
 }
 
 function humanizeImportedField(input: string) {
@@ -165,4 +220,3 @@ function humanizeImportedField(input: string) {
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
-
