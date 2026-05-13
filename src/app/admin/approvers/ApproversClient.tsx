@@ -304,8 +304,8 @@ export function ApproversClient({
                 <table className="admin-table w-full table-fixed">
                   <colgroup>
                     <col className="w-[28%]" />
-                    <col className="w-[42%]" />
                     <col className="w-[30%]" />
+                    <col className="w-[42%]" />
                   </colgroup>
                   <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
                     <tr>
