@@ -16,7 +16,7 @@ const approverSchema = new Schema(
     email: { type: String, default: "", lowercase: true, trim: true, index: true },
     employeeId: { type: String, default: "", trim: true, index: true },
     roles: {
-      type: [{ type: String, enum: APPROVER_ROLES }],
+      type: [{ type: String }],
       default: [],
     },
     department: { type: String, default: "" },

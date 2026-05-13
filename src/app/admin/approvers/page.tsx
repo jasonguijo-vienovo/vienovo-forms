@@ -9,6 +9,8 @@ export default async function ApproversPage() {
     Approver.find({}).sort({ name: 1 }).lean(),
     getAdminEmployeePickerOptions(),
   ]);
+  const dynamicRoles = Array.from(new Set(all.flatMap((item) => item.roles || []).filter(Boolean))).sort();
+  const roles = Array.from(new Set([...APPROVER_ROLES, ...dynamicRoles]));
 
   return (
     <ApproversClient
@@ -23,7 +25,7 @@ export default async function ApproversPage() {
         department: item.department || "",
         jobTitle: item.jobTitle || "",
       }))}
-      roles={[...APPROVER_ROLES]}
+      roles={roles}
       employeeOptions={employeeOptions}
     />
   );
