@@ -287,7 +287,7 @@ export function ApproversClient({
             onClick={() => setShowRoleManagement(false)}
           >
             <div
-              className="w-full max-w-4xl rounded-md border border-surface-border bg-white p-5 shadow-xl"
+              className="w-full max-w-3xl rounded-md border border-surface-border bg-white p-4 shadow-xl"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
@@ -300,40 +300,45 @@ export function ApproversClient({
                   Close
                 </button>
               </div>
-              <div className="admin-table-wrap">
-                <table className="admin-table">
+              <div>
+                <table className="admin-table w-full table-fixed">
+                  <colgroup>
+                    <col className="w-[28%]" />
+                    <col className="w-[32%]" />
+                    <col className="w-[40%]" />
+                  </colgroup>
                   <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
                     <tr>
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Tags (roles column)</th>
-                      <th className="px-4 py-3 text-right">Actions</th>
+                      <th className="px-2 py-2">Name</th>
+                      <th className="px-2 py-2">Tags</th>
+                      <th className="px-2 py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-border">
                     {visibleRoles.map((role) => (
                       <tr key={role} className="bg-white">
-                        <td className="px-4 py-4 text-sm text-surface-text">{roleLabel(role)}</td>
-                        <td className="px-4 py-4">
+                        <td className="px-2 py-2 text-sm text-surface-text break-words">{roleLabel(role)}</td>
+                        <td className="px-2 py-2">
                           {editingRole === role ? (
-                            <input form={`edit-role-${role}`} name="tags" defaultValue={role} className="field-input w-[240px]" />
+                            <input form={`edit-role-${role}`} name="tags" defaultValue={role} className="field-input w-full min-w-0" />
                           ) : (
-                            <span className="text-sm text-surface-text">{role}</span>
+                            <span className="block text-sm text-surface-text break-words">{role}</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="flex justify-end gap-2">
+                        <td className="px-2 py-2 text-right">
+                          <div className="flex flex-wrap justify-end gap-1">
                             {editingRole === role ? (
                               <>
                                 <form id={`edit-role-${role}`} action={editApproverRole}>
                                   <input type="hidden" name="previousRole" value={role} />
-                                  <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50" />
+                                  <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-brand-200 bg-white px-2 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50" />
                                 </form>
-                                <button type="button" onClick={() => setEditingRole(null)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                                <button type="button" onClick={() => setEditingRole(null)} className="border border-brand-200 bg-white px-2 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
                                   Cancel
                                 </button>
                               </>
                             ) : (
-                              <button type="button" onClick={() => setEditingRole(role)} className="border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
+                              <button type="button" onClick={() => setEditingRole(role)} className="border border-brand-200 bg-white px-2 py-1 text-xs font-semibold text-brand-700 transition hover:bg-brand-50">
                                 Edit
                               </button>
                             )}
@@ -344,7 +349,7 @@ export function ApproversClient({
                               }}
                             >
                               <input type="hidden" name="role" value={role} />
-                              <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50" />
+                              <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50" />
                             </form>
                           </div>
                         </td>
