@@ -1,6 +1,7 @@
 ﻿"use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { connectMongo } from "@/lib/db/mongo";
 import { syncEmployeesFromGraph } from "@/lib/employee-sync";
 import { setFlashToast } from "@/lib/flash";
@@ -410,6 +411,7 @@ export async function addApproverRole(formData: FormData) {
     message: `Role "${name}" saved. Tag "${role}" will be used when assigned to approvers.`,
   });
   revalidatePath("/admin/approvers");
+  redirect("/admin/approvers");
 }
 
 export async function recoverApproverEmails() {
@@ -496,6 +498,7 @@ export async function editApproverRole(formData: FormData) {
   });
   revalidatePath("/admin/approvers");
   revalidatePath("/admin/lookups");
+  redirect("/admin/approvers");
 }
 
 export async function deleteApproverRole(formData: FormData) {
@@ -515,6 +518,7 @@ export async function deleteApproverRole(formData: FormData) {
   await setFlashToast({ tone: "success", message: `Role "${role}" removed from all approvers.` });
   revalidatePath("/admin/approvers");
   revalidatePath("/admin/lookups");
+  redirect("/admin/approvers");
 }
 
 export async function updateApprover(formData: FormData) {
