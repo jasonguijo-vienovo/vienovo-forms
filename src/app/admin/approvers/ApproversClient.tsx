@@ -303,42 +303,42 @@ export function ApproversClient({
               <div className="overflow-x-hidden">
                 <table className="admin-table w-full table-fixed">
                   <colgroup>
+                    <col className="w-[24%]" />
                     <col className="w-[28%]" />
-                    <col className="w-[30%]" />
-                    <col className="w-[42%]" />
+                    <col className="w-[48%]" />
                   </colgroup>
                   <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
                     <tr>
-                      <th className="px-2 py-2">Name</th>
-                      <th className="px-2 py-2">Tags</th>
-                      <th className="px-2 py-2 text-right">Actions</th>
+                      <th className="px-1.5 py-2">Name</th>
+                      <th className="px-1.5 py-2">Tags</th>
+                      <th className="px-1.5 py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-border">
                     {visibleRoles.map((role) => (
                       <tr key={role} className="bg-white">
-                        <td className="px-2 py-2 text-sm text-surface-text break-words">{roleLabel(role)}</td>
-                        <td className="px-2 py-2">
+                        <td className="px-1.5 py-2 text-sm text-surface-text break-words">{roleLabel(role)}</td>
+                        <td className="px-1.5 py-2">
                           {editingRole === role ? (
                             <input form={`edit-role-${role}`} name="tags" defaultValue={role} className="field-input w-full min-w-0" />
                           ) : (
                             <span className="block text-sm text-surface-text break-words">{role}</span>
                           )}
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-1.5 py-2">
                           <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                             {editingRole === role ? (
                               <>
                                 <form id={`edit-role-${role}`} action={editApproverRole}>
                                   <input type="hidden" name="previousRole" value={role} />
-                                  <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100" />
+                                  <PendingSubmitButton type="submit" idleLabel="Save" pendingLabel="Saving..." className="border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100" />
                                 </form>
-                                <button type="button" onClick={() => setEditingRole(null)} className="border border-surface-border bg-white px-2 py-1 text-xs font-semibold text-surface-muted transition hover:text-surface-text">
+                                <button type="button" onClick={() => setEditingRole(null)} className="border border-surface-border bg-white px-1.5 py-1 text-xs font-semibold text-surface-muted transition hover:text-surface-text">
                                   Cancel
                                 </button>
                               </>
                             ) : (
-                              <button type="button" onClick={() => setEditingRole(role)} className="border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                              <button type="button" onClick={() => setEditingRole(role)} className="border border-emerald-200 bg-emerald-50 px-1.5 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
                                 Edit
                               </button>
                             )}
@@ -349,7 +349,7 @@ export function ApproversClient({
                               }}
                             >
                               <input type="hidden" name="role" value={role} />
-                              <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100" />
+                              <PendingSubmitButton type="submit" idleLabel="Delete" pendingLabel="Deleting..." className="border border-red-200 bg-red-50 px-1.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100" />
                             </form>
                           </div>
                         </td>
