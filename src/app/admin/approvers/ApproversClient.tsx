@@ -13,7 +13,7 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { SearchableSelect } from "@/components/searchable-select";
-import { addApprover, deleteApprover, toggleApprover, updateApprover } from "./actions";
+import { addApprover, addApproverRole, deleteApprover, toggleApprover, updateApprover } from "./actions";
 
 type ApproverRow = {
   _id: string;
@@ -74,6 +74,7 @@ export function ApproversClient({
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
   const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
@@ -126,6 +127,9 @@ export function ApproversClient({
           <>
             <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
               Add a new approver
+            </button>
+            <button type="button" onClick={() => setShowAddRoleModal(true)} className="btn-secondary">
+              Add new role
             </button>
             <Link href="/admin/processors" className="btn-secondary">
               Open processors list
@@ -214,6 +218,23 @@ export function ApproversClient({
                 ))}
               </div>
               <PendingSubmitButton type="submit" idleLabel="Add approver" pendingLabel="Adding..." className="btn-primary" />
+            </form>
+          </div>
+        </div>
+      ) : null}
+      {showAddRoleModal ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4" onClick={() => setShowAddRoleModal(false)}>
+          <div className="w-full max-w-md rounded-md border border-surface-border bg-white p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-surface-text">Add a new role</h3>
+              <button type="button" onClick={() => setShowAddRoleModal(false)} className="text-sm font-semibold text-surface-muted hover:text-surface-text">
+                Close
+              </button>
+            </div>
+            <form action={addApproverRole} className="space-y-3">
+              <input type="text" name="role" required placeholder="ex: regionalManager" className="field-input w-full" />
+              <p className="text-xs text-surface-muted">This role will immediately appear in approver role dropdowns.</p>
+              <PendingSubmitButton type="submit" idleLabel="Add role" pendingLabel="Adding..." className="btn-primary" />
             </form>
           </div>
         </div>
