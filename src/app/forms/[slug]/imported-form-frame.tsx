@@ -319,6 +319,99 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     });
   }
 
+  function findFieldContainer(control) {
+    if (!control) return null;
+    return (
+      control.closest(".form-group") ||
+      control.closest(".field") ||
+      control.closest(".mb-3") ||
+      control.closest(".mb-4") ||
+      control.closest(".row") ||
+      control.closest("td") ||
+      control.closest("label") ||
+      control.parentElement
+    );
+  }
+
+  function setConditionalVisibility(control, visible) {
+    if (!control) return;
+    var container = findFieldContainer(control);
+    if (container) {
+      container.style.display = visible ? "" : "none";
+    } else {
+      control.style.display = visible ? "" : "none";
+    }
+
+    if (visible) {
+      control.removeAttribute("data-vf-conditional-hidden");
+      return;
+    }
+
+    control.setAttribute("data-vf-conditional-hidden", "1");
+    var tagName = String(control.tagName || "").toLowerCase();
+    var type = String(control.type || "").toLowerCase();
+    if (tagName === "select" || tagName === "textarea" || ["text", "email", "number", "date", "time", "tel", "hidden"].indexOf(type) >= 0) {
+      control.value = "";
+    }
+    if (type === "checkbox" || type === "radio") {
+      control.checked = false;
+    }
+  }
+
+  function setConditionalWrapperVisibility(wrapperId, controlId, visible) {
+    var wrapper = document.getElementById(wrapperId);
+    var control = document.getElementById(controlId);
+    if (wrapper) {
+      wrapper.style.display = visible ? "" : "none";
+    } else {
+      setConditionalVisibility(control, visible);
+      return;
+    }
+
+    if (visible || !control) {
+      if (control) control.removeAttribute("data-vf-conditional-hidden");
+      return;
+    }
+
+    control.setAttribute("data-vf-conditional-hidden", "1");
+    var tagName = String(control.tagName || "").toLowerCase();
+    var type = String(control.type || "").toLowerCase();
+    if (tagName === "select" || tagName === "textarea" || ["text", "email", "number", "date", "time", "tel", "hidden"].indexOf(type) >= 0) {
+      control.value = "";
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (type === "checkbox" || type === "radio") {
+      control.checked = false;
+    }
+  }
+
+  function applyRequestForPaymentConditionalFields() {
+    if (String(bridge.slug || "") !== "request-for-payment") return;
+
+    var transactionTypeControl = document.getElementById("transactionType");
+    if (!transactionTypeControl) return;
+
+    function syncConditionalFields() {
+      var transactionValue = String(transactionTypeControl.value || "").trim();
+      var showExpense = transactionValue === "Operating Expense";
+      var showCapex = transactionValue === "CAPEX";
+      var showOthers = transactionValue === "Others";
+
+      setConditionalWrapperVisibility("opExpenseWrap", "typeOfExpense", showExpense);
+      setConditionalWrapperVisibility("natureCapexWrap", "natureOfCapex", showCapex);
+      setConditionalWrapperVisibility("natureServicesWrap", "natureOfServices", showOthers);
+      queueHeightPost();
+    }
+
+    if (transactionTypeControl.dataset.vfConditionalInit !== "1") {
+      transactionTypeControl.dataset.vfConditionalInit = "1";
+      transactionTypeControl.addEventListener("change", syncConditionalFields);
+      transactionTypeControl.addEventListener("input", syncConditionalFields);
+    }
+
+    syncConditionalFields();
+  }
+
   function labelFor(control) {
     var name = control.name || control.id || "";
     if (bridge.labelsByName[name]) return bridge.labelsByName[name];
@@ -338,6 +431,9 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     Array.prototype.forEach.call(controls, function (control) {
       var name = control.name;
       if (!name || ["submit", "button", "reset", "image"].indexOf((control.type || "").toLowerCase()) >= 0) {
+        return;
+      }
+      if (control.getAttribute("data-vf-conditional-hidden") === "1") {
         return;
       }
       labels[name] = labels[name] || labelFor(control);
@@ -478,6 +574,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   window.addEventListener("load", function () {
     populateNativeSelects();
     hideReferenceFieldsForControlLog();
+    applyRequestForPaymentConditionalFields();
     window.parent.postMessage({ type: "vienovo-imported-ready" }, "*");
     queueHeightPost();
     setTimeout(queueHeightPost, 300);
