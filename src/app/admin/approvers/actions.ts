@@ -8,6 +8,29 @@ import { requireAdmin } from "@/lib/admin";
 import { Employee } from "@/models/Employee";
 import { Approver, APPROVER_ROLES, type ApproverRole } from "@/models/Approver";
 import { Lookup } from "@/models/Lookup";
+import { SystemSetting } from "@/models/SystemSetting";
+
+const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
+
+function normalizeRoleTag(value: string) {
+  return String(value ?? "").trim().replace(/\s+/g, "");
+}
+
+async function getStoredCustomRoles() {
+  const doc = await SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean();
+  if (!Array.isArray(doc?.value)) return [] as string[];
+  return Array.from(new Set((doc.value as unknown[]).map((item) => normalizeRoleTag(String(item))).filter(Boolean)));
+}
+
+async function saveStoredCustomRoles(roles: string[]) {
+  const normalized = Array.from(new Set(roles.map((role) => normalizeRoleTag(role)).filter(Boolean)));
+  await SystemSetting.updateOne(
+    { key: APPROVER_CUSTOM_ROLES_KEY },
+    { $set: { key: APPROVER_CUSTOM_ROLES_KEY, value: normalized } },
+    { upsert: true },
+  );
+  return normalized;
+}
 
 function parseRoles(formData: FormData): string[] {
   const out = new Set<string>();
@@ -369,18 +392,19 @@ export async function addApproverRole(formData: FormData) {
   await connectMongo();
   const name = String(formData.get("name") ?? "").trim();
   const roleRaw = String(formData.get("tags") ?? "").trim();
-  const role = roleRaw.replace(/\s+/g, "");
+  const role = normalizeRoleTag(roleRaw);
   if (!name || !role) {
     await setFlashToast({ tone: "error", message: "Both Name and Tags are required." });
     revalidatePath("/admin/approvers");
     return;
   }
-  const allRoles = await Approver.distinct("roles");
-  if (allRoles.includes(role) || APPROVER_ROLES.includes(role as ApproverRole)) {
+  const [allRoles, stored] = await Promise.all([Approver.distinct("roles"), getStoredCustomRoles()]);
+  if (allRoles.includes(role) || stored.includes(role) || APPROVER_ROLES.includes(role as ApproverRole)) {
     await setFlashToast({ tone: "success", message: `Role "${role}" already exists.` });
     revalidatePath("/admin/approvers");
     return;
   }
+  await saveStoredCustomRoles([...stored, role]);
   await setFlashToast({
     tone: "success",
     message: `Role "${name}" saved. Tag "${role}" will be used when assigned to approvers.`,
@@ -444,7 +468,7 @@ export async function editApproverRole(formData: FormData) {
   await connectMongo();
   const previousRole = String(formData.get("previousRole") ?? "").trim();
   const nextRoleRaw = String(formData.get("tags") ?? "").trim();
-  const nextRole = nextRoleRaw.replace(/\s+/g, "");
+  const nextRole = normalizeRoleTag(nextRoleRaw);
 
   if (!previousRole || !nextRole) {
     await setFlashToast({ tone: "error", message: "Current role and new tag are required." });
@@ -462,6 +486,9 @@ export async function editApproverRole(formData: FormData) {
     { roles: previousRole },
     { $addToSet: { roles: nextRole }, $pull: { roles: previousRole } },
   );
+  const stored = await getStoredCustomRoles();
+  const nextStored = stored.map((item) => (item === previousRole ? nextRole : item));
+  await saveStoredCustomRoles(nextStored);
   await syncAutoLookupRoles();
   await setFlashToast({
     tone: "success",
@@ -482,6 +509,8 @@ export async function deleteApproverRole(formData: FormData) {
   }
 
   await Approver.updateMany({ roles: role }, { $pull: { roles: role } });
+  const stored = await getStoredCustomRoles();
+  await saveStoredCustomRoles(stored.filter((item) => item !== role));
   await syncAutoLookupRoles();
   await setFlashToast({ tone: "success", message: `Role "${role}" removed from all approvers.` });
   revalidatePath("/admin/approvers");
