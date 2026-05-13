@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { BUILTIN_FORMS } from "@/lib/form-definitions";
 import { runWithOptionalTransaction } from "@/lib/db/transaction";
 import { analyzeImportedSource } from "@/lib/forms/import-diagnostics";
+import { normalizeTriggerUrl } from "@/lib/forms/triggers";
 import {
   FormDefinition,
   FORM_DEFINITION_AVAILABILITIES,
@@ -583,6 +584,12 @@ export async function updateFormDefinitionSettings(input: {
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
+  triggerEnabled: boolean;
+  triggerUrl: string;
+  triggerSource: string;
+  triggerEvent: string;
+  triggerFunctionName: string;
+  triggerNotes: string;
 }) {
   if (!FORM_DEFINITION_STATUSES.includes(input.status)) {
     throw new Error(`Invalid status: ${input.status}`);
@@ -595,6 +602,10 @@ export async function updateFormDefinitionSettings(input: {
   }
 
   const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
+  const normalizedTriggerUrl = normalizeTriggerUrl(input.triggerUrl);
+  if (input.triggerEnabled && !normalizedTriggerUrl) {
+    throw new Error("Turn off trigger automation or provide a valid trigger URL.");
+  }
 
   const form = input.id
     ? await FormDefinition.findById(input.id).lean()
@@ -657,6 +668,12 @@ export async function updateFormDefinitionSettings(input: {
           writeResponsesToSheet: input.writeResponsesToSheet,
           responseSpreadsheetId: input.responseSpreadsheetId,
           responseSheetName: input.responseSheetName,
+          triggerEnabled: input.triggerEnabled,
+          triggerUrl: normalizedTriggerUrl,
+          triggerSource: String(input.triggerSource || "").trim(),
+          triggerEvent: String(input.triggerEvent || "").trim(),
+          triggerFunctionName: String(input.triggerFunctionName || "").trim(),
+          triggerNotes: String(input.triggerNotes || "").trim(),
         },
       },
       sessionOptions(session),
@@ -712,6 +729,51 @@ export async function updateFormDefinitionSettings(input: {
   }
 
   return result;
+}
+
+export async function updateFormTriggerSettings(input: {
+  id?: string;
+  slug?: string;
+  triggerEnabled: boolean;
+  triggerUrl: string;
+  triggerSource: string;
+  triggerEvent: string;
+  triggerFunctionName: string;
+  triggerNotes: string;
+}) {
+  const normalizedTriggerUrl = normalizeTriggerUrl(input.triggerUrl);
+  if (input.triggerEnabled && !normalizedTriggerUrl) {
+    throw new Error("Turn off trigger automation or provide a valid trigger URL.");
+  }
+
+  return runWithOptionalTransaction(async (session) => {
+    const form = input.id
+      ? await FormDefinition.findById(input.id).session(session).lean()
+      : await FormDefinition.findOne({ slug: input.slug }).session(session).lean();
+    if (!form) {
+      throw new Error("Form definition not found.");
+    }
+
+    await FormDefinition.updateOne(
+      { _id: form._id },
+      {
+        $set: {
+          triggerEnabled: input.triggerEnabled,
+          triggerUrl: normalizedTriggerUrl,
+          triggerSource: String(input.triggerSource || "").trim(),
+          triggerEvent: String(input.triggerEvent || "").trim(),
+          triggerFunctionName: String(input.triggerFunctionName || "").trim(),
+          triggerNotes: String(input.triggerNotes || "").trim(),
+        },
+      },
+      sessionOptions(session),
+    );
+
+    return {
+      before: form,
+      after: await FormDefinition.findById(form._id).session(session).lean(),
+    };
+  });
 }
 
 export async function hideFormDefinitionEntry(input: { id?: string; slug?: string }) {

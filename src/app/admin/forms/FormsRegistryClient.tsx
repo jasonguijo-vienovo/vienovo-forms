@@ -33,6 +33,12 @@ type RegistryForm = {
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
+  triggerEnabled: boolean;
+  triggerUrl: string;
+  triggerSource: string;
+  triggerEvent: string;
+  triggerFunctionName: string;
+  triggerNotes: string;
   notes: string;
 };
 
@@ -355,6 +361,7 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
   const [openVisibility, setOpenVisibility] = useState(false);
   const [openRouting, setOpenRouting] = useState(false);
   const [openResponses, setOpenResponses] = useState(false);
+  const [openTrigger, setOpenTrigger] = useState(false);
   const [openAdvanced, setOpenAdvanced] = useState(false);
 
   const liveReason = liveForUsers
@@ -421,6 +428,31 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
             <Field label="Response spreadsheet ID"><input name="responseSpreadsheetId" defaultValue={form.responseSpreadsheetId} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
             <Field label="Response sheet tab"><input name="responseSheetName" defaultValue={form.responseSheetName} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
             <label className="flex items-center gap-2 text-sm text-surface-text"><input type="checkbox" name="writeResponsesToSheet" defaultChecked={form.writeResponsesToSheet} disabled={!isEditMode} className="accent-brand-600" /><span>Copy new submissions to response tab</span></label>
+          </>
+        ) : null}
+
+        {form.source === "imported" ? (
+          <>
+            <SectionToggle title="Trigger automation" open={openTrigger} onToggle={() => setOpenTrigger((v) => !v)} />
+            {openTrigger ? (
+              <>
+                <p className="text-xs text-surface-muted">
+                  Imported forms can call an Apps Script web app or webhook after a successful in-app submit.
+                </p>
+                <label className="flex items-center gap-2 text-sm text-surface-text">
+                  <input type="checkbox" name="triggerEnabled" defaultChecked={form.triggerEnabled} disabled={!isEditMode} className="accent-brand-600" />
+                  <span>Enable post-submit trigger call</span>
+                </label>
+                <Field label="Trigger URL"><input name="triggerUrl" type="url" defaultValue={form.triggerUrl} readOnly={!isEditMode} placeholder="https://script.google.com/macros/s/.../exec" className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Trigger source"><input name="triggerSource" defaultValue={form.triggerSource} readOnly={!isEditMode} placeholder="apps-script-web-app" className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+                  <Field label="Trigger event"><input name="triggerEvent" defaultValue={form.triggerEvent} readOnly={!isEditMode} placeholder="submitted" className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+                </div>
+                <Field label="Function name hint"><input name="triggerFunctionName" defaultValue={form.triggerFunctionName} readOnly={!isEditMode} placeholder="onFormSubmit" className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+                <Field label="Trigger notes"><textarea name="triggerNotes" rows={3} defaultValue={form.triggerNotes} readOnly={!isEditMode} className={`field-input ${!isEditMode ? "field-locked" : ""}`} /></Field>
+                {form.externalFormUrl ? <p className="text-xs text-surface-muted">This trigger runs only for in-app submissions. External launch URLs keep their own trigger behavior outside this app.</p> : null}
+              </>
+            ) : null}
           </>
         ) : null}
 

@@ -243,6 +243,12 @@ export async function updateFormDefinition(formData: FormData) {
       writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
       responseSpreadsheetId: s(formData, "responseSpreadsheetId"),
       responseSheetName: s(formData, "responseSheetName"),
+      triggerEnabled: bool(formData, "triggerEnabled"),
+      triggerUrl: s(formData, "triggerUrl"),
+      triggerSource: s(formData, "triggerSource"),
+      triggerEvent: s(formData, "triggerEvent"),
+      triggerFunctionName: s(formData, "triggerFunctionName"),
+      triggerNotes: s(formData, "triggerNotes"),
     });
 
     await setFlashToast({ tone: "success", message: "Form settings saved." });

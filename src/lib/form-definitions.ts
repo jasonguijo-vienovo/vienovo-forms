@@ -27,6 +27,12 @@ export type AppFormDefinition = {
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
+  triggerEnabled: boolean;
+  triggerUrl: string;
+  triggerSource: string;
+  triggerEvent: string;
+  triggerFunctionName: string;
+  triggerNotes: string;
   notes: string;
   _id?: string;
   runtime: FormRuntimeState;
@@ -67,6 +73,12 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Travel Booking Responses",
+    triggerEnabled: false,
+    triggerUrl: "",
+    triggerSource: "",
+    triggerEvent: "",
+    triggerFunctionName: "",
+    triggerNotes: "",
     notes: "",
   },
   {
@@ -85,6 +97,12 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Cash Advance Responses",
+    triggerEnabled: false,
+    triggerUrl: "",
+    triggerSource: "",
+    triggerEvent: "",
+    triggerFunctionName: "",
+    triggerNotes: "",
     notes: "",
   },
   {
@@ -103,6 +121,12 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Reimbursement Responses",
+    triggerEnabled: false,
+    triggerUrl: "",
+    triggerSource: "",
+    triggerEvent: "",
+    triggerFunctionName: "",
+    triggerNotes: "",
     notes: "",
   },
   {
@@ -121,6 +145,12 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Request for Payment Responses",
+    triggerEnabled: false,
+    triggerUrl: "",
+    triggerSource: "",
+    triggerEvent: "",
+    triggerFunctionName: "",
+    triggerNotes: "",
     notes: "",
   },
   {
@@ -139,6 +169,12 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Cashiering Responses",
+    triggerEnabled: false,
+    triggerUrl: "",
+    triggerSource: "",
+    triggerEvent: "",
+    triggerFunctionName: "",
+    triggerNotes: "",
     notes: "",
   },
   {
@@ -157,6 +193,12 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Leave Request Responses",
+    triggerEnabled: false,
+    triggerUrl: "",
+    triggerSource: "",
+    triggerEvent: "",
+    triggerFunctionName: "",
+    triggerNotes: "",
     notes: "",
   },
 ];
@@ -190,6 +232,12 @@ function normalizeFormDefinitionRow(row: any): Omit<AppFormDefinition, "runtime"
     writeResponsesToSheet: Boolean(row.writeResponsesToSheet),
     responseSpreadsheetId: row.responseSpreadsheetId ?? "",
     responseSheetName: row.responseSheetName ?? "",
+    triggerEnabled: Boolean(row.triggerEnabled),
+    triggerUrl: row.triggerUrl ?? "",
+    triggerSource: row.triggerSource ?? "",
+    triggerEvent: row.triggerEvent ?? "",
+    triggerFunctionName: row.triggerFunctionName ?? "",
+    triggerNotes: row.triggerNotes ?? "",
     notes: row.notes ?? "",
   };
 }
@@ -277,6 +325,12 @@ export async function syncBuiltInForms() {
             writeResponsesToSheet: form.writeResponsesToSheet,
             responseSpreadsheetId: form.responseSpreadsheetId,
             responseSheetName: form.responseSheetName,
+            triggerEnabled: form.triggerEnabled,
+            triggerUrl: form.triggerUrl,
+            triggerSource: form.triggerSource,
+            triggerEvent: form.triggerEvent,
+            triggerFunctionName: form.triggerFunctionName,
+            triggerNotes: form.triggerNotes,
             notes: form.notes,
           },
         },

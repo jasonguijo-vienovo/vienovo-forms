@@ -33,6 +33,8 @@ const formImportSchema = new Schema(
       parsedDescription: { type: String, default: "" },
       parsedFieldCount: { type: Number, default: 0 },
       fieldNames: { type: [String], default: [] },
+      detectedTriggerFunctions: { type: [String], default: [] },
+      detectedTriggerEvents: { type: [String], default: [] },
       missingBindings: { type: [String], default: [] },
       warnings: { type: [String], default: [] },
       blockers: { type: [String], default: [] },

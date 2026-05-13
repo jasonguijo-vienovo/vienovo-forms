@@ -139,6 +139,9 @@ export default async function AdminOverviewPage() {
             <Link href="/admin/forms" className="btn-secondary">
               Manage live forms
             </Link>
+            <Link href="/admin/settings" className="btn-secondary">
+              Settings hub
+            </Link>
           </>
         }
       />
@@ -342,6 +345,12 @@ export default async function AdminOverviewPage() {
             icon={<FileInput className="h-5 w-5" />}
             title="Import and publish forms"
             description="Bring in a legacy form, link its spreadsheet, update dropdowns, preview it, then publish it."
+          />
+          <AdminCard
+            href="/admin/settings"
+            icon={<Cog className="h-5 w-5" />}
+            title="Settings"
+            description="One place for imported trigger setup plus links to the other admin settings surfaces."
           />
           <AdminCard
             href="/admin/forms"

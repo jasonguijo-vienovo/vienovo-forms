@@ -6,6 +6,7 @@ import {
   BellRing,
   Boxes,
   ClipboardList,
+  Cog,
   FileInput,
   GitBranch,
   Grid2X2,
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const primaryLinks = [
   { href: "/admin", label: "Overview", icon: Grid2X2, exact: true },
+  { href: "/admin/settings", label: "Settings", icon: Cog },
   { href: "/admin/forms", label: "Forms registry", icon: Boxes },
   { href: "/admin/form-imports", label: "Importer", icon: FileInput },
   { href: "/admin/lookups", label: "Dropdowns", icon: ListChecks },

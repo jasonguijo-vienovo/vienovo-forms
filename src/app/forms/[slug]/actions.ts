@@ -8,6 +8,7 @@ import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { getFormUserAccess } from "@/lib/forms/runtime-state";
+import { fireImportedFormTrigger } from "@/lib/forms/triggers";
 import { parseImportedFormHtml, type ImportedFieldDefinition } from "@/lib/imported-forms";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 import { sendFlowNotification } from "@/lib/notifications/flow";
@@ -1345,9 +1346,40 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       }
     }
 
+    let triggerMessageSuffix = "";
+    const triggerResult = await fireImportedFormTrigger({
+      form: {
+        slug: definition.slug,
+        name: definition.name,
+        triggerEnabled: definition.triggerEnabled,
+        triggerUrl: definition.triggerUrl,
+        triggerSource: definition.triggerSource,
+        triggerEvent: definition.triggerEvent,
+        triggerFunctionName: definition.triggerFunctionName,
+      },
+      request: {
+        id: String(createdRequest._id),
+        referenceNo,
+      },
+      submittedBy: {
+        email,
+        name,
+      },
+      values,
+      labels,
+    });
+    if (triggerResult.attempted && !triggerResult.ok) {
+      triggerMessageSuffix = ` Trigger follow-up failed: ${triggerResult.error}`;
+      console.error("Imported form trigger failed", {
+        slug,
+        referenceNo,
+        error: triggerResult.error,
+      });
+    }
+
     await setFlashToast({
       tone: "success",
-      message: `${imported.name} submitted and recorded to ${responseSheetName}: ${referenceNo}`,
+      message: `${imported.name} submitted and recorded to ${responseSheetName}: ${referenceNo}.${triggerMessageSuffix}`,
     });
 
     try {
@@ -1524,7 +1556,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       });
       await setFlashToast({
         tone: "success",
-        message: `${imported.name} submitted and notifications sent to submitter + HR: ${referenceNo}`,
+        message: `${imported.name} submitted and notifications sent to submitter + HR: ${referenceNo}.${triggerMessageSuffix}`,
       });
     } catch (notificationError) {
       console.error("Imported form submit notification failed:", notificationError);

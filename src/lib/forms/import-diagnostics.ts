@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { parseImportedFormHtml, parseSpreadsheetBindings } from "@/lib/imported-forms";
+import { detectAppsScriptTriggerHints } from "@/lib/forms/triggers";
 import type { FormImportReadinessState } from "@/models/FormImport";
 
 export type ImportDiagnosticsInput = {
@@ -29,6 +30,8 @@ export type ImportDiagnosticsResult = {
     parsedDescription: string;
     parsedFieldCount: number;
     fieldNames: string[];
+    detectedTriggerFunctions: string[];
+    detectedTriggerEvents: string[];
     missingBindings: string[];
     warnings: string[];
     blockers: string[];
@@ -60,6 +63,7 @@ export function analyzeImportedSource(input: ImportDiagnosticsInput): ImportDiag
   const externalFormUrl = String(input.externalFormUrl ?? "").trim();
   const bindings = parseSpreadsheetBindings(input.spreadsheetBindings);
   const runtime = parseImportedFormHtml(htmlSource);
+  const triggerHints = detectAppsScriptTriggerHints(appsScriptSource);
   const warnings = [...runtime.warnings];
   const blockers: string[] = [];
   const hasExternalFormUrl = Boolean(externalFormUrl);
@@ -102,6 +106,11 @@ export function analyzeImportedSource(input: ImportDiagnosticsInput): ImportDiag
   if (hasExternalFormUrl && !htmlSource && !appsScriptSource) {
     warnings.push("This import will launch an external form URL instead of the in-app runtime.");
   }
+  if (triggerHints.detectedFunctions.length > 0 || triggerHints.detectedEvents.length > 0) {
+    warnings.push(
+      "Apps Script trigger logic was detected. Configure imported trigger settings if this form depends on post-submit automation.",
+    );
+  }
 
   const readinessState: FormImportReadinessState =
     blockers.length > 0 ? "blocked" : warnings.length > 0 ? "needs-review" : "ready";
@@ -118,6 +127,8 @@ export function analyzeImportedSource(input: ImportDiagnosticsInput): ImportDiag
       parsedDescription: runtime.description,
       parsedFieldCount: runtime.fields.length,
       fieldNames: runtime.fields.map((field) => field.name),
+      detectedTriggerFunctions: triggerHints.detectedFunctions,
+      detectedTriggerEvents: triggerHints.detectedEvents,
       missingBindings,
       warnings,
       blockers,
