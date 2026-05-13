@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { connectMongo } from "@/lib/db/mongo";
+import { syncEmployeesFromGraph } from "@/lib/employee-sync";
 import { setFlashToast } from "@/lib/flash";
 import { requireAdmin } from "@/lib/admin";
 import { Employee } from "@/models/Employee";
@@ -179,6 +180,114 @@ async function syncRoleDrivenLookupCategories() {
 
 function normalizeEmail(value: string) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+type EmployeeDirectoryRow = {
+  email: string;
+  employeeId: string;
+  fullName: string;
+  department: string;
+  jobTitle: string;
+  isActive: boolean;
+};
+
+function findEmployeeMatchForApprover(
+  approver: {
+    email?: string;
+    employeeId?: string;
+  },
+  employeesByEmail: Map<string, EmployeeDirectoryRow>,
+  employeesById: Map<string, EmployeeDirectoryRow>,
+) {
+  const approverEmployeeId = String(approver.employeeId ?? "").trim();
+  if (approverEmployeeId) {
+    const byId = employeesById.get(approverEmployeeId);
+    if (byId) return byId;
+  }
+
+  const approverEmail = normalizeEmail(String(approver.email ?? ""));
+  if (!approverEmail) return null;
+  return employeesByEmail.get(approverEmail) ?? null;
+}
+
+async function refreshApproversFromEmployeeDirectory() {
+  const [approvers, employees] = await Promise.all([
+    Approver.find({}).lean(),
+    Employee.find({})
+      .select({ email: 1, employeeId: 1, fullName: 1, department: 1, jobTitle: 1, isActive: 1 })
+      .lean(),
+  ]);
+
+  const employeeRows: EmployeeDirectoryRow[] = employees.map((employee) => ({
+    email: normalizeEmail(String(employee.email ?? "")),
+    employeeId: String(employee.employeeId ?? "").trim(),
+    fullName: String(employee.fullName ?? "").trim(),
+    department: String(employee.department ?? "").trim(),
+    jobTitle: String(employee.jobTitle ?? "").trim(),
+    isActive: employee.isActive !== false,
+  }));
+
+  const employeesByEmail = new Map(employeeRows.filter((row) => row.email).map((row) => [row.email, row]));
+  const employeesById = new Map(employeeRows.filter((row) => row.employeeId).map((row) => [row.employeeId, row]));
+
+  const ops: Parameters<typeof Approver.bulkWrite>[0] = [];
+  let matched = 0;
+  let updated = 0;
+  let inactiveMatches = 0;
+
+  for (const approver of approvers) {
+    const match = findEmployeeMatchForApprover(approver, employeesByEmail, employeesById);
+    if (!match) continue;
+
+    matched += 1;
+    if (!match.isActive) inactiveMatches += 1;
+
+    const nextName = match.fullName || String(approver.name ?? "").trim();
+    const nextEmail = match.email;
+    const nextEmployeeId = match.employeeId;
+    const nextDepartment = match.department;
+    const nextJobTitle = match.jobTitle;
+    const nextEmailNeedsReview = !nextEmail;
+
+    const changed =
+      nextName !== String(approver.name ?? "").trim() ||
+      nextEmail !== normalizeEmail(String(approver.email ?? "")) ||
+      nextEmployeeId !== String(approver.employeeId ?? "").trim() ||
+      nextDepartment !== String(approver.department ?? "").trim() ||
+      nextJobTitle !== String(approver.jobTitle ?? "").trim() ||
+      nextEmailNeedsReview !== Boolean(approver.emailNeedsReview);
+
+    if (!changed) continue;
+
+    updated += 1;
+    ops.push({
+      updateOne: {
+        filter: { _id: approver._id },
+        update: {
+          $set: {
+            name: nextName,
+            email: nextEmail,
+            employeeId: nextEmployeeId,
+            department: nextDepartment,
+            jobTitle: nextJobTitle,
+            emailNeedsReview: nextEmailNeedsReview,
+          },
+        },
+      },
+    });
+  }
+
+  if (ops.length > 0) {
+    await Approver.bulkWrite(ops, { ordered: false });
+  }
+
+  return {
+    approverCount: approvers.length,
+    matched,
+    updated,
+    unmatched: Math.max(0, approvers.length - matched),
+    inactiveMatches,
+  };
 }
 
 async function resolveApproverProfile(input: {
@@ -439,4 +548,37 @@ export async function deleteApprover(formData: FormData) {
   });
   revalidatePath("/admin/approvers");
   revalidatePath("/admin/lookups");
+}
+
+export async function syncApproversFromIntune() {
+  await requireAdmin();
+  await connectMongo();
+
+  try {
+    const employeeResult = await syncEmployeesFromGraph();
+    const approverResult = await refreshApproversFromEmployeeDirectory();
+    await syncAutoLookupRoles();
+
+    const message =
+      `Intune sync completed. ${employeeResult.processed} employee records refreshed, ` +
+      `${approverResult.updated} approvers updated from ${approverResult.matched} matched employee records` +
+      `${approverResult.unmatched > 0 ? `, ${approverResult.unmatched} approvers had no employee match` : ""}` +
+      `${approverResult.inactiveMatches > 0 ? `, ${approverResult.inactiveMatches} matched employees are inactive` : ""}.`;
+
+    await setFlashToast({
+      tone: "success",
+      message,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Approver sync failed.";
+    await setFlashToast({
+      tone: "error",
+      message,
+      persistent: true,
+    });
+  }
+
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
+  revalidatePath("/admin/users");
 }
