@@ -279,6 +279,57 @@ export async function addApproverRole(formData: FormData) {
   revalidatePath("/admin/approvers");
 }
 
+export async function recoverApproverEmails() {
+  await requireAdmin();
+  await connectMongo();
+
+  const invalidEmail = /^(?![^\s@]+@[^\s@]+\.[^\s@]+$).*/;
+  const candidates = await Approver.find({
+    $or: [{ emailNeedsReview: true }, { email: "" }, { email: { $regex: invalidEmail } }],
+  });
+
+  let recovered = 0;
+
+  for (const doc of candidates) {
+    let employee: { email?: string; employeeId?: string } | null = null;
+    const employeeId = String(doc.employeeId ?? "").trim();
+    const name = String(doc.name ?? "").trim();
+    const currentEmail = String(doc.email ?? "").trim().toLowerCase();
+
+    if (currentEmail) {
+      employee = await Employee.findOne({ email: currentEmail }).select({ email: 1, employeeId: 1 }).lean();
+    }
+    if (!employee && employeeId) {
+      employee = await Employee.findOne({ employeeId }).select({ email: 1, employeeId: 1 }).lean();
+    }
+    if (!employee && name) {
+      employee = await Employee.findOne({ fullName: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") })
+        .select({ email: 1, employeeId: 1 })
+        .lean();
+    }
+    if (!employee?.email) continue;
+
+    const recoveredEmail = String(employee.email).trim().toLowerCase();
+    const previousEmail = String(doc.email ?? "").trim().toLowerCase();
+    const changed = recoveredEmail !== previousEmail || doc.emailNeedsReview || !doc.employeeId;
+    if (!changed) continue;
+
+    doc.email = recoveredEmail;
+    doc.employeeId = String(employee.employeeId ?? doc.employeeId ?? "").trim();
+    doc.emailNeedsReview = false;
+    await doc.save();
+    recovered += 1;
+  }
+
+  if (recovered > 0) await syncAutoLookupRoles();
+  await setFlashToast({
+    tone: "success",
+    message: recovered > 0 ? `Recovered ${recovered} approver email(s).` : "No recoverable approver emails found.",
+  });
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
+}
+
 export async function editApproverRole(formData: FormData) {
   await requireAdmin();
   await connectMongo();

@@ -13,7 +13,7 @@ import {
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
 import { SearchableSelect } from "@/components/searchable-select";
-import { addApprover, addApproverRole, deleteApprover, deleteApproverRole, editApproverRole, toggleApprover, updateApprover } from "./actions";
+import { addApprover, addApproverRole, deleteApprover, deleteApproverRole, editApproverRole, recoverApproverEmails, toggleApprover, updateApprover } from "./actions";
 
 type ApproverRow = {
   _id: string;
@@ -135,6 +135,14 @@ export function ApproversClient({
             <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
               Add a new approver
             </button>
+            <form action={recoverApproverEmails}>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel="Recover emails"
+                pendingLabel="Recovering..."
+                className="btn-secondary"
+              />
+            </form>
             <Link href="/admin/processors" className="btn-secondary">
               Open processors list
             </Link>
@@ -303,15 +311,15 @@ export function ApproversClient({
               <div className="overflow-x-hidden">
                 <table className="admin-table w-full table-fixed">
                   <colgroup>
-                    <col className="w-[24%]" />
-                    <col className="w-[28%]" />
-                    <col className="w-[48%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[5%]" />
                   </colgroup>
                   <thead className="border-b border-surface-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
                     <tr>
                       <th className="px-1.5 py-2">Name</th>
                       <th className="px-1.5 py-2">Tags</th>
-                      <th className="px-1.5 py-2 text-right">Actions</th>
+                      <th className="px-1.5 py-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-border">
@@ -326,7 +334,7 @@ export function ApproversClient({
                           )}
                         </td>
                         <td className="px-1.5 py-2">
-                          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                          <div className="flex items-center justify-start gap-1 whitespace-nowrap">
                             {editingRole === role ? (
                               <>
                                 <form id={`edit-role-${role}`} action={editApproverRole}>
