@@ -441,6 +441,11 @@ export async function addApproverRole(formData: FormData) {
     revalidatePath("/admin/approvers");
     redirect("/admin/approvers");
   } catch (error) {
+    const digest =
+      typeof error === "object" && error !== null && "digest" in error
+        ? String((error as { digest?: unknown }).digest ?? "")
+        : "";
+    if (digest.startsWith("NEXT_REDIRECT")) throw error;
     await setFlashToast({
       tone: "error",
       message: error instanceof Error ? error.message : "Failed to add role.",
