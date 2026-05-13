@@ -569,6 +569,36 @@ function findValue(values: Record<string, unknown>, labels: Record<string, strin
   return "";
 }
 
+function enforceRequestForPaymentConditionalFields(
+  slug: string,
+  values: Record<string, unknown>,
+  labels: Record<string, string>,
+) {
+  if (slug !== "request-for-payment") return;
+
+  const transactionType = findValue(values, labels, "transactionType", "transaction type");
+  const typeOfExpense = findValue(values, labels, "typeOfExpense", "type of expense", "type of expenses");
+  const natureOfCapex = findValue(values, labels, "natureOfCapex", "nature of capex");
+  const natureOfServices = findValue(
+    values,
+    labels,
+    "natureOfServices",
+    "nature of services",
+    "gl account nature of services",
+    "gl account - nature of services",
+  );
+
+  if (transactionType === "Operating Expense" && !typeOfExpense) {
+    throw new Error("Type of Expense is required for Operating Expense.");
+  }
+  if (transactionType === "CAPEX" && !natureOfCapex) {
+    throw new Error("Nature of CAPEX is required for CAPEX.");
+  }
+  if (transactionType === "Others" && !natureOfServices) {
+    throw new Error("GL Account - Nature of Services is required for Others.");
+  }
+}
+
 function buildEmployeeInformationRow(opts: {
   referenceNo: string;
   values: Record<string, unknown>;
@@ -1007,6 +1037,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       throw new Error(`Missing required fields: ${missing.join(", ")}`);
     }
     Object.assign(values, normalizePayloadValues(values));
+    enforceRequestForPaymentConditionalFields(slug, values, labels);
     await enforceFixedAssetDuplicateGuard(slug, values, labels);
 
     const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;

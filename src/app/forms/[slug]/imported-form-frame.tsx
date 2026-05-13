@@ -319,23 +319,6 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     });
   }
 
-  function controlMatchesPatterns(control, patterns) {
-    var key = normalize((control.name || "") + " " + (control.id || ""));
-    var labelText = normalize(labelFor(control));
-    return patterns.some(function (pattern) {
-      var normalizedPattern = normalize(pattern);
-      return key.indexOf(normalizedPattern) >= 0 || labelText.indexOf(normalizedPattern) >= 0;
-    });
-  }
-
-  function findFirstControlByPatterns(patterns) {
-    var controls = document.querySelectorAll("input[name], input[id], textarea[name], textarea[id], select[name], select[id]");
-    for (var i = 0; i < controls.length; i += 1) {
-      if (controlMatchesPatterns(controls[i], patterns)) return controls[i];
-    }
-    return null;
-  }
-
   function findFieldContainer(control) {
     if (!control) return null;
     return (
@@ -375,29 +358,48 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     }
   }
 
+  function setConditionalWrapperVisibility(wrapperId, controlId, visible) {
+    var wrapper = document.getElementById(wrapperId);
+    var control = document.getElementById(controlId);
+    if (wrapper) {
+      wrapper.style.display = visible ? "" : "none";
+    } else {
+      setConditionalVisibility(control, visible);
+      return;
+    }
+
+    if (visible || !control) {
+      if (control) control.removeAttribute("data-vf-conditional-hidden");
+      return;
+    }
+
+    control.setAttribute("data-vf-conditional-hidden", "1");
+    var tagName = String(control.tagName || "").toLowerCase();
+    var type = String(control.type || "").toLowerCase();
+    if (tagName === "select" || tagName === "textarea" || ["text", "email", "number", "date", "time", "tel", "hidden"].indexOf(type) >= 0) {
+      control.value = "";
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (type === "checkbox" || type === "radio") {
+      control.checked = false;
+    }
+  }
+
   function applyRequestForPaymentConditionalFields() {
     if (String(bridge.slug || "") !== "request-for-payment") return;
 
-    var transactionTypeControl = findFirstControlByPatterns(["transaction type", "transactiontype"]);
+    var transactionTypeControl = document.getElementById("transactionType");
     if (!transactionTypeControl) return;
 
-    var expenseTypeControl = findFirstControlByPatterns(["type of expense", "typeofexpense"]);
-    var capexNatureControl = findFirstControlByPatterns(["nature of capex", "natureofcapex"]);
-    var servicesNatureControl = findFirstControlByPatterns([
-      "gl account - nature of services",
-      "gl account nature of services",
-      "nature of services",
-    ]);
-
     function syncConditionalFields() {
-      var transactionValue = normalize(transactionTypeControl.value || "");
-      var showExpense = transactionValue.indexOf("expense") >= 0;
-      var showCapex = transactionValue.indexOf("capex") >= 0;
-      var showOthers = transactionValue === "others" || transactionValue.indexOf("other") >= 0;
+      var transactionValue = String(transactionTypeControl.value || "").trim();
+      var showExpense = transactionValue === "Operating Expense";
+      var showCapex = transactionValue === "CAPEX";
+      var showOthers = transactionValue === "Others";
 
-      setConditionalVisibility(expenseTypeControl, showExpense);
-      setConditionalVisibility(capexNatureControl, showCapex);
-      setConditionalVisibility(servicesNatureControl, showOthers);
+      setConditionalWrapperVisibility("opExpenseWrap", "typeOfExpense", showExpense);
+      setConditionalWrapperVisibility("natureCapexWrap", "natureOfCapex", showCapex);
+      setConditionalWrapperVisibility("natureServicesWrap", "natureOfServices", showOthers);
       queueHeightPost();
     }
 
