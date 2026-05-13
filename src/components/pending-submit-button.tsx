@@ -9,6 +9,7 @@ type PendingSubmitButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & 
   idleLabel: React.ReactNode;
   pendingLabel?: React.ReactNode;
   pendingClassName?: string;
+  busyTimeoutMs?: number;
 };
 
 export function PendingSubmitButton({
@@ -16,6 +17,7 @@ export function PendingSubmitButton({
   pendingLabel,
   className,
   pendingClassName,
+  busyTimeoutMs = 30000,
   disabled,
   children,
   ...props
@@ -51,7 +53,7 @@ export function PendingSubmitButton({
         safetyUnlockTimerRef.current = setTimeout(() => {
           setIsInstantBusy(false);
           safetyUnlockTimerRef.current = null;
-        }, 5000);
+        }, busyTimeoutMs);
         props.onClick?.(event);
       }}
       disabled={isDisabled}

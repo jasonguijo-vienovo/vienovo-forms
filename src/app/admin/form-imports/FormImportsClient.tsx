@@ -346,7 +346,8 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
             <PendingSubmitButton
               type="submit"
               idleLabel="Next: Sync from spreadsheet"
-              pendingLabel="Syncing..."
+              pendingLabel="Syncing dropdown values..."
+              busyTimeoutMs={120000}
               className="btn-primary"
             />
           </form>
@@ -423,7 +424,8 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
                 Sync
               </span>
             }
-            pendingLabel="Syncing..."
+            pendingLabel="Syncing dropdown values..."
+            busyTimeoutMs={120000}
             className="btn-secondary"
           />
         </form>
