@@ -95,10 +95,7 @@ export function ApproversClient({
   const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
-  const visibleRoles = useMemo(
-    () => roles.filter((role) => role.trim().toLowerCase() !== "far"),
-    [roles],
-  );
+  const visibleRoles = useMemo(() => roles, [roles]);
 
   const selectedEmployee = useMemo(
     () => employeeOptions.find((employee) => employee.email === selectedEmployeeEmail) ?? null,
@@ -488,10 +485,8 @@ export function ApproversClient({
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {approver.roles.filter((role) => role.trim().toLowerCase() !== "far").length > 0 ? (
-                            approver.roles
-                              .filter((role) => role.trim().toLowerCase() !== "far")
-                              .map((role) => (
+                          {approver.roles.length > 0 ? (
+                            approver.roles.map((role) => (
                               <span
                                 key={role}
                                 className={`inline-flex items-center rounded border px-2 py-1 text-xs font-medium capitalize ${

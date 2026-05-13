@@ -27,9 +27,7 @@ export default async function ApproversPage() {
           ),
         )
       : [];
-  const roles = Array.from(new Set([...APPROVER_ROLES, ...dynamicRoles, ...storedRoles])).filter(
-    (role) => String(role).trim().toLowerCase() !== "far",
-  );
+  const roles = Array.from(new Set([...APPROVER_ROLES, ...dynamicRoles, ...storedRoles]));
 
   return (
     <ApproversClient
