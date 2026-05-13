@@ -89,27 +89,29 @@ export function AdminShell({
         ].join(" ")}
       >
         <div className="px-6 py-5">
-          <div className={collapsed ? "flex justify-center" : "flex items-start gap-3"}>
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded bg-brand-700 text-lg font-black text-white">
-              V
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className={collapsed ? "hidden" : "block"}>
-                <p className="text-sm font-black uppercase tracking-wider text-brand-700">Admin Console</p>
-                <p className="text-xs text-surface-muted">Enterprise Management</p>
+          <div className={collapsed ? "space-y-3" : "flex items-center justify-between gap-3"}>
+            <div className={collapsed ? "flex justify-center" : "flex min-w-0 flex-1 items-start gap-3"}>
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded bg-brand-700 text-lg font-black text-white">
+                V
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className={collapsed ? "hidden" : "block"}>
+                  <p className="text-sm font-black uppercase tracking-wider text-brand-700">Admin Console</p>
+                  <p className="text-xs text-surface-muted">Enterprise Management</p>
+                </div>
               </div>
             </div>
-          </div>
-          <div className={collapsed ? "mt-3 flex justify-center" : "mt-3 flex justify-end"}>
-            <button
-              type="button"
-              onClick={() => setCollapsed((value) => !value)}
-              className="grid h-9 w-9 place-items-center rounded-md border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
-              aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
-              title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </button>
+            <div className={collapsed ? "flex justify-center" : "shrink-0 self-center"}>
+              <button
+                type="button"
+                onClick={() => setCollapsed((value) => !value)}
+                className="grid h-9 w-9 place-items-center rounded-md border border-surface-border bg-white text-slate-700 transition hover:text-brand-700"
+                aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
+                title={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
+              >
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
         </div>
         <AdminNav collapsed={collapsed} />
