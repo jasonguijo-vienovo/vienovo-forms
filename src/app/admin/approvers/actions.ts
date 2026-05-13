@@ -404,34 +404,50 @@ export async function addApprover(formData: FormData) {
 }
 
 export async function addApproverRole(formData: FormData) {
-  await requireAdmin();
-  await connectMongo();
-  const name = String(formData.get("name") ?? "").trim();
-  const roleRaw = String(formData.get("tags") ?? "").trim();
-  const role = normalizeRoleTag(roleRaw);
-  if (!name || !role) {
-    await setFlashToast({ tone: "error", message: "Both Name and Tags are required." });
+  try {
+    await requireAdmin();
+    await connectMongo();
+    const name = String(formData.get("name") ?? "").trim();
+    const roleRaw = String(formData.get("tags") ?? "").trim();
+    const role = normalizeRoleTag(roleRaw);
+    if (!name || !role) {
+      await setFlashToast({ tone: "error", message: "Both Name and Tags are required." });
+      revalidatePath("/admin/approvers");
+      return;
+    }
+    const [allRoles, stored] = await Promise.all([Approver.distinct("roles"), getStoredCustomRoles()]);
+    const allRoleKeys = new Set([
+      ...allRoles.map((item) => normalizeRoleTag(String(item))),
+      ...stored.map((item) => normalizeRoleTag(item)),
+      ...APPROVER_ROLES.map((item) => normalizeRoleTag(String(item))),
+    ]);
+    if (allRoleKeys.has(role)) {
+      await setFlashToast({ tone: "success", message: `Role "${role}" already exists.` });
+      revalidatePath("/admin/approvers");
+      redirect("/admin/approvers");
+    }
+
+    const nextRoles = Array.from(new Set([...stored, role].map((item) => normalizeRoleTag(item)).filter(Boolean)));
+    await SystemSetting.findOneAndUpdate(
+      { key: APPROVER_CUSTOM_ROLES_KEY },
+      { $set: { key: APPROVER_CUSTOM_ROLES_KEY, value: nextRoles } },
+      { upsert: true, new: true },
+    );
+
+    await setFlashToast({
+      tone: "success",
+      message: `Role "${name}" saved. Tag "${role}" will be used when assigned to approvers.`,
+    });
     revalidatePath("/admin/approvers");
-    return;
-  }
-  const [allRoles, stored] = await Promise.all([Approver.distinct("roles"), getStoredCustomRoles()]);
-  const allRoleKeys = new Set([
-    ...allRoles.map((item) => normalizeRoleTag(String(item))),
-    ...stored.map((item) => normalizeRoleTag(item)),
-    ...APPROVER_ROLES.map((item) => normalizeRoleTag(String(item))),
-  ]);
-  if (allRoleKeys.has(role)) {
-    await setFlashToast({ tone: "success", message: `Role "${role}" already exists.` });
+    redirect("/admin/approvers");
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message: error instanceof Error ? error.message : "Failed to add role.",
+    });
     revalidatePath("/admin/approvers");
-    return;
+    redirect("/admin/approvers");
   }
-  await saveStoredCustomRoles([...stored, role]);
-  await setFlashToast({
-    tone: "success",
-    message: `Role "${name}" saved. Tag "${role}" will be used when assigned to approvers.`,
-  });
-  revalidatePath("/admin/approvers");
-  redirect("/admin/approvers");
 }
 
 export async function recoverApproverEmails() {
