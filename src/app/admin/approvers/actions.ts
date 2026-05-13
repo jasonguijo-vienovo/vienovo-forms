@@ -253,12 +253,60 @@ export async function addApproverRole(formData: FormData) {
     revalidatePath("/admin/approvers");
     return;
   }
-  await Approver.updateMany({}, { $addToSet: { roles: role } });
   await setFlashToast({
     tone: "success",
-    message: `Role "${name}" added. Tag "${role}" is now available in role dropdowns.`,
+    message: `Role "${name}" saved. Tag "${role}" will be used when assigned to approvers.`,
   });
   revalidatePath("/admin/approvers");
+}
+
+export async function editApproverRole(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+  const previousRole = String(formData.get("previousRole") ?? "").trim();
+  const nextRoleRaw = String(formData.get("tags") ?? "").trim();
+  const nextRole = nextRoleRaw.replace(/\s+/g, "");
+
+  if (!previousRole || !nextRole) {
+    await setFlashToast({ tone: "error", message: "Current role and new tag are required." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  if (previousRole === nextRole) {
+    await setFlashToast({ tone: "success", message: "No changes detected for this role." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  await Approver.updateMany(
+    { roles: previousRole },
+    { $addToSet: { roles: nextRole }, $pull: { roles: previousRole } },
+  );
+  await syncAutoLookupRoles();
+  await setFlashToast({
+    tone: "success",
+    message: `Role tag updated from "${previousRole}" to "${nextRole}".`,
+  });
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
+}
+
+export async function deleteApproverRole(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+  const role = String(formData.get("role") ?? "").trim();
+  if (!role) {
+    await setFlashToast({ tone: "error", message: "Role is required." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  await Approver.updateMany({ roles: role }, { $pull: { roles: role } });
+  await syncAutoLookupRoles();
+  await setFlashToast({ tone: "success", message: `Role "${role}" removed from all approvers.` });
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
 }
 
 export async function updateApprover(formData: FormData) {
