@@ -6,14 +6,30 @@ import { SystemSetting } from "@/models/SystemSetting";
 import { ApproversClient } from "./ApproversClient";
 
 const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
+const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
 
 export default async function ApproversPage() {
   await connectMongo();
-  const [all, employeeOptions, storedRoleDoc] = await Promise.all([
+  const [all, employeeOptions, storedRoleDoc, lookupApproverSyncDoc] = await Promise.all([
     Approver.find({}).sort({ name: 1 }).lean(),
     getAdminEmployeePickerOptions(),
     SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean(),
+    SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean(),
   ]);
+  const lookupSyncValues =
+    lookupApproverSyncDoc?.value && typeof lookupApproverSyncDoc.value === "object"
+      ? Object.values(lookupApproverSyncDoc.value as Record<string, unknown>)
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean)
+      : [];
+  const latestLookupSyncAt = lookupSyncValues
+    .map((value) => {
+      const ms = new Date(value).getTime();
+      return Number.isNaN(ms) ? null : ms;
+    })
+    .filter((value): value is number => value !== null)
+    .sort((a, b) => b - a)[0];
+  const lastLookupDropdownSyncAt = typeof latestLookupSyncAt === "number" ? new Date(latestLookupSyncAt).toISOString() : "";
   const dynamicRoles = Array.from(new Set(all.flatMap((item) => item.roles || []).filter(Boolean))).sort();
   const storedRoles = Array.isArray(storedRoleDoc?.value)
     ? Array.from(new Set((storedRoleDoc.value as unknown[]).map((item) => String(item ?? "").trim()).filter(Boolean)))
@@ -46,6 +62,7 @@ export default async function ApproversPage() {
       employeeOptions={employeeOptions}
       graphReady={isEmployeeDirectorySyncConfigured()}
       syncEnabled={isEmployeeDirectorySyncEnabled()}
+      lastLookupDropdownSyncAt={lastLookupDropdownSyncAt}
     />
   );
 }

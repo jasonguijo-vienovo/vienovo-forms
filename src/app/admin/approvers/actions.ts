@@ -12,12 +12,41 @@ import { Lookup } from "@/models/Lookup";
 import { SystemSetting } from "@/models/SystemSetting";
 
 const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
+const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
 
 function normalizeRoleTag(value: string) {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, "")
     .toLowerCase();
+}
+
+function parseApproverSyncMeta(value: unknown) {
+  if (!value || typeof value !== "object") return {} as Record<string, string>;
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const category = String(key ?? "").trim();
+    const at = String(raw ?? "").trim();
+    if (!category || !at) continue;
+    out[category] = at;
+  }
+  return out;
+}
+
+async function markLookupCategoriesSynced(categories: string[]) {
+  const unique = Array.from(new Set(categories.map((item) => String(item ?? "").trim()).filter(Boolean)));
+  if (unique.length === 0) return;
+
+  const doc = await SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean();
+  const current = parseApproverSyncMeta(doc?.value);
+  const now = new Date().toISOString();
+  for (const category of unique) current[category] = now;
+
+  await SystemSetting.updateOne(
+    { key: LOOKUP_APPROVER_SYNC_KEY },
+    { $set: { key: LOOKUP_APPROVER_SYNC_KEY, value: current } },
+    { upsert: true },
+  );
 }
 
 async function getStoredCustomRoles() {
@@ -72,6 +101,7 @@ async function syncApproverRoleLookupCategory(role: ApproverRole, category: stri
   const existingByValue = new Map(existing.map((item) => [String(item.value).trim().toLowerCase(), item]));
 
   const toInsert: Array<{ value: string; label: string }> = [];
+  let changed = false;
 
   for (const approver of approvers) {
     const email = String(approver.email ?? "").trim().toLowerCase();
@@ -82,6 +112,7 @@ async function syncApproverRoleLookupCategory(role: ApproverRole, category: stri
     if (match) {
       if ((match.label ?? "") !== name || !match.isActive) {
         await Lookup.updateOne({ _id: match._id }, { $set: { label: name, isActive: true } });
+        changed = true;
       }
       continue;
     }
@@ -101,14 +132,26 @@ async function syncApproverRoleLookupCategory(role: ApproverRole, category: stri
         isActive: true,
       })),
     );
+    changed = true;
   }
+  return changed;
 }
 
 async function syncAutoLookupRoles() {
+  const touchedCategories = new Set<string>();
   for (const item of AUTO_SYNC_ROLE_TO_CATEGORY) {
-    await syncApproverRoleLookupCategory(item.role, item.category);
+    const changed = await syncApproverRoleLookupCategory(item.role, item.category);
+    if (changed) touchedCategories.add(item.category);
   }
-  await syncRoleDrivenLookupCategories();
+  const roleDrivenTouched = await syncRoleDrivenLookupCategories();
+  for (const category of roleDrivenTouched) touchedCategories.add(category);
+  if (touchedCategories.size > 0) {
+    await markLookupCategoriesSynced([...touchedCategories]);
+  }
+  return {
+    touchedCategories: touchedCategories.size,
+    categories: [...touchedCategories],
+  };
 }
 
 function normalizeKey(input: string) {
@@ -141,13 +184,14 @@ function inferRolesForCategory(category: string, label: string, knownRoles: stri
 
 async function syncRoleDrivenLookupCategories() {
   const categories = (await Lookup.distinct("category")).filter((category) => categoryLooksRoleDriven(String(category)));
-  if (categories.length === 0) return;
+  if (categories.length === 0) return [] as string[];
 
   const [approvers, roles] = await Promise.all([
     Approver.find({ isActive: true, email: { $ne: "" } }).select({ email: 1, name: 1, roles: 1 }).lean(),
     Approver.distinct("roles"),
   ]);
   const knownRoles = Array.from(new Set([...(roles || []), ...APPROVER_ROLES]));
+  const touchedCategories: string[] = [];
 
   for (const category of categories) {
     const existing = await Lookup.find({ category }).sort({ sortOrder: 1, value: 1 }).lean();
@@ -213,8 +257,25 @@ async function syncRoleDrivenLookupCategories() {
         ops as Parameters<typeof Lookup.bulkWrite>[0],
         { ordered: false },
       );
+      touchedCategories.push(String(category));
     }
   }
+  return touchedCategories;
+}
+
+export async function syncLookupDropdownsFromApprovers() {
+  await requireAdmin();
+  await connectMongo();
+  const result = await syncAutoLookupRoles();
+  await setFlashToast({
+    tone: "success",
+    message:
+      result.touchedCategories > 0
+        ? `Dropdown sync complete: updated ${result.touchedCategories} dropdown group(s) from approvers.`
+        : "Dropdown sync complete: no role-driven dropdown changes were needed.",
+  });
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/lookups");
 }
 
 function normalizeEmail(value: string) {
@@ -632,13 +693,14 @@ export async function syncApproversFromIntune() {
   try {
     const employeeResult = await syncEmployeesFromGraph();
     const approverResult = await refreshApproversFromEmployeeDirectory();
-    await syncAutoLookupRoles();
+    const lookupResult = await syncAutoLookupRoles();
 
     const message =
       `Intune sync completed. ${employeeResult.processed} employee records refreshed, ` +
       `${approverResult.updated} approvers updated from ${approverResult.matched} matched employee records` +
       `${approverResult.unmatched > 0 ? `, ${approverResult.unmatched} approvers had no employee match` : ""}` +
-      `${approverResult.inactiveMatches > 0 ? `, ${approverResult.inactiveMatches} matched employees are inactive` : ""}.`;
+      `${approverResult.inactiveMatches > 0 ? `, ${approverResult.inactiveMatches} matched employees are inactive` : ""}` +
+      `${lookupResult.touchedCategories > 0 ? `, ${lookupResult.touchedCategories} dropdown groups were synced.` : "."}`;
 
     await setFlashToast({
       tone: "success",

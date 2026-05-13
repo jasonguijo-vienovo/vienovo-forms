@@ -20,6 +20,7 @@ import {
   deleteApproverRole,
   editApproverRole,
   recoverApproverEmails,
+  syncLookupDropdownsFromApprovers,
   syncApproversFromIntune,
   toggleApprover,
   updateApprover,
@@ -47,6 +48,19 @@ type EmployeeOption = {
 };
 
 type ViewFilter = "all" | "review" | "active" | "inactive" | "hr_missing_email";
+
+function formatSyncDateTime(value: string) {
+  if (!value) return "Not synced yet";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Invalid timestamp";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function roleLabel(role: string) {
   if (role === "sla") return "SLA Approver";
@@ -76,12 +90,14 @@ export function ApproversClient({
   employeeOptions,
   graphReady,
   syncEnabled,
+  lastLookupDropdownSyncAt,
 }: {
   approvers: ApproverRow[];
   roles: string[];
   employeeOptions: EmployeeOption[];
   graphReady: boolean;
   syncEnabled: boolean;
+  lastLookupDropdownSyncAt: string;
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -184,6 +200,14 @@ export function ApproversClient({
                 className="btn-secondary"
               />
             </form>
+            <form action={syncLookupDropdownsFromApprovers}>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel="Sync dropdowns"
+                pendingLabel="Syncing dropdowns..."
+                className="btn-secondary"
+              />
+            </form>
             <Link href="/admin/processors" className="btn-secondary">
               Open processors list
             </Link>
@@ -192,16 +216,20 @@ export function ApproversClient({
       />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.9fr)]">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <CompactMetricCard label="Total approvers" value={approvers.length} />
           <CompactMetricCard label="Active approvers" value={activeCount} tone="ok" />
           <CompactMetricCard label="Needs review" value={needsReview} tone={needsReview > 0 ? "warn" : "ok"} />
           <CompactMetricCard label="Processor-capable" value={approvers.filter((item) => item.roles.includes("processor")).length} />
+          <CompactMetricCard label="Last dropdown sync" value={formatSyncDateTime(lastLookupDropdownSyncAt)} />
         </div>
         <AdminHelpPanel title="What this page does">
           Use this page when someone should be available as an approver, supervisor, department head,
           cash advance approver, or final approver. If an email needs review, fix it here before relying
           on notification emails.
+          {lastLookupDropdownSyncAt
+            ? ` Role-driven dropdowns were last synced on ${formatSyncDateTime(lastLookupDropdownSyncAt)}.`
+            : " Role-driven dropdowns have not been synced yet."}
           {!graphReady ? " Microsoft Graph credentials are still missing for Intune-based sync." : ""}
           {graphReady && !syncEnabled ? " Intune sync is configured but disabled because INTUNE_SYNC_ENABLED is off." : ""}
           {graphReady && syncEnabled

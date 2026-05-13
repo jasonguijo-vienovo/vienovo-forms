@@ -12,6 +12,7 @@ import {
   deleteLookup,
   deleteLookupCategory,
   scanRolesLookups,
+  syncLookupCategoryFromApprovers,
   toggleLookup,
   updateLookup,
 } from "./actions";
@@ -30,12 +31,36 @@ export type LookupAdminGroup = {
   categories: string[];
 };
 
+function formatRoleLabel(role: string) {
+  if (role === "sla") return "SLA";
+  if (role === "cashAdvanceApprover") return "Cash Advance Approver";
+  if (role === "hr") return "HR";
+  return role
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function formatSyncDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Invalid timestamp";
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function LookupsClient(props: {
   categoryLabels: Record<string, string>;
   groups: LookupAdminGroup[];
   itemsByCategory: Record<string, LookupAdminItem[]>;
+  approverRoles: string[];
+  approverSyncByCategory: Record<string, string>;
 }) {
-  const { categoryLabels, groups, itemsByCategory } = props;
+  const { categoryLabels, groups, itemsByCategory, approverRoles, approverSyncByCategory } = props;
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
   const [openAddPanelByCategory, setOpenAddPanelByCategory] = useState<Record<string, "bulk" | "single">>({});
@@ -135,26 +160,50 @@ export default function LookupsClient(props: {
                         {(itemsByCategory[cat]?.length ?? 0).toString()} entries
                       </AdminStatusPill>
                     </div>
+                    <div className="text-[11px] text-surface-muted">
+                      {approverSyncByCategory[cat]
+                        ? `Synced from approvers: ${formatSyncDateTime(approverSyncByCategory[cat])}`
+                        : "Not synced from approvers yet"}
+                    </div>
                   </summary>
 
                   <div className="mt-4">
                     <div className="mb-3 flex justify-end">
                       <div className="flex flex-wrap justify-end gap-2">
+                        <form action={syncLookupCategoryFromApprovers}>
+                          <input type="hidden" name="category" value={cat} />
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Sync now"
+                            pendingLabel="Syncing..."
+                            className="btn-secondary text-xs"
+                          />
+                        </form>
                         <form action={addLookupFromApproverRole} className="flex items-center gap-2">
                           <input type="hidden" name="category" value={cat} />
-                          <select name="approverRole" defaultValue="sla" className="field-input min-w-[140px] py-1 text-xs">
-                            <option value="sla">SLA</option>
-                            <option value="supervisor">Supervisor</option>
-                            <option value="head">Head</option>
-                            <option value="processor">Processor</option>
-                            <option value="cashAdvanceApprover">Cash Advance Approver</option>
-                            <option value="hr">HR</option>
+                          <select
+                            name="approverRole"
+                            defaultValue={approverRoles.includes("sla") ? "sla" : approverRoles[0] ?? ""}
+                            className="field-input min-w-[140px] py-1 text-xs"
+                          >
+                            {approverRoles.length > 0 ? (
+                              approverRoles.map((role) => (
+                                <option key={role} value={role}>
+                                  {formatRoleLabel(role)}
+                                </option>
+                              ))
+                            ) : (
+                              <option value="" disabled>
+                                No approver roles
+                              </option>
+                            )}
                           </select>
                           <PendingSubmitButton
                             type="submit"
                             idleLabel="Add from approver role"
                             pendingLabel="Adding..."
                             className="btn-secondary text-xs"
+                            disabled={approverRoles.length === 0}
                           />
                         </form>
                         <form
