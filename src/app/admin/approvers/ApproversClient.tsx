@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -150,12 +149,7 @@ export function ApproversClient({
             <form action={syncApproversFromIntune}>
               <PendingSubmitButton
                 type="submit"
-                idleLabel={
-                  <span className="inline-flex items-center gap-2">
-                    <RefreshCcw className="h-4 w-4" />
-                    <span>Sync from Intune</span>
-                  </span>
-                }
+                idleLabel="Sync from Intune"
                 pendingLabel="Syncing approvers..."
                 className="btn-secondary"
                 disabled={!graphReady || !syncEnabled}
