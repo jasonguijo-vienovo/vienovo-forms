@@ -1,5 +1,6 @@
 import { connectMongo } from "@/lib/db/mongo";
 import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
+import { getImportedDropdownSourceSheetNames } from "@/lib/system-settings";
 import { FormImport } from "@/models/FormImport";
 import { SettingsClient } from "./SettingsClient";
 
@@ -9,7 +10,7 @@ export default async function AdminSettingsPage({
   searchParams: Promise<{ form?: string }>;
 }) {
   await connectMongo();
-  const [params, forms, imports] = await Promise.all([
+  const [params, forms, imports, dropdownSourceSheetNames] = await Promise.all([
     searchParams,
     getAllFormDefinitionsForAdmin(),
     FormImport.find({})
@@ -21,6 +22,7 @@ export default async function AdminSettingsPage({
         parseDiagnostics: 1,
       })
       .lean(),
+    getImportedDropdownSourceSheetNames(),
   ]);
 
   const importBySlug = new Map(imports.map((item) => [item.slug, item]));
@@ -47,5 +49,11 @@ export default async function AdminSettingsPage({
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return <SettingsClient rows={rows} selectedSlug={params.form ?? ""} />;
+  return (
+    <SettingsClient
+      rows={rows}
+      selectedSlug={params.form ?? ""}
+      dropdownSourceSheetNames={dropdownSourceSheetNames}
+    />
+  );
 }

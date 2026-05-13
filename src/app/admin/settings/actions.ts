@@ -8,6 +8,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
 import { updateFormTriggerSettings } from "@/lib/forms/import-registry-service";
+import {
+  parseSheetNameList,
+  saveImportedDropdownSourceSheetNames,
+} from "@/lib/system-settings";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -22,7 +26,7 @@ function messageFromError(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
-  return "The trigger settings could not be saved. Please try again.";
+  return "The settings could not be saved. Please try again.";
 }
 
 function redirectToSettings(slug?: string) {
@@ -92,4 +96,37 @@ export async function saveTriggerSettings(formData: FormData) {
   }
 
   redirectToSettings(slug || id);
+}
+
+export async function saveImporterSettings(formData: FormData) {
+  try {
+    const { email } = await requireAdmin();
+    const rawSheetNames = s(formData, "dropdownSourceSheetNames");
+    const sheetNames = parseSheetNameList(rawSheetNames);
+    const savedSheetNames = await saveImportedDropdownSourceSheetNames(sheetNames);
+
+    await setFlashToast({
+      tone: "success",
+      message: `Importer settings saved. Auto-detect will scan: ${savedSheetNames.join(", ")}.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "update_importer_settings",
+      targetType: "system-setting",
+      targetId: "imported-dropdown-source-sheets",
+      correlationId: randomUUID(),
+      details: {
+        dropdownSourceSheetNames: savedSheetNames,
+      },
+    });
+
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin/form-imports");
+    revalidatePath("/admin/lookups");
+  } catch (error) {
+    console.error("saveImporterSettings failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+
+  redirectToSettings();
 }

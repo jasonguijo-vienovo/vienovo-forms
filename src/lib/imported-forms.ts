@@ -1,5 +1,6 @@
 import { listSpreadsheetSheets, readSpreadsheetMatrix, readSpreadsheetRange } from "@/lib/google/sheets";
 import { loadImportedLookupOptions } from "@/lib/imported-lookup-store";
+import { getImportedDropdownSourceSheetNames } from "@/lib/system-settings";
 
 export type ImportedFieldOption = {
   value: string;
@@ -353,6 +354,7 @@ export async function hydrateImportedFormRuntime(opts: {
   spreadsheetId?: string;
   spreadsheetBindings?: unknown;
   preferLookupOptions?: boolean;
+  dropdownSourceSheetNames?: string[];
 }) {
   const runtime = parseImportedFormHtml(opts.htmlSource);
   const spreadsheetId = String(opts.spreadsheetId ?? "").trim();
@@ -387,11 +389,22 @@ export async function hydrateImportedFormRuntime(opts: {
   const cache = new Map<string, string[]>();
   const autoDetectedBindings: Record<string, string> = {};
   let sheetNames: string[] = [];
+  let autoDropdownSheetNames: string[] = [];
   let sheetPreviews = new Map<string, string[][]>();
   try {
+    const configuredDropdownSourceSheets =
+      opts.dropdownSourceSheetNames?.filter(Boolean).length
+        ? opts.dropdownSourceSheetNames
+        : await getImportedDropdownSourceSheetNames();
+    const configuredDropdownSourceKeys = new Set(
+      configuredDropdownSourceSheets.map(normalizeKey)
+    );
     sheetNames = await listSpreadsheetSheets(spreadsheetId);
+    autoDropdownSheetNames = sheetNames.filter((sheet) =>
+      configuredDropdownSourceKeys.has(normalizeKey(sheet))
+    );
     const previewEntries: Array<[string, string[][]]> = await Promise.all(
-      sheetNames.map(async (sheet) => [
+      autoDropdownSheetNames.map(async (sheet) => [
         sheet,
         await readSpreadsheetMatrix(spreadsheetId, `${sheet}!A1:ZZ100`),
       ] as [string, string[][]])
@@ -437,7 +450,9 @@ export async function hydrateImportedFormRuntime(opts: {
         let matchedRange = findOptionsRangeFromPreview(sheetPreviews, candidates);
 
         if (!matchedRange) {
-          const matchedSheet = sheetNames.find((sheet) => candidates.includes(normalizeKey(sheet)));
+          const matchedSheet = autoDropdownSheetNames.find((sheet) =>
+            candidates.includes(normalizeKey(sheet))
+          );
           if (matchedSheet) {
             matchedRange = `${matchedSheet}!A2:A`;
           }

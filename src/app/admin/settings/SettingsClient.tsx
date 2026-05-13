@@ -2,7 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Cog, ExternalLink, GitBranch, BellRing, Boxes, KeyRound, ListChecks, Users } from "lucide-react";
+import {
+  BellRing,
+  Boxes,
+  Cog,
+  ExternalLink,
+  GitBranch,
+  KeyRound,
+  ListChecks,
+  Settings2,
+  Users,
+} from "lucide-react";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
@@ -13,7 +23,7 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
-import { saveTriggerSettings } from "./actions";
+import { saveImporterSettings, saveTriggerSettings } from "./actions";
 
 type TriggerRow = {
   id?: string;
@@ -76,9 +86,11 @@ const SETTINGS_LINKS = [
 export function SettingsClient({
   rows,
   selectedSlug,
+  dropdownSourceSheetNames,
 }: {
   rows: TriggerRow[];
   selectedSlug?: string;
+  dropdownSourceSheetNames: string[];
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -115,37 +127,90 @@ export function SettingsClient({
       <AdminPageHeader
         eyebrow="System settings"
         title="Settings"
-        description="Use this page as the home for admin configuration. Imported form triggers live here, and the other settings areas are linked below."
+        description="Use this page as the home for importer defaults, imported-form trigger automation, and the other admin settings surfaces."
         actions={
           <>
-            <Link href="/admin/forms" className="btn-secondary">
-              <Boxes className="h-4 w-4" />
-              Form settings
-            </Link>
             <Link href="/admin/notifications" className="btn-primary">
               <BellRing className="h-4 w-4" />
               Notification settings
+            </Link>
+            <Link href="/admin/forms" className="btn-secondary">
+              <Boxes className="h-4 w-4" />
+              Form settings
             </Link>
           </>
         }
       />
 
       <AdminHelpPanel title="What this page does">
-        Imported Apps Script forms can keep their post-submit automation by calling a web app or webhook after the in-app request is saved. If trigger logic was detected in the imported source, it will show up here so setup is easier to track.
+        Importer defaults live here now too. Configure which spreadsheet tabs the auto-detect scan is allowed to use, then manage post-submit trigger automation for imported forms below.
       </AdminHelpPanel>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <AdminMetricCard label="Imported forms" value={rows.length} hint="Forms that can use trigger automation" />
-        <AdminMetricCard label="Triggers enabled" value={configuredCount} tone={configuredCount > 0 ? "ok" : "default"} hint="Will call a configured endpoint on submit" />
-        <AdminMetricCard label="Trigger hints detected" value={detectedCount} hint="Apps Script source looked like it had trigger logic" />
-        <AdminMetricCard label="Needs setup" value={attentionCount} tone={attentionCount > 0 ? "warn" : "ok"} hint="Detected trigger logic but automation is still off" />
-      </div>
+      <AdminSection
+        title="Importer Defaults"
+        description="These settings shape how imported Apps Script forms auto-detect spreadsheet-backed dropdown values."
+      >
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
+          <form action={saveImporterSettings} className="space-y-4 rounded border border-surface-border bg-white p-5">
+            <div>
+              <h3 className="text-base font-semibold text-surface-text">Dropdown source tabs</h3>
+              <p className="mt-1 text-sm text-surface-muted">
+                Auto-detect will only scan these sheet tab names when it tries to find dropdown values. Explicit spreadsheet bindings still override this.
+              </p>
+            </div>
+            <Field label="Allowed sheet tab names">
+              <textarea
+                name="dropdownSourceSheetNames"
+                rows={4}
+                defaultValue={dropdownSourceSheetNames.join("\n")}
+                className="field-input"
+              />
+            </Field>
+            <p className="text-xs text-surface-muted">
+              Enter one tab name per line, like <code>Form Dropdowns</code> and <code>Dropdowns</code>.
+            </p>
+            <div className="flex justify-end">
+              <PendingSubmitButton
+                type="submit"
+                idleLabel={
+                  <span className="inline-flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" />
+                    <span>Save importer settings</span>
+                  </span>
+                }
+                pendingLabel="Saving..."
+                className="btn-primary"
+              />
+            </div>
+          </form>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <AdminMetricCard
+              label="Imported forms"
+              value={rows.length}
+              hint="Forms using importer runtime and dropdown sync"
+            />
+            <AdminMetricCard
+              label="Allowed source tabs"
+              value={dropdownSourceSheetNames.length}
+              tone={dropdownSourceSheetNames.length > 0 ? "ok" : "warn"}
+              hint={dropdownSourceSheetNames.join(", ") || "No tab names configured"}
+            />
+          </div>
+        </div>
+      </AdminSection>
 
       <AdminSection
         title="Imported form triggers"
         description="Point the trigger URL to an Apps Script web app or another webhook endpoint. These calls run only for successful in-app imported-form submissions."
         meta={`${filtered.length} of ${rows.length} shown`}
       >
+        <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminMetricCard label="Imported forms" value={rows.length} hint="Forms that can use trigger automation" />
+          <AdminMetricCard label="Triggers enabled" value={configuredCount} tone={configuredCount > 0 ? "ok" : "default"} hint="Will call a configured endpoint on submit" />
+          <AdminMetricCard label="Trigger hints detected" value={detectedCount} hint="Apps Script source looked like it had trigger logic" />
+          <AdminMetricCard label="Needs setup" value={attentionCount} tone={attentionCount > 0 ? "warn" : "ok"} hint="Detected trigger logic but automation is still off" />
+        </div>
         <div className="mb-5 flex flex-col gap-3">
           <AdminSearchField value={query} onChange={setQuery} placeholder="Search by form, trigger event, or function name" />
           <AdminFilterTabs
@@ -291,7 +356,7 @@ export function SettingsClient({
       </AdminSection>
 
       <AdminSection
-        title="Other settings"
+        title="Other Settings"
         description="The rest of the configuration surfaces that shape form behavior, people, routing, and communication."
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
