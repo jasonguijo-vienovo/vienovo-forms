@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -95,6 +95,7 @@ export function ApproversClient({
   const [selectedEmployeeEmail, setSelectedEmployeeEmail] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftEmail, setDraftEmail] = useState("");
+  const [selectedRolesForAdd, setSelectedRolesForAdd] = useState<string[]>([]);
   const visibleRoles = useMemo(() => roles, [roles]);
 
   const selectedEmployee = useMemo(
@@ -135,6 +136,19 @@ export function ApproversClient({
   const needsReview = approvers.filter((item) => item.emailNeedsReview).length;
   const activeCount = approvers.filter((item) => item.isActive).length;
 
+  useEffect(() => {
+    setSelectedRolesForAdd((prev) => prev.filter((role) => visibleRoles.includes(role)));
+  }, [visibleRoles]);
+
+  useEffect(() => {
+    if (!showAddModal) {
+      setSelectedRolesForAdd([]);
+      setSelectedEmployeeEmail("");
+      setDraftName("");
+      setDraftEmail("");
+    }
+  }, [showAddModal]);
+
   return (
     <div className="admin-page">
       <AdminPageHeader
@@ -152,7 +166,14 @@ export function ApproversClient({
                 disabled={!graphReady || !syncEnabled}
               />
             </form>
-            <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRolesForAdd([]);
+                setShowAddModal(true);
+              }}
+              className="btn-primary"
+            >
               Add a new approver
             </button>
             <form action={recoverApproverEmails}>
@@ -247,9 +268,31 @@ export function ApproversClient({
                 </div>
               )}
               <div className="flex flex-wrap gap-3 text-sm text-surface-text">
+                <div className="w-full flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">Roles</p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedRolesForAdd((prev) => (prev.length === visibleRoles.length ? [] : [...visibleRoles]))
+                    }
+                    className="border border-surface-border bg-white px-2 py-1 text-xs font-semibold text-surface-text transition hover:bg-slate-50"
+                  >
+                    {selectedRolesForAdd.length === visibleRoles.length ? "Clear all" : "Select all"}
+                  </button>
+                </div>
                 {visibleRoles.map((role) => (
                   <label key={role} className="flex items-center gap-1.5">
-                    <input type="checkbox" name={`role_${role}`} className="accent-brand-600" />
+                    <input
+                      type="checkbox"
+                      name={`role_${role}`}
+                      className="accent-brand-600"
+                      checked={selectedRolesForAdd.includes(role)}
+                      onChange={(event) =>
+                        setSelectedRolesForAdd((prev) =>
+                          event.target.checked ? Array.from(new Set([...prev, role])) : prev.filter((item) => item !== role),
+                        )
+                      }
+                    />
                     <span className="capitalize">{role}</span>
                   </label>
                 ))}
