@@ -133,9 +133,6 @@ export function ApproversClient({
             <button type="button" onClick={() => setShowAddModal(true)} className="btn-primary">
               Add a new approver
             </button>
-            <button type="button" onClick={() => setShowAddRoleModal(true)} className="btn-secondary">
-              Add new role
-            </button>
             <Link href="/admin/processors" className="btn-secondary">
               Open processors list
             </Link>
@@ -257,13 +254,22 @@ export function ApproversClient({
         description="Search people, fix emails that need review, and switch people on or off."
         meta={`${filtered.length} of ${approvers.length} shown`}
       >
-        <button
-          type="button"
-          onClick={() => setShowApproverList((prev) => !prev)}
-          className="mb-3 border border-surface-border bg-white px-3 py-1.5 text-xs font-semibold text-surface-text transition hover:bg-slate-50"
-        >
-          {showApproverList ? "Collapse approver list" : "Expand approver list"}
-        </button>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setShowApproverList((prev) => !prev)}
+            className="border border-surface-border bg-white px-3 py-1.5 text-xs font-semibold text-surface-text transition hover:bg-slate-50"
+          >
+            {showApproverList ? "Collapse approver list" : "Expand approver list"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAddRoleModal(true)}
+            className="border border-surface-border bg-white px-3 py-1.5 text-xs font-semibold text-surface-text transition hover:bg-slate-50"
+          >
+            Expand role management
+          </button>
+        </div>
         {showApproverList ? (
           <>
         <div className="mb-5 flex flex-col gap-3">
