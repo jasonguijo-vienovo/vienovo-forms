@@ -232,8 +232,15 @@ export function ApproversClient({
               </button>
             </div>
             <form action={addApproverRole} className="space-y-3">
-              <input type="text" name="role" required placeholder="ex: regionalManager" className="field-input w-full" />
-              <p className="text-xs text-surface-muted">This role will immediately appear in approver role dropdowns.</p>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-surface-text">Name</label>
+                <input type="text" name="name" required placeholder="ex: Regional Manager" className="field-input w-full" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-surface-text">Tags (roles column)</label>
+                <input type="text" name="tags" required placeholder="ex: regionalManager" className="field-input w-full" />
+              </div>
+              <p className="text-xs text-surface-muted">Tag value is saved to the roles column and appears in role dropdowns.</p>
               <PendingSubmitButton type="submit" idleLabel="Add role" pendingLabel="Adding..." className="btn-primary" />
             </form>
           </div>
