@@ -239,10 +239,11 @@ export async function addApprover(formData: FormData) {
 export async function addApproverRole(formData: FormData) {
   await requireAdmin();
   await connectMongo();
-  const roleRaw = String(formData.get("role") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const roleRaw = String(formData.get("tags") ?? "").trim();
   const role = roleRaw.replace(/\s+/g, "");
-  if (!role) {
-    await setFlashToast({ tone: "error", message: "Role name is required." });
+  if (!name || !role) {
+    await setFlashToast({ tone: "error", message: "Both Name and Tags are required." });
     revalidatePath("/admin/approvers");
     return;
   }
@@ -253,7 +254,10 @@ export async function addApproverRole(formData: FormData) {
     return;
   }
   await Approver.updateMany({}, { $addToSet: { roles: role } });
-  await setFlashToast({ tone: "success", message: `Role "${role}" added and available in role dropdowns.` });
+  await setFlashToast({
+    tone: "success",
+    message: `Role "${name}" added. Tag "${role}" is now available in role dropdowns.`,
+  });
   revalidatePath("/admin/approvers");
 }
 
