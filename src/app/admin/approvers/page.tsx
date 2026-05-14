@@ -1,4 +1,5 @@
 import { connectMongo } from "@/lib/db/mongo";
+import { getAllFormDefinitionsForAdmin } from "@/lib/form-definitions";
 import { getAdminEmployeePickerOptions } from "@/lib/employee-admin";
 import { isEmployeeDirectorySyncConfigured, isEmployeeDirectorySyncEnabled } from "@/lib/employee-sync";
 import { Approver, APPROVER_ROLES } from "@/models/Approver";
@@ -10,11 +11,12 @@ const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
 
 export default async function ApproversPage() {
   await connectMongo();
-  const [all, employeeOptions, storedRoleDoc, lookupApproverSyncDoc] = await Promise.all([
+  const [all, employeeOptions, storedRoleDoc, lookupApproverSyncDoc, forms] = await Promise.all([
     Approver.find({}).sort({ name: 1 }).lean(),
     getAdminEmployeePickerOptions(),
     SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean(),
     SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean(),
+    getAllFormDefinitionsForAdmin(),
   ]);
   const lookupSyncValues =
     lookupApproverSyncDoc?.value && typeof lookupApproverSyncDoc.value === "object"
@@ -63,6 +65,13 @@ export default async function ApproversPage() {
       graphReady={isEmployeeDirectorySyncConfigured()}
       syncEnabled={isEmployeeDirectorySyncEnabled()}
       lastLookupDropdownSyncAt={lastLookupDropdownSyncAt}
+      assignableForms={forms
+        .filter((form) => form.status !== "archived")
+        .map((form) => ({
+          slug: form.slug,
+          name: form.name,
+          processorApproverId: form.processorApproverId || "",
+        }))}
     />
   );
 }

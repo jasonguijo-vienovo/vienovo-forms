@@ -15,15 +15,17 @@ import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
-import {
-  appendSpreadsheetRow,
-  ensureSpreadsheetSheet,
-  listSpreadsheetSheets,
-  readSpreadsheetMatrix,
-  writeSpreadsheetRow,
-} from "@/lib/google/sheets";
 import { uploadAttachment } from "@/lib/storage/attachments";
-import { buildPendingStepNotificationCopy, resolveAssignedProcessor } from "@/lib/workflow-routing";
+import {
+  appendTravelBookingResponseRow,
+  normalizeSpreadsheetId,
+} from "@/lib/travel-booking-sheet";
+import {
+  buildPendingStepNotificationCopy,
+  resolveAssignedProcessor,
+  resolveConfiguredApprover,
+  resolveDefaultCeoApprover,
+} from "@/lib/workflow-routing";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -41,244 +43,6 @@ function s(formData: FormData, key: string) {
 function d(formData: FormData, key: string) {
   const v = s(formData, key);
   return v ? new Date(v) : null;
-}
-
-const TRAVEL_BOOKING_RESPONSE_HEADERS = [
-  "Timestamp",
-  "Status",
-  "Ref #",
-  "Email Address",
-  "Full Name",
-  "Birthday",
-  "Origin",
-  "Destination To",
-  "Departure Date",
-  "Preferred Time of Departure",
-  "Multi City Departure (Optional)",
-  "Multi City Deaprture Date (Optional)",
-  "Preferred Time of Departure ",
-  "Airlines",
-  "Travel Purpose",
-  "Baggage (Kg)",
-  "Hotel Accommodation",
-  "Immediate Superior",
-  "Department Head",
-  "Contact Number",
-  "SERVICE/PICKUP",
-  "Land/Air",
-  "ID NUMBER",
-  "Activity Schedule",
-  "Department",
-  "Request #",
-] as const;
-
-function normalizeSpreadsheetId(input: string) {
-  const value = String(input || "").trim();
-  if (!value) return "";
-  const match = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return match?.[1] || value;
-}
-
-function normalizeSheetHeader(input: string) {
-  return String(input || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function formatSheetTimestamp(value: Date) {
-  return value.toLocaleString("en-PH", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Manila",
-  });
-}
-
-function formatSheetDate(value: Date | null | undefined) {
-  if (!value) return "";
-  return new Date(value).toISOString().slice(0, 10);
-}
-
-function joinNonEmpty(parts: Array<string | null | undefined>, separator: string) {
-  return parts.map((part) => String(part || "").trim()).filter(Boolean).join(separator);
-}
-
-function buildTravelBookingMultiCityText(multiCity: any) {
-  const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
-  return joinNonEmpty(
-    trips.map((trip: any) => joinNonEmpty([trip?.origin, trip?.destination], " -> ")),
-    " | ",
-  );
-}
-
-function buildTravelBookingMultiCityDates(multiCity: any) {
-  const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
-  return joinNonEmpty(
-    trips.map((trip: any) => formatSheetDate(trip?.date ? new Date(trip.date) : null)),
-    " | ",
-  );
-}
-
-function buildTravelBookingMultiCityTimes(multiCity: any) {
-  const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
-  return joinNonEmpty(
-    trips.map((trip: any) => trip?.time),
-    " | ",
-  );
-}
-
-function buildTravelBookingSheetRow(input: {
-  referenceNo: string;
-  requestNumber: number;
-  submittedByEmail: string;
-  formData: any;
-}) {
-  const formData = input.formData ?? {};
-  const hotelAccommodation = joinNonEmpty(
-    [
-      formData.hotelAccommodation,
-      formData.hotelOther,
-    ],
-    formData.hotelAccommodation && formData.hotelOther ? " - " : "",
-  );
-  const attachmentValue =
-    String(formData?.activitySchedule?.driveWebViewLink || "").trim() ||
-    String(formData?.activitySchedule?.fileName || "").trim() ||
-    String(formData?.activityScheduleFileName || "").trim();
-  const requestNumberText = String(input.requestNumber);
-
-  return [
-    formatSheetTimestamp(new Date()),
-    "pending",
-    input.referenceNo,
-    input.submittedByEmail,
-    String(formData.fullName || "").trim(),
-    formatSheetDate(formData.birthday ? new Date(formData.birthday) : null),
-    String(formData.origin || "").trim(),
-    String(formData.destination || "").trim(),
-    formatSheetDate(formData.departureDate ? new Date(formData.departureDate) : null),
-    String(formData.preferredTime || "").trim(),
-    buildTravelBookingMultiCityText(formData.multiCity),
-    buildTravelBookingMultiCityDates(formData.multiCity),
-    buildTravelBookingMultiCityTimes(formData.multiCity),
-    String(formData.airline || "").trim(),
-    String(formData.travelPurpose || "").trim(),
-    String(formData.baggage || "").trim(),
-    hotelAccommodation,
-    String(formData.immediateSuperiorName || "").trim(),
-    String(formData.departmentHeadName || "").trim(),
-    String(formData.contactNumber || "").trim(),
-    String(formData.servicePickup || "").trim(),
-    String(formData.landAir || "").trim(),
-    String(formData.employeeId || "").trim(),
-    attachmentValue,
-    String(formData.department || "").trim(),
-    requestNumberText,
-  ];
-}
-
-function getNextTravelBookingRequestNumber(rows: string[][], headers: string[]) {
-  const requestColumnIndex = headers.findIndex((header) => normalizeSheetHeader(header) === "request");
-  if (requestColumnIndex < 0) return 1;
-
-  let maxValue = 0;
-  for (const row of rows.slice(1)) {
-    const raw = String(row?.[requestColumnIndex] ?? "").trim();
-    const value = Number.parseInt(raw, 10);
-    if (Number.isFinite(value) && value > maxValue) {
-      maxValue = value;
-    }
-  }
-
-  return maxValue + 1;
-}
-
-function headersMatchExpected(headers: string[], expectedHeaders: readonly string[]) {
-  return (
-    headers.length >= expectedHeaders.length &&
-    expectedHeaders.every((header, index) => normalizeSheetHeader(headers[index]) === normalizeSheetHeader(header))
-  );
-}
-
-async function resolveTravelBookingSheetTitle(spreadsheetId: string, preferredSheetTitle: string) {
-  const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
-  const preferred = String(preferredSheetTitle || "").trim();
-  const sheetTitles = await listSpreadsheetSheets(spreadsheetId);
-
-  if (preferred && sheetTitles.includes(preferred)) {
-    const preferredHeaders = (await readSpreadsheetMatrix(spreadsheetId, `${preferred}!A1:Z1`))[0] ?? [];
-    if (headersMatchExpected(preferredHeaders, expectedHeaders) || preferredHeaders.length === 0) {
-      return preferred;
-    }
-  }
-
-  for (const title of sheetTitles) {
-    const headers = (await readSpreadsheetMatrix(spreadsheetId, `${title}!A1:Z1`))[0] ?? [];
-    if (headersMatchExpected(headers, expectedHeaders)) {
-      return title;
-    }
-  }
-
-  return preferred || "Travel Booking Responses";
-}
-
-async function appendTravelBookingResponseRow(input: {
-  spreadsheetId: string;
-  sheetTitle: string;
-  referenceNo: string;
-  submittedByEmail: string;
-  formData: any;
-}): Promise<{ spreadsheetId: string; sheetTitle: string }> {
-  const spreadsheetId = normalizeSpreadsheetId(input.spreadsheetId);
-  if (!spreadsheetId) {
-    throw new Error("Travel Booking response spreadsheet ID is not configured.");
-  }
-
-  const resolvedSheetTitle = await resolveTravelBookingSheetTitle(spreadsheetId, input.sheetTitle);
-  await ensureSpreadsheetSheet(spreadsheetId, resolvedSheetTitle);
-  const matrix = await readSpreadsheetMatrix(spreadsheetId, `${resolvedSheetTitle}!A1:Z5000`);
-  const currentHeaders = (matrix[0] ?? []).map((cell) => String(cell ?? "").trim());
-  const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
-  const headersMatch = headersMatchExpected(currentHeaders, expectedHeaders);
-  const requestNumber = getNextTravelBookingRequestNumber(
-    matrix,
-    currentHeaders.length > 0 ? currentHeaders : expectedHeaders,
-  );
-
-  if (!headersMatch && currentHeaders.length > 0 && matrix.slice(1).some((row) => row.some((cell) => String(cell || "").trim()))) {
-    throw new Error(
-      `Existing sheet "${resolvedSheetTitle}" does not match the expected Travel Booking headers. Update the response sheet tab in Forms Registry or align the sheet headers first.`,
-    );
-  }
-
-  if (!headersMatch) {
-    await writeSpreadsheetRow({
-      spreadsheetId,
-      range: `${resolvedSheetTitle}!A1`,
-      values: expectedHeaders,
-    });
-  }
-
-  await appendSpreadsheetRow({
-    spreadsheetId,
-    sheetTitle: resolvedSheetTitle,
-    values: [
-      ...buildTravelBookingSheetRow({
-        referenceNo: input.referenceNo,
-        requestNumber,
-        submittedByEmail: input.submittedByEmail,
-        formData: input.formData,
-      }),
-      ...Array(Math.max(currentHeaders.length - expectedHeaders.length, 0)).fill(""),
-    ],
-  });
-
-  return {
-    spreadsheetId,
-    sheetTitle: resolvedSheetTitle,
-  };
 }
 
 export async function submitTravelBooking(
@@ -299,15 +63,29 @@ export async function submitTravelBooking(
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
 
-    const [supervisor, head, processor] = await Promise.all([
+    const [supervisor, head, processor, configuredLevelOne, configuredLevelTwo] = await Promise.all([
       supervisorId ? Approver.findById(supervisorId).lean() : null,
       headId ? Approver.findById(headId).lean() : null,
       resolveAssignedProcessor({ definition }),
+      resolveConfiguredApprover({
+        approverId: definition.levelOneApproverId,
+        approverEmail: definition.levelOneApproverEmail,
+        label: "Level 1 approver",
+      }),
+      resolveConfiguredApprover({
+        approverId: definition.levelTwoApproverId,
+        approverEmail: definition.levelTwoApproverEmail,
+        label: "Level 2 approver",
+      }),
     ]);
 
-    if (!supervisor) throw new Error("Invalid Immediate Superior");
-    if (!head) throw new Error("Invalid Department Head");
     if (!processor) throw new Error("No active processor configured. Ask an admin to assign one.");
+    if (!configuredLevelOne && !supervisor) throw new Error("Invalid Immediate Superior");
+    if (!configuredLevelTwo && !head) throw new Error("Invalid Department Head");
+    const resolvedLevelOne = configuredLevelOne ?? supervisor;
+    const resolvedLevelTwo = configuredLevelTwo ?? head;
+    const requiresCeoStep = Boolean(configuredLevelOne || configuredLevelTwo);
+    const ceoApprover = requiresCeoStep ? await resolveDefaultCeoApprover() : null;
 
     const referenceNo = await generateReferenceNo("travel-booking");
 
@@ -380,10 +158,10 @@ export async function submitTravelBooking(
       hotelAccommodation: s(formData, "hotelAccommodation"),
       hotelOther: s(formData, "hotelOther"),
       servicePickup: s(formData, "servicePickup"),
-      immediateSuperiorName: supervisor.name,
-      immediateSuperiorEmail: supervisor.email,
-      departmentHeadName: head.name,
-      departmentHeadEmail: head.email,
+      immediateSuperiorName: resolvedLevelOne!.name,
+      immediateSuperiorEmail: resolvedLevelOne!.email,
+      departmentHeadName: resolvedLevelTwo!.name,
+      departmentHeadEmail: resolvedLevelTwo!.email,
       activityScheduleFileName: s(formData, "activityScheduleFileName"),
       activitySchedule,
     };
@@ -391,20 +169,31 @@ export async function submitTravelBooking(
     const approvalChain = [
       {
         step: 1,
-        role: "supervisor",
-        approverEmail: supervisor.email,
-        approverName: supervisor.name,
+        role: configuredLevelOne ? "level1" : "supervisor",
+        approverEmail: resolvedLevelOne!.email,
+        approverName: resolvedLevelOne!.name,
         status: "pending",
       },
       {
         step: 2,
-        role: "head",
-        approverEmail: head.email,
-        approverName: head.name,
+        role: configuredLevelTwo ? "level2" : "head",
+        approverEmail: resolvedLevelTwo!.email,
+        approverName: resolvedLevelTwo!.name,
         status: "waiting",
       },
+      ...(ceoApprover
+        ? [
+            {
+              step: 3,
+              role: "ceo",
+              approverEmail: ceoApprover.email,
+              approverName: ceoApprover.name,
+              status: "waiting",
+            },
+          ]
+        : []),
       {
-        step: 3,
+        step: ceoApprover ? 4 : 3,
         role: "processor",
         approverEmail: processor.email,
         approverName: processor.name,
@@ -478,8 +267,8 @@ export async function submitTravelBooking(
           department: formDataObj.department,
           contactNumber: formDataObj.contactNumber,
           birthday: formDataObj.birthday,
-          supervisorEmail: supervisor.email,
-          departmentHeadEmail: head.email,
+          supervisorEmail: resolvedLevelOne!.email,
+          departmentHeadEmail: resolvedLevelTwo!.email,
           isActive: true,
         },
       },
@@ -501,6 +290,7 @@ export async function submitTravelBooking(
           referenceNo,
           submittedByEmail: submitterEmail,
           formData: formDataObj,
+          submittedAt: createdRequest.createdAt,
         });
         await RequestModel.updateOne(
           { _id: createdRequest._id },
@@ -544,7 +334,7 @@ export async function submitTravelBooking(
     const nextStepCopy = buildPendingStepNotificationCopy({
       formName: "Travel Booking",
       referenceNo,
-      role: "supervisor",
+      role: approvalChain[0]?.role || "supervisor",
     });
     const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
       preferredKeys: [
@@ -604,13 +394,13 @@ export async function submitTravelBooking(
         formSlug: "travel-booking",
         formName: "Travel Booking",
         event: "next-approver",
-        to: supervisor.email,
+        to: resolvedLevelOne!.email,
         subject: nextStepCopy.subject,
         summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
-          { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
+          { label: "Current role", value: resolvedLevelOne!.roles?.[0] || "Approver" },
           { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
@@ -659,17 +449,31 @@ export async function updateTravelBooking(
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
 
-    const [supervisor, head, processor] = await Promise.all([
+    const [supervisor, head, processor, configuredLevelOne, configuredLevelTwo] = await Promise.all([
       supervisorId ? Approver.findById(supervisorId).lean() : null,
       headId ? Approver.findById(headId).lean() : null,
       resolveAssignedProcessor({
         definition,
         existingProcessorEmail: doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "",
       }),
+      resolveConfiguredApprover({
+        approverId: definition?.levelOneApproverId,
+        approverEmail: definition?.levelOneApproverEmail,
+        label: "Level 1 approver",
+      }),
+      resolveConfiguredApprover({
+        approverId: definition?.levelTwoApproverId,
+        approverEmail: definition?.levelTwoApproverEmail,
+        label: "Level 2 approver",
+      }),
     ]);
 
-    if (!supervisor) throw new Error("Invalid Immediate Superior");
-    if (!head) throw new Error("Invalid Department Head");
+    if (!configuredLevelOne && !supervisor) throw new Error("Invalid Immediate Superior");
+    if (!configuredLevelTwo && !head) throw new Error("Invalid Department Head");
+    const resolvedLevelOne = configuredLevelOne ?? supervisor;
+    const resolvedLevelTwo = configuredLevelTwo ?? head;
+    const requiresCeoStep = Boolean(configuredLevelOne || configuredLevelTwo);
+    const ceoApprover = requiresCeoStep ? await resolveDefaultCeoApprover() : null;
 
     const activityFile = formData.get("activitySchedule");
     let activitySchedule: any = (doc as any).formData?.activitySchedule ?? null;
@@ -733,10 +537,10 @@ export async function updateTravelBooking(
       hotelAccommodation: s(formData, "hotelAccommodation"),
       hotelOther: s(formData, "hotelOther"),
       servicePickup: s(formData, "servicePickup"),
-      immediateSuperiorName: supervisor.name,
-      immediateSuperiorEmail: supervisor.email,
-      departmentHeadName: head.name,
-      departmentHeadEmail: head.email,
+      immediateSuperiorName: resolvedLevelOne!.name,
+      immediateSuperiorEmail: resolvedLevelOne!.email,
+      departmentHeadName: resolvedLevelTwo!.name,
+      departmentHeadEmail: resolvedLevelTwo!.email,
       activityScheduleFileName: s(formData, "activityScheduleFileName"),
       activitySchedule,
     };
@@ -749,20 +553,31 @@ export async function updateTravelBooking(
     const nextApprovalChain = [
       {
         step: 1,
-        role: "supervisor",
-        approverEmail: supervisor.email,
-        approverName: supervisor.name,
+        role: configuredLevelOne ? "level1" : "supervisor",
+        approverEmail: resolvedLevelOne!.email,
+        approverName: resolvedLevelOne!.name,
         status: "pending",
       },
       {
         step: 2,
-        role: "head",
-        approverEmail: head.email,
-        approverName: head.name,
+        role: configuredLevelTwo ? "level2" : "head",
+        approverEmail: resolvedLevelTwo!.email,
+        approverName: resolvedLevelTwo!.name,
         status: "waiting",
       },
+      ...(ceoApprover
+        ? [
+            {
+              step: 3,
+              role: "ceo",
+              approverEmail: ceoApprover.email,
+              approverName: ceoApprover.name,
+              status: "waiting",
+            },
+          ]
+        : []),
       {
-        step: 3,
+        step: ceoApprover ? 4 : 3,
         role: "processor",
         approverEmail: processor.email,
         approverName: processor.name,
@@ -817,8 +632,8 @@ export async function updateTravelBooking(
           department: formDataObj.department,
           contactNumber: formDataObj.contactNumber,
           birthday: formDataObj.birthday,
-          supervisorEmail: supervisor.email,
-          departmentHeadEmail: head.email,
+          supervisorEmail: resolvedLevelOne!.email,
+          departmentHeadEmail: resolvedLevelTwo!.email,
           isActive: true,
         },
       },
@@ -850,7 +665,7 @@ export async function updateTravelBooking(
     const nextStepCopy = buildPendingStepNotificationCopy({
       formName: "Travel Booking",
       referenceNo,
-      role: "supervisor",
+      role: nextApprovalChain[0]?.role || "supervisor",
     });
     const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
       preferredKeys: [
@@ -904,13 +719,13 @@ export async function updateTravelBooking(
         formSlug: "travel-booking",
         formName: "Travel Booking",
         event: "next-approver",
-        to: supervisor.email,
+        to: resolvedLevelOne!.email,
         subject: nextStepCopy.subject,
         summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
-          { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
+          { label: "Current role", value: resolvedLevelOne!.roles?.[0] || "Approver" },
           { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,

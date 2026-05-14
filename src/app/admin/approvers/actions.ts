@@ -7,6 +7,7 @@ import { syncEmployeesFromGraph } from "@/lib/employee-sync";
 import { setFlashToast } from "@/lib/flash";
 import { requireAdmin } from "@/lib/admin";
 import { Employee } from "@/models/Employee";
+import { FormDefinition } from "@/models/FormDefinition";
 import { Approver, APPROVER_ROLES, type ApproverRole } from "@/models/Approver";
 import { Lookup } from "@/models/Lookup";
 import { SystemSetting } from "@/models/SystemSetting";
@@ -275,6 +276,7 @@ export async function syncLookupDropdownsFromApprovers() {
         : "Dropdown sync complete: no role-driven dropdown changes were needed.",
   });
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
   revalidatePath("/admin/lookups");
 }
 
@@ -644,6 +646,37 @@ export async function updateApprover(formData: FormData) {
   doc.roles = roles;
   doc.emailNeedsReview = !profile.email;
   await doc.save();
+  const assignedProcessorFormSlugs = new Set<string>();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("assignedProcessorForm_")) continue;
+    if (String(value) !== "on") continue;
+    const slug = key.slice("assignedProcessorForm_".length).trim();
+    if (slug) assignedProcessorFormSlugs.add(slug);
+  }
+
+  const canHoldProcessorAssignments = doc.roles.includes("processor") && doc.isActive && Boolean(doc.email);
+  await FormDefinition.updateMany(
+    { processorApproverId: String(doc._id) },
+    {
+      $set: {
+        processorApproverId: "",
+        processorApproverName: "",
+        processorApproverEmail: "",
+      },
+    },
+  );
+  if (canHoldProcessorAssignments && assignedProcessorFormSlugs.size > 0) {
+    await FormDefinition.updateMany(
+      { slug: { $in: [...assignedProcessorFormSlugs] } },
+      {
+        $set: {
+          processorApproverId: String(doc._id),
+          processorApproverName: doc.name,
+          processorApproverEmail: doc.email,
+        },
+      },
+    );
+  }
   await syncAutoLookupRoles();
   await setFlashToast({
     tone: "success",

@@ -5,6 +5,11 @@ type ProcessorCapableForm = {
   processorApproverEmail?: string;
 };
 
+type ConfiguredApproverTarget = {
+  approverId?: string;
+  approverEmail?: string;
+};
+
 function normalizeKey(input: string) {
   return String(input ?? "")
     .toLowerCase()
@@ -79,4 +84,39 @@ export async function resolveAssignedProcessor(input: {
     throw new Error("No active processor configured. Ask an admin to assign one.");
   }
   return fallback;
+}
+
+export async function resolveConfiguredApprover(
+  input: ConfiguredApproverTarget & { label: string },
+) {
+  const configuredId = String(input.approverId ?? "").trim();
+  const configuredEmail = normalizeEmail(String(input.approverEmail ?? ""));
+  if (!configuredId && !configuredEmail) return null;
+
+  const configured =
+    (configuredId ? await Approver.findById(configuredId).lean() : null) ??
+    (configuredEmail ? await Approver.findOne({ email: configuredEmail }).lean() : null);
+
+  if (!configured) {
+    throw new Error(`${input.label} is invalid. Update the form settings.`);
+  }
+  if (!configured.isActive) {
+    throw new Error(`${input.label} is inactive. Update the form settings.`);
+  }
+  if (!String(configured.email ?? "").trim()) {
+    throw new Error(`${input.label} has no email address.`);
+  }
+
+  return configured;
+}
+
+export async function resolveDefaultCeoApprover() {
+  const ceo = await Approver.findOne({ roles: "ceo", isActive: true }).lean();
+  if (!ceo) {
+    throw new Error("No active CEO approver is configured. Assign the CEO role on the Approvers page.");
+  }
+  if (!String(ceo.email ?? "").trim()) {
+    throw new Error("The CEO approver is missing an email address.");
+  }
+  return ceo;
 }

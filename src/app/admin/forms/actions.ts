@@ -7,11 +7,18 @@ import { requireAdmin } from "@/lib/admin";
 import { writeAuditLog } from "@/lib/audit";
 import { connectMongo } from "@/lib/db/mongo";
 import { setFlashToast } from "@/lib/flash";
+import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import {
   appendSpreadsheetRow,
   readSpreadsheetMatrix,
   writeSpreadsheetRow,
 } from "@/lib/google/sheets";
+import {
+  buildTravelBookingSheetRow,
+  getNextTravelBookingRequestNumber,
+  loadTravelBookingResponseSheetState,
+  normalizeSpreadsheetId,
+} from "@/lib/travel-booking-sheet";
 import {
   deleteFormEverywhere as deleteFormEverywhereEntry,
   deleteFormDefinitionEntry,
@@ -86,6 +93,7 @@ const FIXED_ASSET_ITEM_CODE_HEADERS = [
   "PO NUMBER",
   "Email Status",
 ] as const;
+const TRAVEL_BOOKING_SLUG = "travel-booking";
 
 function norm(input: unknown) {
   return String(input ?? "").trim();
@@ -201,6 +209,103 @@ export async function backfillFixedAssetItemCodeSheet() {
   redirectToRegistry();
 }
 
+export async function backfillTravelBookingResponseSheet() {
+  try {
+    const { email } = await requireAdmin();
+    await connectMongo();
+
+    const definition = await getFormDefinitionBySlug(TRAVEL_BOOKING_SLUG);
+    if (!definition) {
+      throw new Error("Travel Booking form definition could not be found.");
+    }
+    if (!definition.writeResponsesToSheet) {
+      throw new Error("Travel Booking response-sheet sync is turned off in Forms Registry.");
+    }
+
+    const responseSpreadsheetId = normalizeSpreadsheetId(definition.responseSpreadsheetId || "");
+    if (!responseSpreadsheetId) {
+      throw new Error("Travel Booking response spreadsheet ID is not configured.");
+    }
+
+    const state = await loadTravelBookingResponseSheetState({
+      spreadsheetId: responseSpreadsheetId,
+      sheetTitle: String(definition.responseSheetName || "").trim() || "Travel Booking Responses",
+    });
+    const refColumnIndex = state.headers.findIndex(
+      (header) => String(header || "").trim().toLowerCase() === "ref #".toLowerCase(),
+    );
+    if (refColumnIndex < 0) {
+      throw new Error(`Travel Booking response sheet "${state.sheetTitle}" is missing the Ref # column.`);
+    }
+    const existingRefs = new Set(
+      state.matrix
+        .slice(1)
+        .map((row) => String(row?.[refColumnIndex] ?? "").trim().toUpperCase())
+        .filter(Boolean),
+    );
+
+    const requests = await RequestModel.find(
+      { formSlug: TRAVEL_BOOKING_SLUG },
+      {
+        referenceNo: 1,
+        submittedBy: 1,
+        formData: 1,
+        createdAt: 1,
+      },
+    )
+      .sort({ createdAt: 1 })
+      .lean();
+
+    let requestNumber = getNextTravelBookingRequestNumber(state.matrix, state.headers);
+    let inserted = 0;
+    for (const request of requests) {
+      const referenceNo = String(request.referenceNo || "").trim();
+      if (!referenceNo || existingRefs.has(referenceNo.toUpperCase())) continue;
+
+      await appendSpreadsheetRow({
+        spreadsheetId: state.spreadsheetId,
+        sheetTitle: state.sheetTitle,
+        values: [
+          ...buildTravelBookingSheetRow({
+            referenceNo,
+            requestNumber,
+            submittedByEmail: String((request as any).submittedBy?.email || "").trim(),
+            formData: (request as any).formData ?? {},
+            submittedAt: (request as any).createdAt ?? null,
+          }),
+          ...Array(state.extraColumnCount).fill(""),
+        ],
+      });
+
+      existingRefs.add(referenceNo.toUpperCase());
+      requestNumber += 1;
+      inserted += 1;
+    }
+
+    await setFlashToast({
+      tone: "success",
+      message: `Backfill complete. ${inserted} Travel Booking row(s) added to ${state.sheetTitle}.`,
+    });
+    await writeAuditLog({
+      actorEmail: email,
+      action: "backfill_travel_booking_response_sheet",
+      targetType: "spreadsheet",
+      targetId: state.spreadsheetId,
+      correlationId: randomUUID(),
+      details: {
+        inserted,
+        sheet: state.sheetTitle,
+        formSlug: TRAVEL_BOOKING_SLUG,
+      },
+    });
+    revalidateFormSurfaces();
+  } catch (error) {
+    console.error("backfillTravelBookingResponseSheet failed:", error);
+    await setFlashToast({ tone: "error", message: messageFromError(error) });
+  }
+  redirectToRegistry({ slug: TRAVEL_BOOKING_SLUG, openSettings: true });
+}
+
 export async function updateFormDefinition(formData: FormData) {
   const id = s(formData, "id");
   const slug = s(formData, "slug");
@@ -240,6 +345,8 @@ export async function updateFormDefinition(formData: FormData) {
       availability,
       showInNavbar: bool(formData, "showInNavbar"),
       isImplemented: bool(formData, "isImplemented"),
+      levelOneApproverId: s(formData, "levelOneApproverId"),
+      levelTwoApproverId: s(formData, "levelTwoApproverId"),
       processorApproverId: s(formData, "processorApproverId"),
       writeResponsesToSheet: bool(formData, "writeResponsesToSheet"),
       responseSpreadsheetId: s(formData, "responseSpreadsheetId"),

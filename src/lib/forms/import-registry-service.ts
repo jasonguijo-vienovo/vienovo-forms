@@ -594,6 +594,8 @@ export async function updateFormDefinitionSettings(input: {
   availability: FormDefinitionAvailability;
   showInNavbar: boolean;
   isImplemented: boolean;
+  levelOneApproverId: string;
+  levelTwoApproverId: string;
   processorApproverId: string;
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
@@ -618,6 +620,8 @@ export async function updateFormDefinitionSettings(input: {
   const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
   const normalizedResponseSpreadsheetId = normalizeSpreadsheetIdInput(input.responseSpreadsheetId);
   const normalizedTriggerUrl = normalizeTriggerUrl(input.triggerUrl);
+  const normalizedLevelOneApproverId = String(input.levelOneApproverId || "").trim();
+  const normalizedLevelTwoApproverId = String(input.levelTwoApproverId || "").trim();
   const normalizedProcessorApproverId = String(input.processorApproverId || "").trim();
   if (input.triggerEnabled && !normalizedTriggerUrl) {
     throw new Error("Turn off trigger automation or provide a valid trigger URL.");
@@ -636,6 +640,28 @@ export async function updateFormDefinitionSettings(input: {
 
   if (form.source === "imported" && input.requestedSlug !== form.slug) {
     await validateImportedSlugRename(form.slug, input.requestedSlug);
+  }
+
+  const levelOneApprover = normalizedLevelOneApproverId
+    ? await Approver.findById(normalizedLevelOneApproverId)
+        .select({ _id: 1, name: 1, email: 1, isActive: 1 })
+        .lean()
+    : null;
+  if (normalizedLevelOneApproverId) {
+    if (!levelOneApprover || !levelOneApprover.isActive || !String(levelOneApprover.email ?? "").trim()) {
+      throw new Error("Level 1 approver is invalid. Choose an active approver with an email address.");
+    }
+  }
+
+  const levelTwoApprover = normalizedLevelTwoApproverId
+    ? await Approver.findById(normalizedLevelTwoApproverId)
+        .select({ _id: 1, name: 1, email: 1, isActive: 1 })
+        .lean()
+    : null;
+  if (normalizedLevelTwoApproverId) {
+    if (!levelTwoApprover || !levelTwoApprover.isActive || !String(levelTwoApprover.email ?? "").trim()) {
+      throw new Error("Level 2 approver is invalid. Choose an active approver with an email address.");
+    }
   }
 
   const processorApprover = normalizedProcessorApproverId
@@ -698,6 +724,12 @@ export async function updateFormDefinitionSettings(input: {
           availability: input.availability,
           showInNavbar: input.showInNavbar,
           isImplemented: input.isImplemented,
+          levelOneApproverId: normalizedLevelOneApproverId,
+          levelOneApproverName: levelOneApprover ? String(levelOneApprover.name || "").trim() : "",
+          levelOneApproverEmail: levelOneApprover ? String(levelOneApprover.email || "").trim().toLowerCase() : "",
+          levelTwoApproverId: normalizedLevelTwoApproverId,
+          levelTwoApproverName: levelTwoApprover ? String(levelTwoApprover.name || "").trim() : "",
+          levelTwoApproverEmail: levelTwoApprover ? String(levelTwoApprover.email || "").trim().toLowerCase() : "",
           processorApproverId: normalizedProcessorApproverId,
           processorApproverName: processorApprover ? String(processorApprover.name || "").trim() : "",
           processorApproverEmail: processorApprover ? String(processorApprover.email || "").trim().toLowerCase() : "",

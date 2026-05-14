@@ -154,6 +154,17 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
     () => heads.find((h) => h.id === headId)?.email ?? "",
     [heads, headId]
   );
+  const travelLocationOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [...multiCityDepartures, ...airports]
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        ),
+      ),
+    [airports, multiCityDepartures],
+  );
 
   function validate(): string[] {
     const errs: string[] = [];
@@ -167,17 +178,17 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
       if (!mc1Origin) errs.push("Trip 1 From");
       if (!mc1Destination) errs.push("Trip 1 To");
       if (!mc1Date) errs.push("Trip 1 Departing On");
-      if (!mc1Time) errs.push("Trip 1 Preferred Time");
+      if (!mc1Time) errs.push("Trip 1 Preferred Time of Departure");
       if (!mc2Origin) errs.push("Trip 2 From");
       if (!mc2Destination) errs.push("Trip 2 To");
       if (!mc2Date) errs.push("Trip 2 Departing On");
-      if (!mc2Time) errs.push("Trip 2 Preferred Time");
+      if (!mc2Time) errs.push("Trip 2 Preferred Time of Departure");
     } else {
       if (!origin) errs.push("Origin");
       if (!destination) errs.push("Destination");
       if (!departureDate) errs.push("Departure Date");
       if (tripType === "roundtrip" && !returnDate) errs.push("Return Date");
-      if (!preferredTime) errs.push("Preferred Time");
+      if (!preferredTime) errs.push("Preferred Time of Departure");
     }
     if (!airline) errs.push("Airlines");
     if (!travelPurpose) errs.push("Travel Purpose");
@@ -396,10 +407,10 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <Field label="From (Origin)" required>
-                <SearchableSelect name="origin" value={origin} onChange={setOrigin} required placeholder="-- Select Origin --" options={airports.map((a) => ({ value: a, label: a }))} />
+                <SearchableSelect name="origin" value={origin} onChange={setOrigin} required placeholder="-- Select Origin --" options={travelLocationOptions.map((a) => ({ value: a, label: a }))} />
               </Field>
               <Field label="To (Destination)" required>
-                <SearchableSelect name="destination" value={destination} onChange={setDestination} required placeholder="-- Select Destination --" options={airports.map((a) => ({ value: a, label: a }))} />
+                <SearchableSelect name="destination" value={destination} onChange={setDestination} required placeholder="-- Select Destination --" options={travelLocationOptions.map((a) => ({ value: a, label: a }))} />
               </Field>
             </div>
 
@@ -428,7 +439,7 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
               )}
             </div>
 
-            <Field label="Preferred Time" required className="mt-4">
+            <Field label="Preferred Time of Departure" required className="mt-4">
               <input
                 type="time"
                 name="preferredTime"
@@ -447,8 +458,8 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
               destinationName="mc1Destination"
               dateName="mc1Date"
               timeName="mc1Time"
-              origins={multiCityDepartures}
-              destinations={airports}
+              origins={travelLocationOptions}
+              destinations={travelLocationOptions}
               origin={mc1Origin}
               setOrigin={setMc1Origin}
               destination={mc1Destination}
@@ -464,8 +475,8 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
               destinationName="mc2Destination"
               dateName="mc2Date"
               timeName="mc2Time"
-              origins={multiCityDepartures}
-              destinations={airports}
+              origins={travelLocationOptions}
+              destinations={travelLocationOptions}
               origin={mc2Origin}
               setOrigin={setMc2Origin}
               destination={mc2Destination}
@@ -800,7 +811,7 @@ function MultiCityLeg(props: {
             className="field-input"
           />
         </Field>
-        <Field label="Preferred Time" required>
+        <Field label="Preferred Time of Departure" required>
           <input
             type="time"
             name={props.timeName}

@@ -12,11 +12,15 @@ import { FormsRegistryClient } from "./FormsRegistryClient";
 export default async function AdminFormsPage() {
   const forms = await getAllFormDefinitionsForAdmin();
   await connectMongo();
-  const [imports, processors] = await Promise.all([
+  const [imports, processors, approvers] = await Promise.all([
     FormImport.find({}).select({ slug: 1 }).lean(),
     Approver.find({ roles: "processor" })
       .sort({ isActive: -1, name: 1 })
       .select({ _id: 1, name: 1, email: 1, isActive: 1 })
+      .lean(),
+    Approver.find({ isActive: true, email: { $ne: "" } })
+      .sort({ name: 1 })
+      .select({ _id: 1, name: 1, email: 1 })
       .lean(),
   ]);
 
@@ -38,6 +42,11 @@ export default async function AdminFormsPage() {
       statusOptions={[...FORM_DEFINITION_STATUSES]}
       visibilityOptions={[...FORM_DEFINITION_VISIBILITIES]}
       availabilityOptions={[...FORM_DEFINITION_AVAILABILITIES]}
+      approvalApproverOptions={approvers.map((item) => ({
+        _id: String(item._id),
+        name: item.name,
+        email: item.email,
+      }))}
       processorOptions={processors.map((item) => ({
         _id: String(item._id),
         name: item.name,
