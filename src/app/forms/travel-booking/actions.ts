@@ -18,6 +18,7 @@ import { syncRequestMirror } from "@/lib/request-mirror";
 import {
   appendSpreadsheetRow,
   ensureSpreadsheetSheet,
+  listSpreadsheetSheets,
   readSpreadsheetMatrix,
   writeSpreadsheetRow,
 } from "@/lib/google/sheets";
@@ -194,6 +195,35 @@ function getNextTravelBookingRequestNumber(rows: string[][], headers: string[]) 
   return maxValue + 1;
 }
 
+function headersMatchExpected(headers: string[], expectedHeaders: readonly string[]) {
+  return (
+    headers.length === expectedHeaders.length &&
+    expectedHeaders.every((header, index) => normalizeSheetHeader(headers[index]) === normalizeSheetHeader(header))
+  );
+}
+
+async function resolveTravelBookingSheetTitle(spreadsheetId: string, preferredSheetTitle: string) {
+  const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
+  const preferred = String(preferredSheetTitle || "").trim();
+  const sheetTitles = await listSpreadsheetSheets(spreadsheetId);
+
+  if (preferred && sheetTitles.includes(preferred)) {
+    const preferredHeaders = (await readSpreadsheetMatrix(spreadsheetId, `${preferred}!A1:Z1`))[0] ?? [];
+    if (headersMatchExpected(preferredHeaders, expectedHeaders) || preferredHeaders.length === 0) {
+      return preferred;
+    }
+  }
+
+  for (const title of sheetTitles) {
+    const headers = (await readSpreadsheetMatrix(spreadsheetId, `${title}!A1:Z1`))[0] ?? [];
+    if (headersMatchExpected(headers, expectedHeaders)) {
+      return title;
+    }
+  }
+
+  return preferred || "Travel Booking Responses";
+}
+
 async function appendTravelBookingResponseRow(input: {
   spreadsheetId: string;
   sheetTitle: string;
@@ -204,29 +234,34 @@ async function appendTravelBookingResponseRow(input: {
   const spreadsheetId = normalizeSpreadsheetId(input.spreadsheetId);
   if (!spreadsheetId) return;
 
-  await ensureSpreadsheetSheet(spreadsheetId, input.sheetTitle);
-  const matrix = await readSpreadsheetMatrix(spreadsheetId, `${input.sheetTitle}!A1:Z5000`);
+  const resolvedSheetTitle = await resolveTravelBookingSheetTitle(spreadsheetId, input.sheetTitle);
+  await ensureSpreadsheetSheet(spreadsheetId, resolvedSheetTitle);
+  const matrix = await readSpreadsheetMatrix(spreadsheetId, `${resolvedSheetTitle}!A1:Z5000`);
   const currentHeaders = (matrix[0] ?? []).map((cell) => String(cell ?? "").trim());
   const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
-  const headersMatch =
-    currentHeaders.length === expectedHeaders.length &&
-    expectedHeaders.every((header, index) => currentHeaders[index] === header);
+  const headersMatch = headersMatchExpected(currentHeaders, expectedHeaders);
   const requestNumber = getNextTravelBookingRequestNumber(
     matrix,
     currentHeaders.length > 0 ? currentHeaders : expectedHeaders,
   );
 
+  if (!headersMatch && currentHeaders.length > 0 && matrix.slice(1).some((row) => row.some((cell) => String(cell || "").trim()))) {
+    throw new Error(
+      `Existing sheet "${resolvedSheetTitle}" does not match the expected Travel Booking headers. Update the response sheet tab in Forms Registry or align the sheet headers first.`,
+    );
+  }
+
   if (!headersMatch) {
     await writeSpreadsheetRow({
       spreadsheetId,
-      range: `${input.sheetTitle}!A1`,
+      range: `${resolvedSheetTitle}!A1`,
       values: expectedHeaders,
     });
   }
 
   await appendSpreadsheetRow({
     spreadsheetId,
-    sheetTitle: input.sheetTitle,
+    sheetTitle: resolvedSheetTitle,
     values: buildTravelBookingSheetRow({
       referenceNo: input.referenceNo,
       requestNumber,
