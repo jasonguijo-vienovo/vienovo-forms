@@ -19,7 +19,12 @@ import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-s
 import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { RequestModel } from "@/models/Request";
-import { buildNotificationDetailsFromFieldMap, cashAdvanceFieldMap, diffFields } from "@/lib/request-fields";
+import {
+  buildAttachmentDetails,
+  buildNotificationDetailsFromFieldMap,
+  cashAdvanceFieldMap,
+  diffFields,
+} from "@/lib/request-fields";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -72,6 +77,7 @@ export async function submitCashAdvance(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "cash-advance",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -206,10 +212,19 @@ export async function submitCashAdvance(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
+    const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
     const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
       preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
       maxRows: 8,
     });
+    const attachmentDetails = buildAttachmentDetails([
+      {
+        label: "Supporting document",
+        fileName: supportingDocument?.fileName || formDataObj.supportingFileName,
+        url: supportingDocument?.driveWebViewLink,
+      },
+    ]);
     await setFlashToast({ tone: "success", message: `Cash Advance submitted: ${referenceNo}` });
 
     try {
@@ -217,18 +232,47 @@ export async function submitCashAdvance(
         formSlug: "cash-advance",
         formName: "Cash Advance",
         event: "submitted",
-        to: [approver.email, processor.email, submitterEmail],
+        to: [processor.email, submitterEmail],
         subject: `Cash Advance request submitted (${referenceNo})`,
         summary: "A Cash Advance request has been submitted and is now in the workflow queue.",
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           ...notificationDetails,
+          ...attachmentDetails,
         ],
         text:
           `A Cash Advance request has been submitted.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
+      await sendFlowNotification({
+        formSlug: "cash-advance",
+        formName: "Cash Advance",
+        event: "next-approver",
+        to: approver.email,
+        subject: `Cash Advance request needs your approval (${referenceNo})`,
+        summary: "A Cash Advance request is waiting for your approval.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current role", value: approver.roles?.[0] || "Approver" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Cash Advance request is waiting for your approval.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: approvalPageUrl || requestUrl,
+        ctaLabel: "Open approval page",
+        approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+        rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+        commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+        viewAllUrl: approvalsUrl || requestUrl,
       });
     } catch (e) {
       console.error("Email notification failed:", e);
@@ -283,6 +327,7 @@ export async function updateCashAdvance(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "cash-advance",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -397,6 +442,19 @@ export async function updateCashAdvance(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
+    const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
+      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
+      maxRows: 8,
+    });
+    const attachmentDetails = buildAttachmentDetails([
+      {
+        label: "Supporting document",
+        fileName: supportingDocument?.fileName || formDataObj.supportingFileName,
+        url: supportingDocument?.driveWebViewLink,
+      },
+    ]);
     await setFlashToast({ tone: "success", message: `Cash Advance updated: ${referenceNo}` });
 
     try {
@@ -404,12 +462,47 @@ export async function updateCashAdvance(
         formSlug: "cash-advance",
         formName: "Cash Advance",
         event: "resubmitted",
-        to: [approver.email, submitterEmail],
+        to: [submitterEmail],
         subject: `Cash Advance request updated (${referenceNo})`,
+        summary: "Your Cash Advance request was updated and sent back into the approval workflow.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
         text:
           `A Cash Advance request has been updated and returned to Step 1 for approval.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
+      await sendFlowNotification({
+        formSlug: "cash-advance",
+        formName: "Cash Advance",
+        event: "next-approver",
+        to: approver.email,
+        subject: `Cash Advance request needs your approval (${referenceNo})`,
+        summary: "A Cash Advance request was updated and is back at your approval step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current role", value: approver.roles?.[0] || "Approver" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Cash Advance request has been updated and is back at your approval step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: approvalPageUrl || requestUrl,
+        ctaLabel: "Open approval page",
+        approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+        rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+        commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+        viewAllUrl: approvalsUrl || requestUrl,
       });
     } catch (e) {
       console.error("Email notification failed:", e);

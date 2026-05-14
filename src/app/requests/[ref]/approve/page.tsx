@@ -51,8 +51,12 @@ export default async function ApproveRequestPage({
             <p className="text-xs text-gray-500 mt-1">{current.approverEmail}</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
-            <form action={approveAction} className="space-y-2">
+          <div id="comment" className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 scroll-mt-24">
+            Leave a note in any box below, then choose the action you want to take.
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+            <form id="approve" action={approveAction} className="space-y-2 scroll-mt-24">
               <PendingFormState className="space-y-2">
                 <textarea
                   name="comment"
@@ -68,7 +72,7 @@ export default async function ApproveRequestPage({
               </PendingFormState>
             </form>
 
-            <form action={rejectAction} className="space-y-2">
+            <form id="reject" action={rejectAction} className="space-y-2 scroll-mt-24">
               <PendingFormState className="space-y-2">
                 <textarea
                   name="comment"
@@ -84,7 +88,7 @@ export default async function ApproveRequestPage({
               </PendingFormState>
             </form>
 
-            <form action={returnAction} className="space-y-2">
+            <form id="return" action={returnAction} className="space-y-2 scroll-mt-24">
               <PendingFormState className="space-y-2">
                 <textarea
                   name="comment"

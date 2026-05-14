@@ -7,6 +7,13 @@ export type FieldMap = Record<string, string>;
 export type NotificationDetailRow = {
   label: string;
   value: string;
+  href?: string;
+};
+
+export type NotificationAttachmentInput = {
+  label: string;
+  fileName?: string;
+  url?: string;
 };
 
 const NOTIFICATION_LABELS: Record<string, string> = {
@@ -57,6 +64,14 @@ function s(v: unknown) {
   return String(v);
 }
 
+function normalizeKey(input: string) {
+  return String(input ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function isHttpUrl(input: string) {
+  return /^https?:\/\//i.test(String(input ?? "").trim());
+}
+
 function humanizeFieldKey(key: string) {
   const mapped = NOTIFICATION_LABELS[key];
   if (mapped) return mapped;
@@ -101,6 +116,167 @@ export function buildNotificationDetailsFromFieldMap(
   }
 
   return rows.slice(0, maxRows);
+}
+
+export function buildAttachmentDetails(items: NotificationAttachmentInput[]): NotificationDetailRow[] {
+  const normalized = items
+    .map((item) => ({
+      label: s(item.label) || "Attachment",
+      fileName: s(item.fileName),
+      url: s(item.url),
+    }))
+    .filter((item) => item.fileName || item.url);
+
+  if (normalized.length === 0) {
+    return [{ label: "Attachment", value: "None" }];
+  }
+
+  const rows: NotificationDetailRow[] = [];
+  for (const item of normalized) {
+    rows.push({
+      label: item.label,
+      value: item.fileName || "Attached file",
+    });
+    rows.push({
+      label: `${item.label} Link`,
+      value: item.url || "None",
+      ...(item.url ? { href: item.url } : {}),
+    });
+  }
+  return rows;
+}
+
+function findImportedValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
+  const wanted = aliases.map(normalizeKey);
+  for (const [key, rawValue] of Object.entries(values ?? {})) {
+    const keyNorm = normalizeKey(key);
+    const labelNorm = normalizeKey(labels?.[key] ?? "");
+    if (wanted.some((alias) => alias === keyNorm || alias === labelNorm)) {
+      return s(rawValue);
+    }
+  }
+  return "";
+}
+
+export function buildImportedAttachmentDetails(formData: any): NotificationDetailRow[] {
+  const labels: Record<string, string> = formData?.fieldLabels ?? {};
+  const values: Record<string, unknown> = formData?.values ?? {};
+
+  const attachmentUrl =
+    findImportedValue(
+      values,
+      labels,
+      "attachmenturl",
+      "attachment url",
+      "supportingdocument",
+      "supporting document",
+      "supportingdrivelink",
+      "supporting drive link",
+      "activitydrivelink",
+      "activity drive link",
+      "filelink",
+      "file link",
+    ) || "";
+  const attachmentName =
+    findImportedValue(
+      values,
+      labels,
+      "attachmentname",
+      "attachment name",
+      "attachmentfilename",
+      "attachment file name",
+      "supportingfilename",
+      "supporting file name",
+      "activityschedulefilename",
+      "activity schedule file name",
+    ) || "";
+
+  return buildAttachmentDetails(
+    isHttpUrl(attachmentUrl)
+      ? [{ label: "Attachment", fileName: attachmentName || "Attached file", url: attachmentUrl }]
+      : [],
+  );
+}
+
+export function buildStoredRequestSummaryDetails(formSlug: string, formData: any): NotificationDetailRow[] {
+  if (formSlug === "cash-advance") {
+    return buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formData), {
+      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
+      maxRows: 8,
+    });
+  }
+  if (formSlug === "reimbursement") {
+    return buildNotificationDetailsFromFieldMap(reimbursementFieldMap(formData), {
+      preferredKeys: [
+        "firstName",
+        "lastName",
+        "department",
+        "costCenter",
+        "location",
+        "totalExpenses",
+        "formType",
+        "cashAdvanceReferenceNo",
+        "reason",
+      ],
+      maxRows: 10,
+    });
+  }
+  if (formSlug === "travel-booking") {
+    return buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formData), {
+      preferredKeys: [
+        "fullName",
+        "employeeId",
+        "department",
+        "landAir",
+        "tripType",
+        "origin",
+        "destination",
+        "departureDate",
+        "returnDate",
+        "travelPurpose",
+      ],
+      omitKeys: ["birthday", "contactNumber"],
+      maxRows: 10,
+    });
+  }
+  if (formData?.values && formData?.fieldLabels) {
+    return buildNotificationDetailsFromFieldMap(importedFieldMap(formData), { maxRows: 12 });
+  }
+  return [];
+}
+
+export function buildStoredRequestAttachmentDetails(formSlug: string, formData: any): NotificationDetailRow[] {
+  if (formSlug === "cash-advance") {
+    return buildAttachmentDetails([
+      {
+        label: "Supporting document",
+        fileName: s(formData?.supportingDocument?.fileName) || s(formData?.supportingFileName),
+        url: s(formData?.supportingDocument?.driveWebViewLink),
+      },
+    ]);
+  }
+  if (formSlug === "reimbursement") {
+    return buildAttachmentDetails([
+      {
+        label: "Supporting document",
+        fileName: s(formData?.supportingDocument?.fileName) || s(formData?.supportingFileName),
+        url: s(formData?.supportingDocument?.driveWebViewLink),
+      },
+    ]);
+  }
+  if (formSlug === "travel-booking") {
+    return buildAttachmentDetails([
+      {
+        label: "Activity schedule",
+        fileName: s(formData?.activitySchedule?.fileName) || s(formData?.activityScheduleFileName),
+        url: s(formData?.activitySchedule?.driveWebViewLink),
+      },
+    ]);
+  }
+  if (formData?.values && formData?.fieldLabels) {
+    return buildImportedAttachmentDetails(formData);
+  }
+  return [{ label: "Attachment", value: "None" }];
 }
 
 export function formatMoney(v: unknown) {

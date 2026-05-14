@@ -5,6 +5,10 @@ import { findActiveDelegation } from "@/lib/approval-delegations";
 import { getFormDefinitionBySlug } from "@/lib/form-definitions";
 import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
+import {
+  buildStoredRequestAttachmentDetails,
+  buildStoredRequestSummaryDetails,
+} from "@/lib/request-fields";
 import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
 import { RequestModel } from "@/models/Request";
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
@@ -211,13 +215,10 @@ export async function applyApprovalDecision({
   const nextApprover = approvalChain.find((step) => step.step === nextStep) ?? null;
   const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
   const requestUrl = appUrl ? `${appUrl}/requests/${encodeURIComponent(normalizedReference)}` : "";
+  const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
   const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
-  const approveActionUrl = appUrl
-    ? `${appUrl}/approvals?ref=${encodeURIComponent(normalizedReference)}&action=approve`
-    : "";
-  const rejectActionUrl = appUrl
-    ? `${appUrl}/approvals?ref=${encodeURIComponent(normalizedReference)}&action=reject`
-    : "";
+  const summaryDetails = buildStoredRequestSummaryDetails(String(formSlug || ""), (doc as any).formData ?? {});
+  const attachmentDetails = buildStoredRequestAttachmentDetails(String(formSlug || ""), (doc as any).formData ?? {});
 
   try {
     if (isApprove) {
@@ -234,13 +235,16 @@ export async function applyApprovalDecision({
             { label: "Requester", value: doc.submittedBy?.name || doc.submittedBy?.email || "" },
             { label: "Current role", value: nextApprover.role || "" },
             { label: "Status", value: "Pending approval" },
+            ...summaryDetails,
+            ...attachmentDetails,
           ].filter((detail) => detail.value),
           text:
             `${formName} request ${normalizedReference} moved to your approval step.\n\n`,
-          ctaUrl: approvalsUrl || requestUrl,
-          ctaLabel: "View all approval views",
-          approveUrl: approveActionUrl || `${requestUrl}/approve`,
-          rejectUrl: rejectActionUrl || `${requestUrl}/approve`,
+          ctaUrl: approvalPageUrl || requestUrl,
+          ctaLabel: "Open approval page",
+          approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+          rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+          commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
           viewAllUrl: approvalsUrl || requestUrl,
         });
       } else if (submittedByEmail) {
@@ -254,11 +258,15 @@ export async function applyApprovalDecision({
           details: [
             { label: "Reference No.", value: normalizedReference },
             { label: "Status", value: "Approved" },
+            ...summaryDetails,
+            ...attachmentDetails,
           ],
           text:
             `Your ${formName} request has been fully approved.\n\n` +
             `Reference: ${normalizedReference}\n` +
             (requestUrl ? `Link: ${requestUrl}\n` : ""),
+          ctaUrl: requestUrl,
+          ctaLabel: "Open request",
         });
       }
     } else if (isReturn && submittedByEmail) {
@@ -274,6 +282,8 @@ export async function applyApprovalDecision({
           { label: "Status", value: "Returned for correction" },
           { label: "Current role", value: current.role || "" },
           { label: "Correction note", value: note },
+          ...summaryDetails,
+          ...attachmentDetails,
         ].filter((detail) => detail.value),
         text:
           `Your ${formName} request was returned for correction.\n\n` +
@@ -295,12 +305,16 @@ export async function applyApprovalDecision({
           { label: "Reference No.", value: normalizedReference },
           { label: "Status", value: "Rejected" },
           ...(note ? [{ label: "Comment", value: note }] : []),
+          ...summaryDetails,
+          ...attachmentDetails,
         ],
         text:
           `Your ${formName} request was rejected.\n\n` +
           `Reference: ${normalizedReference}\n` +
           (note ? `Comment: ${note}\n` : "") +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
       });
     }
   } catch (error) {

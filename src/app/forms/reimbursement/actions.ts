@@ -20,7 +20,12 @@ import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
-import { buildNotificationDetailsFromFieldMap, diffFields, reimbursementFieldMap } from "@/lib/request-fields";
+import {
+  buildAttachmentDetails,
+  buildNotificationDetailsFromFieldMap,
+  diffFields,
+  reimbursementFieldMap,
+} from "@/lib/request-fields";
 import {
   REIMBURSEMENT_EXPENSE_ACCOUNTS,
   reimbursementExpenseFieldName,
@@ -154,6 +159,7 @@ export async function submitReimbursement(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "reimbursement",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -306,6 +312,8 @@ export async function submitReimbursement(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
+    const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
     const notificationDetails = buildNotificationDetailsFromFieldMap(reimbursementFieldMap(formDataObj), {
       preferredKeys: [
         "firstName",
@@ -320,6 +328,13 @@ export async function submitReimbursement(
       ],
       maxRows: 10,
     });
+    const attachmentDetails = buildAttachmentDetails([
+      {
+        label: "Supporting document",
+        fileName: supportingDocument?.fileName || formDataObj.supportingFileName,
+        url: supportingDocument?.driveWebViewLink,
+      },
+    ]);
     await setFlashToast({ tone: "success", message: `Reimbursement submitted: ${referenceNo}` });
 
     try {
@@ -327,18 +342,47 @@ export async function submitReimbursement(
         formSlug: "reimbursement",
         formName: "Reimbursement",
         event: "submitted",
-        to: [supervisor.email, processor.email, submitterEmail],
+        to: [processor.email, submitterEmail],
         subject: `Reimbursement request submitted (${referenceNo})`,
         summary: "A Reimbursement request has been submitted and is waiting in the approval workflow.",
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           ...notificationDetails,
+          ...attachmentDetails,
         ],
         text:
           `A Reimbursement request has been submitted.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
+      await sendFlowNotification({
+        formSlug: "reimbursement",
+        formName: "Reimbursement",
+        event: "next-approver",
+        to: supervisor.email,
+        subject: `Reimbursement request needs your approval (${referenceNo})`,
+        summary: "A Reimbursement request is waiting for your approval.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Reimbursement request is waiting for your approval.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: approvalPageUrl || requestUrl,
+        ctaLabel: "Open approval page",
+        approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+        rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+        commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+        viewAllUrl: approvalsUrl || requestUrl,
       });
     } catch (e) {
       console.error("Email notification failed:", e);
@@ -420,6 +464,7 @@ export async function updateReimbursement(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "reimbursement",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -539,6 +584,29 @@ export async function updateReimbursement(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
+    const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const notificationDetails = buildNotificationDetailsFromFieldMap(reimbursementFieldMap(formDataObj), {
+      preferredKeys: [
+        "firstName",
+        "lastName",
+        "department",
+        "costCenter",
+        "location",
+        "totalExpenses",
+        "formType",
+        "cashAdvanceReferenceNo",
+        "reason",
+      ],
+      maxRows: 10,
+    });
+    const attachmentDetails = buildAttachmentDetails([
+      {
+        label: "Supporting document",
+        fileName: supportingDocument?.fileName || formDataObj.supportingFileName,
+        url: supportingDocument?.driveWebViewLink,
+      },
+    ]);
     await setFlashToast({ tone: "success", message: `Reimbursement updated: ${referenceNo}` });
 
     try {
@@ -546,12 +614,47 @@ export async function updateReimbursement(
         formSlug: "reimbursement",
         formName: "Reimbursement",
         event: "resubmitted",
-        to: [supervisor.email, submitterEmail],
+        to: [submitterEmail],
         subject: `Reimbursement request updated (${referenceNo})`,
+        summary: "Your Reimbursement request was updated and sent back into the approval workflow.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
         text:
           `A Reimbursement request has been updated and returned to Step 1.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
+      await sendFlowNotification({
+        formSlug: "reimbursement",
+        formName: "Reimbursement",
+        event: "next-approver",
+        to: supervisor.email,
+        subject: `Reimbursement request needs your approval (${referenceNo})`,
+        summary: "A Reimbursement request was updated and is back at your approval step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Reimbursement request has been updated and is back at your approval step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: approvalPageUrl || requestUrl,
+        ctaLabel: "Open approval page",
+        approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+        rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+        commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+        viewAllUrl: approvalsUrl || requestUrl,
       });
     } catch (e) {
       console.error("Email notification failed:", e);

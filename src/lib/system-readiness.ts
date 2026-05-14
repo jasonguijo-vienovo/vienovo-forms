@@ -16,20 +16,23 @@ function hasValue(value: string | undefined) {
 }
 
 export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
+  const googleServiceAccountReady = Boolean(
+    (hasValue(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) && hasValue(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY)) ||
+      hasValue(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH),
+  );
   const smtpReady = Boolean(
     hasValue(process.env.SMTP_USER) &&
       hasValue(process.env.SMTP_PASS) &&
       hasValue(process.env.SMTP_FROM),
   );
   const sheetsReady = Boolean(
-    hasValue(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH) &&
+    googleServiceAccountReady &&
       hasValue(process.env.GOOGLE_SHEETS_MASTER_ID),
   );
 
   const attachmentStorageReady = Boolean(
-    hasValue(process.env.CLOUDINARY_CLOUD_NAME) &&
-      hasValue(process.env.CLOUDINARY_API_KEY) &&
-      hasValue(process.env.CLOUDINARY_API_SECRET),
+    googleServiceAccountReady &&
+      hasValue(process.env.GOOGLE_DRIVE_ATTACHMENTS_ROOT_FOLDER_ID),
   );
 
   const entraReady = Boolean(
@@ -81,12 +84,12 @@ export function getSystemReadinessSnapshot(): SystemReadinessSnapshot {
         : "Missing GOOGLE_SERVICE_ACCOUNT_KEY_PATH or GOOGLE_SHEETS_MASTER_ID.",
     },
     {
-      key: "cloudinary",
-      label: "Cloudinary",
+      key: "drive-attachments",
+      label: "Drive attachments",
       ready: attachmentStorageReady,
       detail: attachmentStorageReady
-        ? "Cloudinary cloud name, API key, and API secret are set for attachments."
-        : "Missing CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, or CLOUDINARY_API_SECRET.",
+        ? "Service account credentials and the Drive attachments root folder ID are set."
+        : "Missing Drive service account credentials or GOOGLE_DRIVE_ATTACHMENTS_ROOT_FOLDER_ID.",
     },
     {
       key: "auth",
