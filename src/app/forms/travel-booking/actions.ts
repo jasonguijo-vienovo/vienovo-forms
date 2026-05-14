@@ -197,7 +197,7 @@ function getNextTravelBookingRequestNumber(rows: string[][], headers: string[]) 
 
 function headersMatchExpected(headers: string[], expectedHeaders: readonly string[]) {
   return (
-    headers.length === expectedHeaders.length &&
+    headers.length >= expectedHeaders.length &&
     expectedHeaders.every((header, index) => normalizeSheetHeader(headers[index]) === normalizeSheetHeader(header))
   );
 }
@@ -230,9 +230,11 @@ async function appendTravelBookingResponseRow(input: {
   referenceNo: string;
   submittedByEmail: string;
   formData: any;
-}) {
+}): Promise<{ spreadsheetId: string; sheetTitle: string }> {
   const spreadsheetId = normalizeSpreadsheetId(input.spreadsheetId);
-  if (!spreadsheetId) return;
+  if (!spreadsheetId) {
+    throw new Error("Travel Booking response spreadsheet ID is not configured.");
+  }
 
   const resolvedSheetTitle = await resolveTravelBookingSheetTitle(spreadsheetId, input.sheetTitle);
   await ensureSpreadsheetSheet(spreadsheetId, resolvedSheetTitle);
@@ -262,13 +264,21 @@ async function appendTravelBookingResponseRow(input: {
   await appendSpreadsheetRow({
     spreadsheetId,
     sheetTitle: resolvedSheetTitle,
-    values: buildTravelBookingSheetRow({
-      referenceNo: input.referenceNo,
-      requestNumber,
-      submittedByEmail: input.submittedByEmail,
-      formData: input.formData,
-    }),
+    values: [
+      ...buildTravelBookingSheetRow({
+        referenceNo: input.referenceNo,
+        requestNumber,
+        submittedByEmail: input.submittedByEmail,
+        formData: input.formData,
+      }),
+      ...Array(Math.max(currentHeaders.length - expectedHeaders.length, 0)).fill(""),
+    ],
   });
+
+  return {
+    spreadsheetId,
+    sheetTitle: resolvedSheetTitle,
+  };
 }
 
 export async function submitTravelBooking(
@@ -434,6 +444,8 @@ export async function submitTravelBooking(
       approvalChain,
       currentStep: 1,
       status: "pending",
+      responseSpreadsheetId: String(definition.responseSpreadsheetId || "").trim(),
+      responseSheetName: String(definition.responseSheetName || "").trim(),
       history,
       ...queueFields,
     });
@@ -482,16 +494,42 @@ export async function submitTravelBooking(
         "";
       const sheetTitle = definition.responseSheetName?.trim() || "Travel Booking Responses";
       if (definition.writeResponsesToSheet && responseSpreadsheetId) {
-        await appendTravelBookingResponseRow({
+        const sheetWrite = await appendTravelBookingResponseRow({
           spreadsheetId: responseSpreadsheetId,
           sheetTitle,
           referenceNo,
           submittedByEmail: submitterEmail,
           formData: formDataObj,
         });
+        await RequestModel.updateOne(
+          { _id: createdRequest._id },
+          {
+            $set: {
+              responseSpreadsheetId: sheetWrite.spreadsheetId,
+              responseSheetName: sheetWrite.sheetTitle,
+              sheetStatusSyncedAt: new Date(),
+              sheetStatusSyncError: "",
+            },
+          },
+        );
       }
     } catch (error) {
       console.error("Travel Booking response export failed:", error);
+      await RequestModel.updateOne(
+        { _id: createdRequest._id },
+        {
+          $set: {
+            responseSpreadsheetId:
+              normalizeSpreadsheetId(definition.responseSpreadsheetId?.trim() || "") ||
+              process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+              process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+              "",
+            responseSheetName: definition.responseSheetName?.trim() || "Travel Booking Responses",
+            sheetStatusSyncedAt: null,
+            sheetStatusSyncError: error instanceof Error ? error.message : "Unknown response export error",
+          },
+        },
+      );
     }
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
