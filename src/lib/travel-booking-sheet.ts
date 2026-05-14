@@ -61,7 +61,49 @@ function formatSheetTimestamp(value: Date) {
 
 function formatSheetDate(value: Date | null | undefined) {
   if (!value) return "";
-  return new Date(value).toISOString().slice(0, 10);
+  return formatDateValue(value);
+}
+
+function formatDateValue(value: Date | string | null | undefined) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[2]}/${isoMatch[3]}/${isoMatch[1]}`;
+  }
+
+  const date = value instanceof Date ? value : new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  const iso = date.toISOString().slice(0, 10);
+  return `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
+}
+
+function formatTimeValue(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const twelveHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
+  if (twelveHourMatch) {
+    const hour = Number.parseInt(twelveHourMatch[1], 10);
+    const minute = twelveHourMatch[2];
+    const second = twelveHourMatch[3] || "00";
+    const meridiem = twelveHourMatch[4].toUpperCase();
+    return `${String(hour).padStart(2, "0")}:${minute}:${second} ${meridiem}`;
+  }
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (twentyFourHourMatch) {
+    const hour24 = Number.parseInt(twentyFourHourMatch[1], 10);
+    const minute = twentyFourHourMatch[2];
+    const second = twentyFourHourMatch[3] || "00";
+    if (hour24 >= 0 && hour24 <= 23) {
+      const meridiem = hour24 >= 12 ? "PM" : "AM";
+      const hour12 = hour24 % 12 || 12;
+      return `${String(hour12).padStart(2, "0")}:${minute}:${second} ${meridiem}`;
+    }
+  }
+
+  return raw;
 }
 
 function joinNonEmpty(parts: Array<string | null | undefined>, separator: string) {
@@ -79,7 +121,7 @@ function buildTravelBookingMultiCityText(multiCity: any) {
 function buildTravelBookingMultiCityDates(multiCity: any) {
   const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
   return joinNonEmpty(
-    trips.map((trip: any) => formatSheetDate(trip?.date ? new Date(trip.date) : null)),
+    trips.map((trip: any) => formatDateValue(trip?.date)),
     " | ",
   );
 }
@@ -87,7 +129,7 @@ function buildTravelBookingMultiCityDates(multiCity: any) {
 function buildTravelBookingMultiCityTimes(multiCity: any) {
   const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
   return joinNonEmpty(
-    trips.map((trip: any) => trip?.time),
+    trips.map((trip: any) => formatTimeValue(trip?.time)),
     " | ",
   );
 }
@@ -115,11 +157,11 @@ export function buildTravelBookingSheetRow(input: {
     input.referenceNo,
     input.submittedByEmail,
     String(formData.fullName || "").trim(),
-    formatSheetDate(formData.birthday ? new Date(formData.birthday) : null),
+    formatDateValue(formData.birthday),
     String(formData.origin || "").trim(),
     String(formData.destination || "").trim(),
-    formatSheetDate(formData.departureDate ? new Date(formData.departureDate) : null),
-    String(formData.preferredTime || "").trim(),
+    formatDateValue(formData.departureDate),
+    formatTimeValue(formData.preferredTime),
     buildTravelBookingMultiCityText(formData.multiCity),
     buildTravelBookingMultiCityDates(formData.multiCity),
     buildTravelBookingMultiCityTimes(formData.multiCity),
