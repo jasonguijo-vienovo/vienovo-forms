@@ -15,8 +15,14 @@ import { sendFlowNotification } from "@/lib/notifications/flow";
 import { deriveRequestQueueFields } from "@/lib/request-queue";
 import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
-import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
+import {
+  appendSpreadsheetRow,
+  ensureSpreadsheetSheet,
+  readSpreadsheetMatrix,
+  writeSpreadsheetRow,
+} from "@/lib/google/sheets";
 import { uploadAttachment } from "@/lib/storage/attachments";
+import { buildPendingStepNotificationCopy, resolveAssignedProcessor } from "@/lib/workflow-routing";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -34,6 +40,200 @@ function s(formData: FormData, key: string) {
 function d(formData: FormData, key: string) {
   const v = s(formData, key);
   return v ? new Date(v) : null;
+}
+
+const TRAVEL_BOOKING_RESPONSE_HEADERS = [
+  "Timestamp",
+  "Status",
+  "Ref #",
+  "Email Address",
+  "Full Name",
+  "Birthday",
+  "Origin",
+  "Destination To",
+  "Departure Date",
+  "Preferred Time of Departure",
+  "Multi City Departure (Optional)",
+  "Multi City Deaprture Date (Optional)",
+  "Preferred Time of Departure ",
+  "Airlines",
+  "Travel Purpose",
+  "Baggage (Kg)",
+  "Hotel Accommodation",
+  "Immediate Superior",
+  "Department Head",
+  "Contact Number",
+  "SERVICE/PICKUP",
+  "Land/Air",
+  "ID NUMBER",
+  "Activity Schedule",
+  "Department",
+  "Request #",
+] as const;
+
+function normalizeSpreadsheetId(input: string) {
+  const value = String(input || "").trim();
+  if (!value) return "";
+  const match = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match?.[1] || value;
+}
+
+function normalizeSheetHeader(input: string) {
+  return String(input || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function formatSheetTimestamp(value: Date) {
+  return value.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
+}
+
+function formatSheetDate(value: Date | null | undefined) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function joinNonEmpty(parts: Array<string | null | undefined>, separator: string) {
+  return parts.map((part) => String(part || "").trim()).filter(Boolean).join(separator);
+}
+
+function buildTravelBookingMultiCityText(multiCity: any) {
+  const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
+  return joinNonEmpty(
+    trips.map((trip: any) => joinNonEmpty([trip?.origin, trip?.destination], " -> ")),
+    " | ",
+  );
+}
+
+function buildTravelBookingMultiCityDates(multiCity: any) {
+  const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
+  return joinNonEmpty(
+    trips.map((trip: any) => formatSheetDate(trip?.date ? new Date(trip.date) : null)),
+    " | ",
+  );
+}
+
+function buildTravelBookingMultiCityTimes(multiCity: any) {
+  const trips = [multiCity?.trip1, multiCity?.trip2].filter(Boolean);
+  return joinNonEmpty(
+    trips.map((trip: any) => trip?.time),
+    " | ",
+  );
+}
+
+function buildTravelBookingSheetRow(input: {
+  referenceNo: string;
+  requestNumber: number;
+  submittedByEmail: string;
+  formData: any;
+}) {
+  const formData = input.formData ?? {};
+  const hotelAccommodation = joinNonEmpty(
+    [
+      formData.hotelAccommodation,
+      formData.hotelOther,
+    ],
+    formData.hotelAccommodation && formData.hotelOther ? " - " : "",
+  );
+  const attachmentValue =
+    String(formData?.activitySchedule?.driveWebViewLink || "").trim() ||
+    String(formData?.activitySchedule?.fileName || "").trim() ||
+    String(formData?.activityScheduleFileName || "").trim();
+  const requestNumberText = String(input.requestNumber);
+
+  return [
+    formatSheetTimestamp(new Date()),
+    "pending",
+    input.referenceNo,
+    input.submittedByEmail,
+    String(formData.fullName || "").trim(),
+    formatSheetDate(formData.birthday ? new Date(formData.birthday) : null),
+    String(formData.origin || "").trim(),
+    String(formData.destination || "").trim(),
+    formatSheetDate(formData.departureDate ? new Date(formData.departureDate) : null),
+    String(formData.preferredTime || "").trim(),
+    buildTravelBookingMultiCityText(formData.multiCity),
+    buildTravelBookingMultiCityDates(formData.multiCity),
+    buildTravelBookingMultiCityTimes(formData.multiCity),
+    String(formData.airline || "").trim(),
+    String(formData.travelPurpose || "").trim(),
+    String(formData.baggage || "").trim(),
+    hotelAccommodation,
+    String(formData.immediateSuperiorName || "").trim(),
+    String(formData.departmentHeadName || "").trim(),
+    String(formData.contactNumber || "").trim(),
+    String(formData.servicePickup || "").trim(),
+    String(formData.landAir || "").trim(),
+    String(formData.employeeId || "").trim(),
+    attachmentValue,
+    String(formData.department || "").trim(),
+    requestNumberText,
+  ];
+}
+
+function getNextTravelBookingRequestNumber(rows: string[][], headers: string[]) {
+  const requestColumnIndex = headers.findIndex((header) => normalizeSheetHeader(header) === "request");
+  if (requestColumnIndex < 0) return 1;
+
+  let maxValue = 0;
+  for (const row of rows.slice(1)) {
+    const raw = String(row?.[requestColumnIndex] ?? "").trim();
+    const value = Number.parseInt(raw, 10);
+    if (Number.isFinite(value) && value > maxValue) {
+      maxValue = value;
+    }
+  }
+
+  return maxValue + 1;
+}
+
+async function appendTravelBookingResponseRow(input: {
+  spreadsheetId: string;
+  sheetTitle: string;
+  referenceNo: string;
+  submittedByEmail: string;
+  formData: any;
+}) {
+  const spreadsheetId = normalizeSpreadsheetId(input.spreadsheetId);
+  if (!spreadsheetId) return;
+
+  await ensureSpreadsheetSheet(spreadsheetId, input.sheetTitle);
+  const matrix = await readSpreadsheetMatrix(spreadsheetId, `${input.sheetTitle}!A1:Z5000`);
+  const currentHeaders = (matrix[0] ?? []).map((cell) => String(cell ?? "").trim());
+  const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
+  const headersMatch =
+    currentHeaders.length === expectedHeaders.length &&
+    expectedHeaders.every((header, index) => currentHeaders[index] === header);
+  const requestNumber = getNextTravelBookingRequestNumber(
+    matrix,
+    currentHeaders.length > 0 ? currentHeaders : expectedHeaders,
+  );
+
+  if (!headersMatch) {
+    await writeSpreadsheetRow({
+      spreadsheetId,
+      range: `${input.sheetTitle}!A1`,
+      values: expectedHeaders,
+    });
+  }
+
+  await appendSpreadsheetRow({
+    spreadsheetId,
+    sheetTitle: input.sheetTitle,
+    values: buildTravelBookingSheetRow({
+      referenceNo: input.referenceNo,
+      requestNumber,
+      submittedByEmail: input.submittedByEmail,
+      formData: input.formData,
+    }),
+  });
 }
 
 export async function submitTravelBooking(
@@ -57,7 +257,7 @@ export async function submitTravelBooking(
     const [supervisor, head, processor] = await Promise.all([
       supervisorId ? Approver.findById(supervisorId).lean() : null,
       headId ? Approver.findById(headId).lean() : null,
-      Approver.findOne({ roles: "processor", isActive: true }).lean(),
+      resolveAssignedProcessor({ definition }),
     ]);
 
     if (!supervisor) throw new Error("Invalid Immediate Superior");
@@ -241,23 +441,18 @@ export async function submitTravelBooking(
 
     try {
       const responseSpreadsheetId =
-        definition.responseSpreadsheetId?.trim() ||
+        normalizeSpreadsheetId(definition.responseSpreadsheetId?.trim() || "") ||
         process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
         process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
         "";
       const sheetTitle = definition.responseSheetName?.trim() || "Travel Booking Responses";
       if (definition.writeResponsesToSheet && responseSpreadsheetId) {
-        await appendResponseSheetRow({
+        await appendTravelBookingResponseRow({
           spreadsheetId: responseSpreadsheetId,
           sheetTitle,
-          rowValues: buildResponseSheetRows({
-            referenceNo,
-            formSlug: "travel-booking",
-            formName: "Travel Booking",
-            submittedByEmail: submitterEmail,
-            submittedByName: submitterName,
-            values: formDataObj,
-          }),
+          referenceNo,
+          submittedByEmail: submitterEmail,
+          formData: formDataObj,
         });
       }
     } catch (error) {
@@ -268,6 +463,11 @@ export async function submitTravelBooking(
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const nextStepCopy = buildPendingStepNotificationCopy({
+      formName: "Travel Booking",
+      referenceNo,
+      role: "supervisor",
+    });
     const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
       preferredKeys: [
         "fullName",
@@ -300,7 +500,7 @@ export async function submitTravelBooking(
         formSlug: "travel-booking",
         formName: "Travel Booking",
         event: "submitted",
-        to: [processor.email, submitterEmail],
+        to: [submitterEmail],
         subject: `Travel Booking request submitted (${referenceNo})`,
         summary: "A Travel Booking request has been submitted and routed for review.",
         details: [
@@ -321,22 +521,22 @@ export async function submitTravelBooking(
         formName: "Travel Booking",
         event: "next-approver",
         to: supervisor.email,
-        subject: `Travel Booking request needs your approval (${referenceNo})`,
-        summary: "A Travel Booking request is waiting for your approval.",
+        subject: nextStepCopy.subject,
+        summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
-          { label: "Status", value: "Pending approval" },
+          { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
         ],
         text:
-          `A Travel Booking request is waiting for your approval.\n\n` +
+          nextStepCopy.text +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
         ctaUrl: approvalPageUrl || requestUrl,
-        ctaLabel: "Open approval page",
+        ctaLabel: nextStepCopy.ctaLabel,
         approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
@@ -363,6 +563,7 @@ export async function updateTravelBooking(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("travel-booking");
 
     const doc = await RequestModel.findOne({
       referenceNo,
@@ -374,22 +575,17 @@ export async function updateTravelBooking(
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
 
-    const [supervisor, head, fallbackProcessor] = await Promise.all([
+    const [supervisor, head, processor] = await Promise.all([
       supervisorId ? Approver.findById(supervisorId).lean() : null,
       headId ? Approver.findById(headId).lean() : null,
-      Approver.findOne({ roles: "processor", isActive: true }).lean(),
+      resolveAssignedProcessor({
+        definition,
+        existingProcessorEmail: doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "",
+      }),
     ]);
 
     if (!supervisor) throw new Error("Invalid Immediate Superior");
     if (!head) throw new Error("Invalid Department Head");
-
-    const existingProcessorEmail =
-      doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "";
-    const processor =
-      (existingProcessorEmail
-        ? await Approver.findOne({ email: existingProcessorEmail }).lean()
-        : null) ?? fallbackProcessor;
-    if (!processor) throw new Error("No active processor configured. Ask an admin to assign one.");
 
     const activityFile = formData.get("activitySchedule");
     let activitySchedule: any = (doc as any).formData?.activitySchedule ?? null;
@@ -567,6 +763,11 @@ export async function updateTravelBooking(
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const nextStepCopy = buildPendingStepNotificationCopy({
+      formName: "Travel Booking",
+      referenceNo,
+      role: "supervisor",
+    });
     const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
       preferredKeys: [
         "fullName",
@@ -620,22 +821,22 @@ export async function updateTravelBooking(
         formName: "Travel Booking",
         event: "next-approver",
         to: supervisor.email,
-        subject: `Travel Booking request needs your approval (${referenceNo})`,
-        summary: "A Travel Booking request was updated and is back at your approval step.",
+        subject: nextStepCopy.subject,
+        summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
-          { label: "Status", value: "Pending approval" },
+          { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
         ],
         text:
-          `A Travel Booking request has been updated and is back at your approval step.\n\n` +
+          nextStepCopy.text +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
         ctaUrl: approvalPageUrl || requestUrl,
-        ctaLabel: "Open approval page",
+        ctaLabel: nextStepCopy.ctaLabel,
         approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,

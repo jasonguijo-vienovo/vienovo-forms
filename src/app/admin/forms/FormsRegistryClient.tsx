@@ -30,6 +30,9 @@ type RegistryForm = {
   availability: string;
   isImplemented: boolean;
   showInNavbar: boolean;
+  processorApproverId: string;
+  processorApproverName: string;
+  processorApproverEmail: string;
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
@@ -40,6 +43,13 @@ type RegistryForm = {
   triggerFunctionName: string;
   triggerNotes: string;
   notes: string;
+};
+
+type ProcessorOption = {
+  _id: string;
+  name: string;
+  email: string;
+  isActive: boolean;
 };
 
 type ViewFilter = "all" | "live" | "draft" | "admin" | "imported";
@@ -55,6 +65,7 @@ export function FormsRegistryClient({
   statusOptions,
   visibilityOptions,
   availabilityOptions,
+  processorOptions,
 }: {
   forms: RegistryForm[];
   importedSlugSet: string[];
@@ -66,6 +77,7 @@ export function FormsRegistryClient({
   statusOptions: string[];
   visibilityOptions: string[];
   availabilityOptions: string[];
+  processorOptions: ProcessorOption[];
 }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -83,6 +95,7 @@ export function FormsRegistryClient({
   const [isSettingsOpen, setIsSettingsOpen] = useState(settingsFromUrl === "open");
   const [draftDirty, setDraftDirty] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQuery(query.trim().toLowerCase()), 180);
@@ -100,6 +113,15 @@ export function FormsRegistryClient({
     const saved = window.localStorage.getItem("admin_forms_settings_open");
     if (saved === "1") setIsSettingsOpen(true);
   }, [settingsFromUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(min-width: 1280px)");
+    const sync = () => setIsDesktopViewport(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   const filteredForms = useMemo(() => {
     return forms.filter((form) => {
@@ -268,6 +290,7 @@ export function FormsRegistryClient({
               ) : null}
             </div>
 
+            {isDesktopViewport ? (
             <aside className={`admin-panel h-fit ${isSettingsOpen ? "block" : "hidden xl:block"}`}>
               <div className="sticky top-20">
                 <div className="flex items-center justify-between border-b border-surface-border bg-slate-50/70 px-5 py-4">
@@ -294,6 +317,7 @@ export function FormsRegistryClient({
                       statusOptions={statusOptions}
                       visibilityOptions={visibilityOptions}
                       availabilityOptions={availabilityOptions}
+                      processorOptions={processorOptions}
                       onDirtyChange={setDraftDirty}
                       isEditMode={isEditMode}
                     />
@@ -303,8 +327,9 @@ export function FormsRegistryClient({
                 </div>
               </div>
             </aside>
+            ) : null}
 
-            {isSettingsOpen ? (
+            {isSettingsOpen && !isDesktopViewport ? (
               <div className="fixed inset-0 z-40 bg-slate-900/35 xl:hidden" onClick={closeSettings}>
                 <aside
                   className="absolute bottom-0 left-0 right-0 max-h-[88vh] overflow-auto border-t border-surface-border bg-white"
@@ -336,6 +361,7 @@ export function FormsRegistryClient({
                         statusOptions={statusOptions}
                         visibilityOptions={visibilityOptions}
                         availabilityOptions={availabilityOptions}
+                        processorOptions={processorOptions}
                         onDirtyChange={setDraftDirty}
                         isEditMode={isEditMode}
                       />
@@ -353,13 +379,14 @@ export function FormsRegistryClient({
   );
 }
 
-function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, onDirtyChange, isEditMode }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; onDirtyChange: (dirty: boolean) => void; isEditMode: boolean }) {
+function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, processorOptions, onDirtyChange, isEditMode }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; processorOptions: ProcessorOption[]; onDirtyChange: (dirty: boolean) => void; isEditMode: boolean }) {
   const liveForUsers = isLiveForRequesters(form);
   const launchUrl = form.externalFormUrl || form.routePath;
   const implementedRoute = (form.isImplemented || Boolean(form.externalFormUrl)) && launchUrl;
   const sourceExists = form.source === "native" || importedSet.has(form.slug);
   const [openVisibility, setOpenVisibility] = useState(false);
   const [openRouting, setOpenRouting] = useState(false);
+  const [openWorkflow, setOpenWorkflow] = useState(false);
   const [openResponses, setOpenResponses] = useState(false);
   const [openTrigger, setOpenTrigger] = useState(false);
   const [openAdvanced, setOpenAdvanced] = useState(false);
@@ -422,6 +449,36 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
           </>
         ) : null}
 
+        <SectionToggle title="Workflow" open={openWorkflow} onToggle={() => setOpenWorkflow((v) => !v)} />
+        {openWorkflow ? (
+          <>
+            <Field label="Assigned processor">
+              <select
+                name="processorApproverId"
+                defaultValue={form.processorApproverId}
+                disabled={!isEditMode}
+                className={`field-input ${!isEditMode ? "field-locked" : ""}`}
+              >
+                <option value="">Use global processor fallback</option>
+                {processorOptions.map((option) => (
+                  <option key={option._id} value={option._id}>
+                    {option.name} ({option.email}){option.isActive ? "" : " - inactive"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <p className="text-xs text-surface-muted">
+              Use this when a form should always route its processor step to a specific person.
+              If left blank, the system falls back to the shared active processor roster.
+            </p>
+            {form.processorApproverEmail ? (
+              <p className="text-xs text-surface-muted">
+                Current processor: {form.processorApproverName || "Processor"} ({form.processorApproverEmail})
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
         <SectionToggle title="Responses" open={openResponses} onToggle={() => setOpenResponses((v) => !v)} />
         {openResponses ? (
           <>
@@ -463,7 +520,6 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
 
         <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t border-surface-border bg-white pt-3">
           <button type="reset" className="btn-secondary" onClick={() => onDirtyChange(false)}>Reset changes</button>
-          <button type="button" className="btn-secondary">Save + Next form</button>
           <PendingSubmitButton type="submit" disabled={!isEditMode} idleLabel={<span className="inline-flex items-center gap-2"><Save className="h-4 w-4" /><span>Save changes</span></span>} pendingLabel="Saving..." className="btn-primary" />
         </div>
       </form>

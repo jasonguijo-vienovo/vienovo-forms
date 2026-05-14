@@ -17,6 +17,7 @@ import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { readSpreadsheetMatrix, writeSpreadsheetRow } from "@/lib/google/sheets";
+import { buildPendingStepNotificationCopy, isProcessorRole } from "@/lib/workflow-routing";
 import {
   buildImportedAttachmentDetails,
   buildNotificationDetailsFromFieldMap,
@@ -1601,14 +1602,20 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             ? `${findValue(values, labels, "lastname", "last name")}, ${findValue(values, labels, "firstname", "first name")} ${findValue(values, labels, "middlename", "middle name")}`.trim()
             : (name || email);
           const detailsEmail = findValue(values, labels, "email", "emailaddress", "email address") || email;
-          const approverSubject = `${imported.name} needs review (${referenceNo})`;
+          const currentRole = String(firstSlaApprover?.role || "").trim();
+          const processorStep = isProcessorRole(currentRole);
+          const nextStepCopy = buildPendingStepNotificationCopy({
+            formName: imported.name,
+            referenceNo,
+            role: currentRole,
+          });
           const approverText =
-            `A new ${imported.name} request was submitted and requires approval.\n\n` +
+            `A new ${imported.name} request was submitted and ${processorStep ? "is ready for processing" : "requires approval"}.\n\n` +
             `Request details:\n` +
             `- Reference No: ${referenceNo}\n` +
             `- Requester: ${detailsName}\n` +
             `- Email: ${detailsEmail}\n` +
-            `- Status: pending\n`;
+            `- Status: ${processorStep ? "pending processing" : "pending approval"}\n`;
 
           notificationJobs.push(
             sendFlowNotification({
@@ -1616,20 +1623,21 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               formName: imported.name,
               event: "next-approver",
               to: approverRecipients,
-              subject: approverSubject,
-              summary: `A new ${imported.name} request is ready for your review.`,
+              subject: nextStepCopy.subject,
+              summary: nextStepCopy.summary,
               details: [
                 { label: "Reference No.", value: referenceNo },
                 { label: "Requester", value: detailsName },
                 { label: "Email", value: detailsEmail },
+                { label: "Current role", value: currentRole },
                 ...approvalContactDetails,
-                { label: "Status", value: "Pending" },
+                { label: "Status", value: nextStepCopy.statusLabel },
                 ...importedNotificationDetails,
                 ...attachmentDetails,
               ],
               text: approverText,
               ctaUrl: approvalPageUrl || approvalsUrl || requestUrl,
-              ctaLabel: "Open approval page",
+              ctaLabel: nextStepCopy.ctaLabel,
               approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
               rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
               commentUrl: requestUrl ? `${requestUrl}/approve#comment` : "",

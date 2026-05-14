@@ -24,6 +24,9 @@ export type AppFormDefinition = {
   isImplemented: boolean;
   showInNavbar: boolean;
   sortOrder: number;
+  processorApproverId: string;
+  processorApproverName: string;
+  processorApproverEmail: string;
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
@@ -70,6 +73,9 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     isImplemented: true,
     showInNavbar: true,
     sortOrder: 10,
+    processorApproverId: "",
+    processorApproverName: "",
+    processorApproverEmail: "",
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Travel Booking Responses",
@@ -94,6 +100,9 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     isImplemented: true,
     showInNavbar: true,
     sortOrder: 20,
+    processorApproverId: "",
+    processorApproverName: "",
+    processorApproverEmail: "",
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Cash Advance Responses",
@@ -118,6 +127,9 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     isImplemented: true,
     showInNavbar: true,
     sortOrder: 30,
+    processorApproverId: "",
+    processorApproverName: "",
+    processorApproverEmail: "",
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Reimbursement Responses",
@@ -142,6 +154,9 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     isImplemented: false,
     showInNavbar: false,
     sortOrder: 40,
+    processorApproverId: "",
+    processorApproverName: "",
+    processorApproverEmail: "",
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Request for Payment Responses",
@@ -166,6 +181,9 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     isImplemented: false,
     showInNavbar: false,
     sortOrder: 50,
+    processorApproverId: "",
+    processorApproverName: "",
+    processorApproverEmail: "",
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Cashiering Responses",
@@ -190,6 +208,9 @@ export const BUILTIN_FORMS: Omit<AppFormDefinition, "runtime">[] = [
     isImplemented: false,
     showInNavbar: false,
     sortOrder: 70,
+    processorApproverId: "",
+    processorApproverName: "",
+    processorApproverEmail: "",
     writeResponsesToSheet: Boolean(DEFAULT_RESPONSE_SPREADSHEET_ID),
     responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     responseSheetName: "Leave Request Responses",
@@ -229,6 +250,9 @@ function normalizeFormDefinitionRow(row: any): Omit<AppFormDefinition, "runtime"
     isImplemented: Boolean(row.isImplemented),
     showInNavbar: Boolean(row.showInNavbar),
     sortOrder: row.sortOrder ?? 0,
+    processorApproverId: row.processorApproverId ?? "",
+    processorApproverName: row.processorApproverName ?? "",
+    processorApproverEmail: row.processorApproverEmail ?? "",
     writeResponsesToSheet: Boolean(row.writeResponsesToSheet),
     responseSpreadsheetId: row.responseSpreadsheetId ?? "",
     responseSheetName: row.responseSheetName ?? "",
@@ -322,6 +346,9 @@ export async function syncBuiltInForms() {
             isImplemented: form.isImplemented,
             showInNavbar: form.showInNavbar,
             sortOrder: form.sortOrder,
+            processorApproverId: form.processorApproverId,
+            processorApproverName: form.processorApproverName,
+            processorApproverEmail: form.processorApproverEmail,
             writeResponsesToSheet: form.writeResponsesToSheet,
             responseSpreadsheetId: form.responseSpreadsheetId,
             responseSheetName: form.responseSheetName,

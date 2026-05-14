@@ -2,7 +2,7 @@ import { connectMongo } from "@/lib/db/mongo";
 import { RequestModel, type FormType } from "@/models/Request";
 
 const PREFIX: Record<FormType, string> = {
-  "travel-booking": "TB",
+  "travel-booking": "TBR",
   "cash-advance": "CA",
   "reimbursement": "RB",
   "request-for-payment": "RFP",
