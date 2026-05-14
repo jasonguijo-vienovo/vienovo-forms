@@ -486,6 +486,7 @@ export async function submitTravelBooking(
       { upsert: true },
     );
 
+    let sheetExportErrorMessage = "";
     try {
       const responseSpreadsheetId =
         normalizeSpreadsheetId(definition.responseSpreadsheetId?.trim() || "") ||
@@ -515,6 +516,10 @@ export async function submitTravelBooking(
       }
     } catch (error) {
       console.error("Travel Booking response export failed:", error);
+      sheetExportErrorMessage =
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Travel Booking response export failed.";
       await RequestModel.updateOne(
         { _id: createdRequest._id },
         {
@@ -526,7 +531,7 @@ export async function submitTravelBooking(
               "",
             responseSheetName: definition.responseSheetName?.trim() || "Travel Booking Responses",
             sheetStatusSyncedAt: null,
-            sheetStatusSyncError: error instanceof Error ? error.message : "Unknown response export error",
+            sheetStatusSyncError: sheetExportErrorMessage || "Unknown response export error",
           },
         },
       );
@@ -566,7 +571,13 @@ export async function submitTravelBooking(
         url: activitySchedule?.driveWebViewLink,
       },
     ]);
-    await setFlashToast({ tone: "success", message: `Travel Booking submitted: ${referenceNo}` });
+    await setFlashToast({
+      tone: sheetExportErrorMessage ? "error" : "success",
+      message: sheetExportErrorMessage
+        ? `Travel Booking submitted as ${referenceNo}, but sheet export failed: ${sheetExportErrorMessage}`
+        : `Travel Booking submitted: ${referenceNo}`,
+      persistent: Boolean(sheetExportErrorMessage),
+    });
 
     try {
       await sendFlowNotification({
