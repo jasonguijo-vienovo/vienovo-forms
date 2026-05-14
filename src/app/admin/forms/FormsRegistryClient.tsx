@@ -424,6 +424,43 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
       <form key={form.slug} action={updateFormDefinition} className="space-y-3" onChange={() => isEditMode && onDirtyChange(true)}>
         <input type="hidden" name="id" value={form._id ?? ""} />
         <input type="hidden" name="slug" value={form.slug} />
+        {!openVisibility ? (
+          <>
+            <input type="hidden" name="status" value={form.status} />
+            <input type="hidden" name="visibility" value={form.visibility} />
+            <input type="hidden" name="availability" value={form.availability} />
+            {form.isImplemented ? <input type="hidden" name="isImplemented" value="1" /> : null}
+            {form.showInNavbar ? <input type="hidden" name="showInNavbar" value="1" /> : null}
+          </>
+        ) : null}
+        {!openRouting ? (
+          <>
+            <input type="hidden" name="name" value={form.name} />
+            <input type="hidden" name="newSlug" value={form.slug} />
+            <input type="hidden" name="routePath" value={form.routePath} />
+            <input type="hidden" name="externalFormUrl" value={form.externalFormUrl} />
+            <input type="hidden" name="description" value={form.description} />
+          </>
+        ) : null}
+        {!openWorkflow ? <input type="hidden" name="processorApproverId" value={form.processorApproverId} /> : null}
+        {!openResponses ? (
+          <>
+            <input type="hidden" name="responseSpreadsheetId" value={form.responseSpreadsheetId} />
+            <input type="hidden" name="responseSheetName" value={form.responseSheetName} />
+            {form.writeResponsesToSheet ? <input type="hidden" name="writeResponsesToSheet" value="1" /> : null}
+          </>
+        ) : null}
+        {form.source === "imported" && !openTrigger ? (
+          <>
+            {form.triggerEnabled ? <input type="hidden" name="triggerEnabled" value="1" /> : null}
+            <input type="hidden" name="triggerUrl" value={form.triggerUrl} />
+            <input type="hidden" name="triggerSource" value={form.triggerSource} />
+            <input type="hidden" name="triggerEvent" value={form.triggerEvent} />
+            <input type="hidden" name="triggerFunctionName" value={form.triggerFunctionName} />
+            <input type="hidden" name="triggerNotes" value={form.triggerNotes} />
+          </>
+        ) : null}
+        {!openAdvanced ? <input type="hidden" name="notes" value={form.notes} /> : null}
         <SectionToggle title="Visibility" open={openVisibility} onToggle={() => setOpenVisibility((v) => !v)} />
         {openVisibility ? (
           <>
