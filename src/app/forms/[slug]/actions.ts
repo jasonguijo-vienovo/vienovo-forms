@@ -256,7 +256,7 @@ function buildFixedAssetItemCodeRow(opts: {
     Location: findValue(opts.values, opts.labels, "location"),
     "Project Name": findValue(opts.values, opts.labels, "projectname", "project name"),
     "Total Cost": findValue(opts.values, opts.labels, "totalcost", "total cost", "approvedannualbudget", "approved annual budget"),
-    "Supporting Document": findValue(opts.values, opts.labels, "supportingdocument", "supporting document"),
+    "Supporting Document": findAttachmentLink(opts.values, opts.labels),
     "ASSIGNED ITEM CODE": findValue(opts.values, opts.labels, "assigneditemcode", "assigned item code"),
     "PO NUMBER": findValue(opts.values, opts.labels, "ponumber", "po number"),
     "Email Status": findValue(opts.values, opts.labels, "emailstatus", "email status"),
@@ -365,7 +365,7 @@ function buildFixedAssetAdditionsRow(opts: {
     "Asset Assignee": findValue(opts.values, opts.labels, "assetassignee", "asset assignee", "receivedby", "received by"),
     "Assignee Email": findValue(opts.values, opts.labels, "assigneeemail", "assignee email"),
     "Component Asset Tag": findValue(opts.values, opts.labels, "componentassettag", "component asset tag"),
-    "Attachment URL": findValue(opts.values, opts.labels, "attachmenturl", "attachment url", "supportingdocument", "supporting document"),
+    "Attachment URL": findAttachmentLink(opts.values, opts.labels),
     "Ack Token": findValue(opts.values, opts.labels, "acktoken", "ack token"),
     RefID: opts.referenceNo,
     Status: "submitted",
@@ -476,7 +476,7 @@ function buildFixedAssetChangeControlLogRow(opts: {
     "Request by Email": findValue(opts.values, opts.labels, "requestbyemail", "request by email", "email") || opts.submittedByEmail,
     "Approved By": findValue(opts.values, opts.labels, "approvedby", "approved by", "authorizedby", "authorized by"),
     "Approver Email": findValue(opts.values, opts.labels, "approveremail", "approver email"),
-    "Supporting Documents": findValue(opts.values, opts.labels, "supportingdocuments", "supporting documents", "supportingdocument", "supporting document"),
+    "Supporting Documents": findAttachmentLink(opts.values, opts.labels),
     Status: findValue(opts.values, opts.labels, "status") || "submitted",
     "Assignee Ack Timestamp": findValue(opts.values, opts.labels, "assigneeacktimestamp", "assignee ack timestamp"),
     "Approval Timestamp": findValue(opts.values, opts.labels, "approvaltimestamp", "approval timestamp"),
@@ -565,12 +565,61 @@ function buildEmployeeFingerprint(row: Record<string, string>) {
 
 function findValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
   const wanted = aliases.map(normalizeKey);
-  for (const [key, value] of Object.entries(values)) {
-    const byKey = normalizeKey(key);
-    const byLabel = normalizeKey(labels[key] || "");
-    if (wanted.some((alias) => alias === byKey || alias === byLabel)) return String(value ?? "").trim();
+  for (const alias of wanted) {
+    for (const [key, value] of Object.entries(values)) {
+      const byKey = normalizeKey(key);
+      const byLabel = normalizeKey(labels[key] || "");
+      if (alias === byKey || alias === byLabel) return String(value ?? "").trim();
+    }
   }
   return "";
+}
+
+function findAttachmentLink(values: Record<string, unknown>, labels: Record<string, string>) {
+  return findValue(
+    values,
+    labels,
+    "supportingdrivelink",
+    "supporting drive link",
+    "activitydrivelink",
+    "activity drive link",
+    "drivewebviewlink",
+    "drive web view link",
+    "filelink",
+    "file link",
+    "attachmenturl",
+    "attachment url",
+    "supportingdocument",
+    "supporting document",
+    "supportingdocuments",
+    "supporting documents",
+  );
+}
+
+function buildImportedApprovalDetailRows(values: Record<string, unknown>, labels: Record<string, string>) {
+  const immediateSuperior = findValue(
+    values,
+    labels,
+    "immediatesuperior",
+    "immediate superior",
+    "manager",
+    "supervisor",
+    "manager/supervisor",
+    "manager / supervisor",
+  );
+  const departmentHead = findValue(
+    values,
+    labels,
+    "departmenthead",
+    "department head",
+    "depthead",
+    "dept head",
+    "head",
+  );
+  return [
+    { label: "Immediate Superior", value: immediateSuperior },
+    { label: "Department Head", value: departmentHead },
+  ].filter((detail) => detail.value);
 }
 
 function enforceRequestForPaymentConditionalFields(
@@ -1156,6 +1205,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         importedFormName: imported.name,
         spreadsheetId: imported.spreadsheetId ?? "",
         selectedApproverId: resolvedSelectedApprover ? String((resolvedSelectedApprover as any)._id ?? "") : "",
+        selectedApproverName: String(resolvedSelectedApprover?.name ?? "").trim(),
+        selectedApproverEmail: String(resolvedSelectedApprover?.email ?? "").trim().toLowerCase(),
         employeeFingerprint:
           isEmployeeInformation && employeeRow ? buildEmployeeFingerprint(employeeRow) : undefined,
         fieldLabels: labels,
@@ -1179,6 +1230,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         importedFormName: imported.name,
         spreadsheetId: imported.spreadsheetId ?? "",
         selectedApproverId: resolvedSelectedApprover ? String((resolvedSelectedApprover as any)._id ?? "") : "",
+        selectedApproverName: String(resolvedSelectedApprover?.name ?? "").trim(),
+        selectedApproverEmail: String(resolvedSelectedApprover?.email ?? "").trim().toLowerCase(),
         employeeFingerprint:
           isEmployeeInformation && employeeRow ? buildEmployeeFingerprint(employeeRow) : undefined,
         fieldLabels: labels,
@@ -1471,6 +1524,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
         maxRows: 12,
       });
       const attachmentDetails = buildImportedAttachmentDetails({ fieldLabels: labels, values });
+      const approvalContactDetails = buildImportedApprovalDetailRows(values, labels);
       const notificationJobs: Array<Promise<unknown>> = [];
       notificationJobs.push(
         (async () => {
@@ -1488,6 +1542,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
                 : [
                     { label: "Reference No.", value: referenceNo },
                     { label: "Requester", value: name || email },
+                    ...approvalContactDetails,
                     ...importedNotificationDetails,
                     ...attachmentDetails,
                   ],
@@ -1567,6 +1622,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
                 { label: "Reference No.", value: referenceNo },
                 { label: "Requester", value: detailsName },
                 { label: "Email", value: detailsEmail },
+                ...approvalContactDetails,
                 { label: "Status", value: "Pending" },
                 ...importedNotificationDetails,
                 ...attachmentDetails,
