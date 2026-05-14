@@ -14,7 +14,14 @@ import {
   AdminStatusPill,
 } from "@/components/admin-ui";
 import { AdminFilterTabs, AdminSearchField } from "@/components/admin-ui-client";
-import { backfillFixedAssetItemCodeSheet, deleteFormDefinition, deleteFormEverywhere, hideFormDefinition, updateFormDefinition } from "./actions";
+import {
+  backfillFixedAssetItemCodeSheet,
+  backfillTravelBookingResponseSheet,
+  deleteFormDefinition,
+  deleteFormEverywhere,
+  hideFormDefinition,
+  updateFormDefinition,
+} from "./actions";
 
 type RegistryForm = {
   _id?: string;
@@ -33,6 +40,12 @@ type RegistryForm = {
   processorApproverId: string;
   processorApproverName: string;
   processorApproverEmail: string;
+  levelOneApproverId: string;
+  levelOneApproverName: string;
+  levelOneApproverEmail: string;
+  levelTwoApproverId: string;
+  levelTwoApproverName: string;
+  levelTwoApproverEmail: string;
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
@@ -52,6 +65,12 @@ type ProcessorOption = {
   isActive: boolean;
 };
 
+type ApprovalApproverOption = {
+  _id: string;
+  name: string;
+  email: string;
+};
+
 type ViewFilter = "all" | "live" | "draft" | "admin" | "imported";
 
 export function FormsRegistryClient({
@@ -65,6 +84,7 @@ export function FormsRegistryClient({
   statusOptions,
   visibilityOptions,
   availabilityOptions,
+  approvalApproverOptions,
   processorOptions,
 }: {
   forms: RegistryForm[];
@@ -77,6 +97,7 @@ export function FormsRegistryClient({
   statusOptions: string[];
   visibilityOptions: string[];
   availabilityOptions: string[];
+  approvalApproverOptions: ApprovalApproverOption[];
   processorOptions: ProcessorOption[];
 }) {
   const [query, setQuery] = useState("");
@@ -210,6 +231,14 @@ export function FormsRegistryClient({
                 className="btn-secondary"
               />
             </form>
+            <form action={backfillTravelBookingResponseSheet}>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel="Backfill Travel Booking Sheet"
+                pendingLabel="Backfilling..."
+                className="btn-secondary"
+              />
+            </form>
             <Link href="/admin/lookups" className="btn-secondary">
               Manage dropdowns
             </Link>
@@ -317,6 +346,7 @@ export function FormsRegistryClient({
                       statusOptions={statusOptions}
                       visibilityOptions={visibilityOptions}
                       availabilityOptions={availabilityOptions}
+                      approvalApproverOptions={approvalApproverOptions}
                       processorOptions={processorOptions}
                       onDirtyChange={setDraftDirty}
                       isEditMode={isEditMode}
@@ -361,6 +391,7 @@ export function FormsRegistryClient({
                         statusOptions={statusOptions}
                         visibilityOptions={visibilityOptions}
                         availabilityOptions={availabilityOptions}
+                        approvalApproverOptions={approvalApproverOptions}
                         processorOptions={processorOptions}
                         onDirtyChange={setDraftDirty}
                         isEditMode={isEditMode}
@@ -379,7 +410,7 @@ export function FormsRegistryClient({
   );
 }
 
-function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, processorOptions, onDirtyChange, isEditMode }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; processorOptions: ProcessorOption[]; onDirtyChange: (dirty: boolean) => void; isEditMode: boolean }) {
+function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions, availabilityOptions, approvalApproverOptions, processorOptions, onDirtyChange, isEditMode }: { form: RegistryForm; importedSet: Set<string>; statusOptions: string[]; visibilityOptions: string[]; availabilityOptions: string[]; approvalApproverOptions: ApprovalApproverOption[]; processorOptions: ProcessorOption[]; onDirtyChange: (dirty: boolean) => void; isEditMode: boolean }) {
   const liveForUsers = isLiveForRequesters(form);
   const launchUrl = form.externalFormUrl || form.routePath;
   const implementedRoute = (form.isImplemented || Boolean(form.externalFormUrl)) && launchUrl;
@@ -442,7 +473,13 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
             <input type="hidden" name="description" value={form.description} />
           </>
         ) : null}
-        {!openWorkflow ? <input type="hidden" name="processorApproverId" value={form.processorApproverId} /> : null}
+        {!openWorkflow ? (
+          <>
+            <input type="hidden" name="levelOneApproverId" value={form.levelOneApproverId} />
+            <input type="hidden" name="levelTwoApproverId" value={form.levelTwoApproverId} />
+            <input type="hidden" name="processorApproverId" value={form.processorApproverId} />
+          </>
+        ) : null}
         {!openResponses ? (
           <>
             <input type="hidden" name="responseSpreadsheetId" value={form.responseSpreadsheetId} />
@@ -489,6 +526,39 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
         <SectionToggle title="Workflow" open={openWorkflow} onToggle={() => setOpenWorkflow((v) => !v)} />
         {openWorkflow ? (
           <>
+            <Field label="Level 1 approver">
+              <select
+                name="levelOneApproverId"
+                defaultValue={form.levelOneApproverId}
+                disabled={!isEditMode}
+                className={`field-input ${!isEditMode ? "field-locked" : ""}`}
+              >
+                <option value="">Use form/requester routing</option>
+                {approvalApproverOptions.map((option) => (
+                  <option key={option._id} value={option._id}>
+                    {option.name} ({option.email})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Level 2 approver">
+              <select
+                name="levelTwoApproverId"
+                defaultValue={form.levelTwoApproverId}
+                disabled={!isEditMode}
+                className={`field-input ${!isEditMode ? "field-locked" : ""}`}
+              >
+                <option value="">Use form/requester routing</option>
+                {approvalApproverOptions.map((option) => (
+                  <option key={option._id} value={option._id}>
+                    {option.name} ({option.email})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <p className="text-xs text-surface-muted">
+              When either Level 1 or Level 2 is configured, Level 3 should be treated as the CEO by default in the workflow rollout.
+            </p>
             <Field label="Assigned processor">
               <select
                 name="processorApproverId"
@@ -511,6 +581,16 @@ function FormSettingsForm({ form, importedSet, statusOptions, visibilityOptions,
             {form.processorApproverEmail ? (
               <p className="text-xs text-surface-muted">
                 Current processor: {form.processorApproverName || "Processor"} ({form.processorApproverEmail})
+              </p>
+            ) : null}
+            {form.levelOneApproverEmail ? (
+              <p className="text-xs text-surface-muted">
+                Current Level 1 approver: {form.levelOneApproverName || "Approver"} ({form.levelOneApproverEmail})
+              </p>
+            ) : null}
+            {form.levelTwoApproverEmail ? (
+              <p className="text-xs text-surface-muted">
+                Current Level 2 approver: {form.levelTwoApproverName || "Approver"} ({form.levelTwoApproverEmail})
               </p>
             ) : null}
           </>

@@ -47,6 +47,12 @@ type EmployeeOption = {
   isActive: boolean;
 };
 
+type AssignableForm = {
+  slug: string;
+  name: string;
+  processorApproverId: string;
+};
+
 type ViewFilter = "all" | "review" | "active" | "inactive" | "hr_missing_email";
 
 function formatSyncDateTime(value: string) {
@@ -65,12 +71,14 @@ function formatSyncDateTime(value: string) {
 function roleLabel(role: string) {
   if (role === "sla") return "SLA Approver";
   if (role === "cashAdvanceApprover") return "CA Approver";
+  if (role === "ceo") return "CEO";
   return role;
 }
 
 function roleChipLabel(role: string) {
   if (role === "sla") return "SLA";
   if (role === "cashAdvanceApprover") return "CA";
+  if (role === "ceo") return "CEO";
   return role;
 }
 
@@ -81,6 +89,7 @@ const ROLE_TONE: Record<string, string> = {
   cashadvance: "border-emerald-200 bg-emerald-50 text-emerald-700",
   finalapprover: "border-amber-200 bg-amber-50 text-amber-700",
   processor: "border-violet-200 bg-violet-50 text-violet-700",
+  ceo: "border-rose-200 bg-rose-50 text-rose-700",
   approver: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
@@ -91,6 +100,7 @@ export function ApproversClient({
   graphReady,
   syncEnabled,
   lastLookupDropdownSyncAt,
+  assignableForms,
 }: {
   approvers: ApproverRow[];
   roles: string[];
@@ -98,6 +108,7 @@ export function ApproversClient({
   graphReady: boolean;
   syncEnabled: boolean;
   lastLookupDropdownSyncAt: string;
+  assignableForms: AssignableForm[];
 }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<ViewFilter>("all");
@@ -226,7 +237,7 @@ export function ApproversClient({
         <AdminHelpPanel title="What this page does">
           Use this page when someone should be available as an approver, supervisor, department head,
           cash advance approver, or final approver. If an email needs review, fix it here before relying
-          on notification emails.
+          on notification emails. Processor-capable approvers can also be assigned to specific forms here.
           {lastLookupDropdownSyncAt
             ? ` Role-driven dropdowns were last synced on ${formatSyncDateTime(lastLookupDropdownSyncAt)}.`
             : " Role-driven dropdowns have not been synced yet."}
@@ -503,6 +514,7 @@ export function ApproversClient({
                   <th className="px-4 py-3">Name</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Roles</th>
+                  <th className="px-4 py-3">Assigned forms</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -570,6 +582,49 @@ export function ApproversClient({
                           ) : (
                             <span className="text-sm text-surface-muted">No roles</span>
                           )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      {editingId === approver._id ? (
+                        approver.roles.includes("processor") ? (
+                          <div className="space-y-2">
+                            {assignableForms.map((form) => (
+                              <label
+                                key={form.slug}
+                                className="flex items-start gap-2 rounded border border-surface-border bg-white px-2 py-2 text-xs"
+                              >
+                                <input
+                                  form={`approver-edit-${approver._id}`}
+                                  type="checkbox"
+                                  name={`assignedProcessorForm_${form.slug}`}
+                                  defaultChecked={form.processorApproverId === approver._id}
+                                  className="mt-0.5 accent-brand-600"
+                                />
+                                <span className="text-surface-text">{form.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-surface-muted">
+                            Add the <strong>processor</strong> role first to assign forms here.
+                          </p>
+                        )
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {assignableForms
+                            .filter((form) => form.processorApproverId === approver._id)
+                            .map((form) => (
+                              <span
+                                key={form.slug}
+                                className="inline-flex items-center rounded border border-violet-200 bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700"
+                              >
+                                {form.name}
+                              </span>
+                            ))}
+                          {assignableForms.every((form) => form.processorApproverId !== approver._id) ? (
+                            <span className="text-sm text-surface-muted">No form assignments</span>
+                          ) : null}
                         </div>
                       )}
                     </td>
