@@ -159,6 +159,7 @@ export async function submitReimbursement(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "reimbursement",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -463,6 +464,7 @@ export async function updateReimbursement(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "reimbursement",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,

@@ -77,6 +77,7 @@ export async function submitCashAdvance(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "cash-advance",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,
@@ -326,6 +327,7 @@ export async function updateCashAdvance(
       const bytes = Buffer.from(await supportingFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "cash-advance",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${supportingFile.name}`,
         mimeType: supportingFile.type || "application/octet-stream",
         bytes,

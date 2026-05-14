@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { readFile } from "fs/promises";
 
+const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3/files";
+
 function requiredEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
@@ -37,7 +39,7 @@ async function getServiceAccountAccessToken() {
   const assertion = signJwtRS256(
     {
       iss: clientEmail,
-      scope: "https://www.googleapis.com/auth/drive.file",
+      scope: "https://www.googleapis.com/auth/drive",
       aud: "https://oauth2.googleapis.com/token",
       iat: now,
       exp: now + 60 * 60,
@@ -70,14 +72,120 @@ export type DriveUploadResult = {
   webContentLink?: string;
 };
 
+function escapeDriveQueryValue(input: string) {
+  return String(input ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function normalizeFolderSegment(input: string) {
+  return String(input ?? "").trim().replace(/^\/+|\/+$/g, "");
+}
+
+async function driveFetchJson<T>(input: string, init: RequestInit, errorPrefix: string) {
+  const res = await fetch(input, init);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${errorPrefix} (${res.status}): ${text || res.statusText}`);
+  }
+  return (await res.json()) as T;
+}
+
+async function findChildFolderByName(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+}) {
+  const params = new URLSearchParams({
+    q: [
+      "mimeType = 'application/vnd.google-apps.folder'",
+      `'${escapeDriveQueryValue(opts.parentId)}' in parents`,
+      `name = '${escapeDriveQueryValue(opts.name)}'`,
+      "trashed = false",
+    ].join(" and "),
+    fields: "files(id,name)",
+    pageSize: "1",
+    supportsAllDrives: "true",
+    includeItemsFromAllDrives: "true",
+  });
+
+  const json = await driveFetchJson<{ files?: Array<{ id: string; name?: string }> }>(
+    `${DRIVE_API_BASE}?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+      },
+    },
+    "Drive folder lookup error"
+  );
+  return json.files?.[0] ?? null;
+}
+
+async function createDriveFolder(opts: {
+  accessToken: string;
+  parentId: string;
+  name: string;
+}) {
+  return driveFetchJson<{ id: string; name?: string }>(
+    `${DRIVE_API_BASE}?fields=id,name&supportsAllDrives=true`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${opts.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: opts.name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [opts.parentId],
+      }),
+    },
+    "Drive folder create error"
+  );
+}
+
+async function ensureDriveFolderPath(opts: {
+  accessToken: string;
+  rootFolderId: string;
+  folderPath?: string[];
+}) {
+  let currentFolderId = opts.rootFolderId;
+  const segments = (opts.folderPath ?? []).map(normalizeFolderSegment).filter(Boolean);
+
+  for (const segment of segments) {
+    const existing = await findChildFolderByName({
+      accessToken: opts.accessToken,
+      parentId: currentFolderId,
+      name: segment,
+    });
+    if (existing?.id) {
+      currentFolderId = existing.id;
+      continue;
+    }
+    const created = await createDriveFolder({
+      accessToken: opts.accessToken,
+      parentId: currentFolderId,
+      name: segment,
+    });
+    currentFolderId = created.id;
+  }
+
+  return currentFolderId;
+}
+
 export async function uploadToDriveFolder(opts: {
   folderId?: string;
+  folderPath?: string[];
   fileName: string;
   mimeType: string;
   bytes: Buffer;
 }) {
-  const folderId = opts.folderId ?? requiredEnv("GOOGLE_DRIVE_TRAVEL_BOOKING_FOLDER_ID");
+  const rootFolderId = opts.folderId ?? requiredEnv("GOOGLE_DRIVE_ATTACHMENTS_ROOT_FOLDER_ID");
   const accessToken = await getServiceAccountAccessToken();
+  const folderId = await ensureDriveFolderPath({
+    accessToken,
+    rootFolderId,
+    folderPath: opts.folderPath,
+  });
 
   const boundary = `vienovoForms_${crypto.randomUUID()}`;
   const metadata = {
@@ -94,8 +202,8 @@ export async function uploadToDriveFolder(opts: {
   const epilogue = `\r\n--${boundary}--`;
   const body = Buffer.concat([Buffer.from(preamble, "utf8"), opts.bytes, Buffer.from(epilogue, "utf8")]);
 
-  const res = await fetch(
-    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink",
+  return driveFetchJson<DriveUploadResult>(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink&supportsAllDrives=true",
     {
       method: "POST",
       headers: {
@@ -103,15 +211,9 @@ export async function uploadToDriveFolder(opts: {
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
       body,
-    }
+    },
+    "Drive upload error"
   );
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Drive upload error (${res.status}): ${text || res.statusText}`);
-  }
-
-  return (await res.json()) as DriveUploadResult;
 }
 
 async function loadServiceAccountCredentials(): Promise<{ clientEmail: string; privateKey: string }> {

@@ -82,6 +82,7 @@ export async function submitTravelBooking(
       const bytes = Buffer.from(await activityFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "travel-booking",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${activityFile.name}`,
         mimeType: activityFile.type || "application/octet-stream",
         bytes,
@@ -393,6 +394,7 @@ export async function updateTravelBooking(
       const bytes = Buffer.from(await activityFile.arrayBuffer());
       const uploaded = await uploadAttachment({
         folder: "travel-booking",
+        requestReference: referenceNo,
         fileName: `${referenceNo}_${activityFile.name}`,
         mimeType: activityFile.type || "application/octet-stream",
         bytes,
