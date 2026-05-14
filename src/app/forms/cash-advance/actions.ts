@@ -107,6 +107,8 @@ export async function submitCashAdvance(
       amount,
       reason: s(formData, "reason"),
       forApprovalNote: s(formData, "forApprovalNote"),
+      approverName: approver.name,
+      approverEmail: approver.email,
       agreedToAuthorization: true,
       supportingFileName: s(formData, "supportingFileName"),
       supportingDocument,
@@ -215,7 +217,7 @@ export async function submitCashAdvance(
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
     const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
-      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
+      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "approverName", "supportingFileName"],
       maxRows: 8,
     });
     const attachmentDetails = buildAttachmentDetails([
@@ -358,6 +360,8 @@ export async function updateCashAdvance(
       amount,
       reason: s(formData, "reason"),
       forApprovalNote: s(formData, "forApprovalNote"),
+      approverName: approver.name,
+      approverEmail: approver.email,
       agreedToAuthorization: true,
       supportingFileName: s(formData, "supportingFileName"),
       supportingDocument,
@@ -445,7 +449,7 @@ export async function updateCashAdvance(
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
     const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
-      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
+      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "approverName", "supportingFileName"],
       maxRows: 8,
     });
     const attachmentDetails = buildAttachmentDetails([

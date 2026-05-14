@@ -7,6 +7,27 @@ import {
 
 type RowValues = Record<string, unknown>;
 
+const META_HEADER_ALIASES: Record<string, string[]> = {
+  Timestamp: ["Timestamp", "Submitted At", "Date Submitted", "Created At"],
+  "Ref #": ["Ref #", "Reference", "Ref", "RefID", "Request ID", "Request No", "Reference No", "Reference #"],
+  "Submitted By Email": [
+    "Submitted By Email",
+    "Requester Email",
+    "Requestor Email",
+    "Request By Email",
+    "Submitted Email",
+  ],
+  "Submitted By Name": [
+    "Submitted By Name",
+    "Requester Name",
+    "Requestor Name",
+    "Requested By",
+    "Submitted By",
+    "Requester",
+  ],
+  Status: ["Status"],
+};
+
 function toColumnLetters(columnNumber: number) {
   let n = columnNumber;
   let letters = "";
@@ -20,6 +41,19 @@ function toColumnLetters(columnNumber: number) {
 
 function normalizeHeader(value: string) {
   return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function buildTimestampText(value: Date) {
+  return value.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Manila",
+  });
 }
 
 function normalizeReference(value: string) {
@@ -78,16 +112,7 @@ export function buildResponseSheetRows(opts: {
   values: Record<string, unknown>;
 }) {
   const submittedAt = opts.submittedAt ?? new Date();
-  const timestampText = submittedAt.toLocaleString("en-PH", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Manila",
-  });
+  const timestampText = buildTimestampText(submittedAt);
 
   return {
     Timestamp: timestampText,
@@ -99,6 +124,46 @@ export function buildResponseSheetRows(opts: {
     Status: opts.status || "submitted",
     ...flattenObject(opts.values, "", opts.labels ?? {}),
   };
+}
+
+function hasEquivalentExistingHeader(header: string, existingHeaders: string[]) {
+  const aliases = META_HEADER_ALIASES[header];
+  if (!aliases) return existingHeaders.includes(header);
+  const normalizedAliases = new Set(aliases.map(normalizeHeader));
+  return existingHeaders.some((item) => normalizedAliases.has(normalizeHeader(item)));
+}
+
+function projectRowValuesToExistingHeaders(rowValues: RowValues, existingHeaders: string[]) {
+  const projected: RowValues = { ...rowValues };
+  for (const [sourceHeader, aliases] of Object.entries(META_HEADER_ALIASES)) {
+    const sourceValue = rowValues[sourceHeader];
+    if (sourceValue == null || sourceValue === "") continue;
+    const normalizedAliases = new Set(aliases.map(normalizeHeader));
+    for (const header of existingHeaders) {
+      const normalizedHeader = normalizeHeader(header);
+      if (!normalizedAliases.has(normalizedHeader)) continue;
+      if (projected[header] == null || projected[header] === "") {
+        projected[header] = sourceValue;
+      }
+      if (
+        sourceHeader === "Timestamp" &&
+        ["lastupdated", "updatedat", "lastmodified"].includes(normalizedHeader) &&
+        (projected[header] == null || projected[header] === "")
+      ) {
+        projected[header] = sourceValue;
+      }
+    }
+  }
+
+  for (const header of existingHeaders) {
+    const normalizedHeader = normalizeHeader(header);
+    if (!["lastupdated", "updatedat", "lastmodified"].includes(normalizedHeader)) continue;
+    if (projected[header] == null || projected[header] === "") {
+      projected[header] = rowValues.Timestamp ?? "";
+    }
+  }
+
+  return projected;
 }
 
 export async function appendResponseSheetRow(opts: {
@@ -115,10 +180,14 @@ export async function appendResponseSheetRow(opts: {
     String(value ?? "").trim(),
   ) ?? [];
 
-  const rowEntries = Object.entries(opts.rowValues);
+  const normalizedRowValues = headers.length > 0
+    ? projectRowValuesToExistingHeaders(opts.rowValues, headers)
+    : opts.rowValues;
+  const rowEntries = Object.entries(normalizedRowValues);
   const missingHeaders = rowEntries
     .map(([header]) => header)
-    .filter((header) => header && !headers.includes(header));
+    .filter((header) => header && !headers.includes(header))
+    .filter((header) => !hasEquivalentExistingHeader(header, headers));
 
   if (headers.length === 0) {
     headers = rowEntries.map(([header]) => header);
@@ -136,7 +205,7 @@ export async function appendResponseSheetRow(opts: {
     });
   }
 
-  const row = headers.map((header) => flattenValue(opts.rowValues[header]));
+  const row = headers.map((header) => flattenValue(normalizedRowValues[header]));
   await appendSpreadsheetRow({
     spreadsheetId,
     sheetTitle,
@@ -162,9 +231,12 @@ export async function updateResponseSheetStatusByReference(opts: {
   let headers = rows[0].map((value) => String(value ?? "").trim());
   let normalizedHeaders = headers.map(normalizeHeader);
   const refCol = normalizedHeaders.findIndex((header) =>
-    ["ref", "refno", "refnumber", "referenceno", "reference", "referenceid"].includes(header),
+    ["ref", "refno", "refnumber", "referenceno", "reference", "referenceid", "requestid", "requestno"].includes(header),
   );
   let statusCol = normalizedHeaders.findIndex((header) => header === "status");
+  const lastUpdatedCol = normalizedHeaders.findIndex((header) =>
+    ["lastupdated", "updatedat", "lastmodified"].includes(header),
+  );
   if (refCol < 0) return false;
   if (statusCol < 0) {
     headers = [...headers, "Status"];
@@ -189,6 +261,14 @@ export async function updateResponseSheetStatusByReference(opts: {
       range: `${sheetTitle}!${colLetters}${rowNumber}`,
       values: [opts.status],
     });
+    if (lastUpdatedCol >= 0) {
+      const lastUpdatedLetters = toColumnLetters(lastUpdatedCol + 1);
+      await writeSpreadsheetRow({
+        spreadsheetId,
+        range: `${sheetTitle}!${lastUpdatedLetters}${rowNumber}`,
+        values: [buildTimestampText(new Date())],
+      });
+    }
     return true;
   }
 

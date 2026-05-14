@@ -55,6 +55,12 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   servicePickup: "Service / pickup",
   activityScheduleFileName: "Activity schedule",
   supportingFileName: "Supporting file",
+  approverName: "Approver",
+  approverEmail: "Approver email",
+  immediateSuperiorName: "Immediate superior",
+  immediateSuperiorEmail: "Immediate superior email",
+  departmentHeadName: "Department head",
+  departmentHeadEmail: "Department head email",
   agreedToAuthorization: "Authorization confirmed",
   agreedToCertification: "Certification confirmed",
 };
@@ -148,11 +154,13 @@ export function buildAttachmentDetails(items: NotificationAttachmentInput[]): No
 
 function findImportedValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
   const wanted = aliases.map(normalizeKey);
-  for (const [key, rawValue] of Object.entries(values ?? {})) {
-    const keyNorm = normalizeKey(key);
-    const labelNorm = normalizeKey(labels?.[key] ?? "");
-    if (wanted.some((alias) => alias === keyNorm || alias === labelNorm)) {
-      return s(rawValue);
+  for (const alias of wanted) {
+    for (const [key, rawValue] of Object.entries(values ?? {})) {
+      const keyNorm = normalizeKey(key);
+      const labelNorm = normalizeKey(labels?.[key] ?? "");
+      if (alias === keyNorm || alias === labelNorm) {
+        return s(rawValue);
+      }
     }
   }
   return "";
@@ -166,16 +174,18 @@ export function buildImportedAttachmentDetails(formData: any): NotificationDetai
     findImportedValue(
       values,
       labels,
-      "attachmenturl",
-      "attachment url",
-      "supportingdocument",
-      "supporting document",
       "supportingdrivelink",
       "supporting drive link",
       "activitydrivelink",
       "activity drive link",
+      "drivewebviewlink",
+      "drive web view link",
       "filelink",
       "file link",
+      "attachmenturl",
+      "attachment url",
+      "supportingdocument",
+      "supporting document",
     ) || "";
   const attachmentName =
     findImportedValue(
@@ -201,7 +211,15 @@ export function buildImportedAttachmentDetails(formData: any): NotificationDetai
 export function buildStoredRequestSummaryDetails(formSlug: string, formData: any): NotificationDetailRow[] {
   if (formSlug === "cash-advance") {
     return buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formData), {
-      preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "supportingFileName"],
+      preferredKeys: [
+        "payablesTo",
+        "payeeName",
+        "amount",
+        "reason",
+        "forApprovalNote",
+        "approverName",
+        "supportingFileName",
+      ],
       maxRows: 8,
     });
   }
@@ -216,6 +234,8 @@ export function buildStoredRequestSummaryDetails(formSlug: string, formData: any
         "totalExpenses",
         "formType",
         "cashAdvanceReferenceNo",
+        "immediateSuperiorName",
+        "departmentHeadName",
         "reason",
       ],
       maxRows: 10,
@@ -233,6 +253,8 @@ export function buildStoredRequestSummaryDetails(formSlug: string, formData: any
         "destination",
         "departureDate",
         "returnDate",
+        "immediateSuperiorName",
+        "departmentHeadName",
         "travelPurpose",
       ],
       omitKeys: ["birthday", "contactNumber"],
@@ -322,6 +344,10 @@ export function travelBookingFieldMap(formData: any): FieldMap {
     servicePickup: s(formData?.servicePickup),
     activityScheduleFileName: s(formData?.activityScheduleFileName),
     activityDriveLink: s(activity?.driveWebViewLink),
+    immediateSuperiorName: s(formData?.immediateSuperiorName),
+    immediateSuperiorEmail: s(formData?.immediateSuperiorEmail),
+    departmentHeadName: s(formData?.departmentHeadName),
+    departmentHeadEmail: s(formData?.departmentHeadEmail),
   };
 }
 
@@ -337,6 +363,8 @@ export function cashAdvanceFieldMap(formData: any): FieldMap {
     forApprovalNote: s(formData?.forApprovalNote),
     supportingFileName: s(formData?.supportingFileName),
     supportingDriveLink: s(supporting?.driveWebViewLink),
+    approverName: s(formData?.approverName),
+    approverEmail: s(formData?.approverEmail),
     agreedToAuthorization: formData?.agreedToAuthorization ? "Yes" : "",
   };
 }
@@ -364,6 +392,10 @@ export function reimbursementFieldMap(formData: any): FieldMap {
     jvNo: s(formData?.jvNo),
     supportingFileName: s(formData?.supportingFileName),
     supportingDriveLink: s(supporting?.driveWebViewLink),
+    immediateSuperiorName: s(formData?.immediateSuperiorName),
+    immediateSuperiorEmail: s(formData?.immediateSuperiorEmail),
+    departmentHeadName: s(formData?.departmentHeadName),
+    departmentHeadEmail: s(formData?.departmentHeadEmail),
     agreedToCertification: formData?.agreedToCertification ? "Yes" : "",
   };
 
