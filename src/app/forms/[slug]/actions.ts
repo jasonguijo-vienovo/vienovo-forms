@@ -17,7 +17,11 @@ import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { readSpreadsheetMatrix, writeSpreadsheetRow } from "@/lib/google/sheets";
-import { buildNotificationDetailsFromFieldMap, importedFieldMap } from "@/lib/request-fields";
+import {
+  buildImportedAttachmentDetails,
+  buildNotificationDetailsFromFieldMap,
+  importedFieldMap,
+} from "@/lib/request-fields";
 import { RequestModel } from "@/models/Request";
 import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
@@ -1416,13 +1420,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
     try {
       const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
       const requestUrl = appUrl ? `${appUrl}/requests/${encodeURIComponent(referenceNo)}` : "";
+      const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
       const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
-      const approveActionUrl = appUrl
-        ? `${appUrl}/approvals?ref=${encodeURIComponent(referenceNo)}&action=approve`
-        : "";
-      const rejectActionUrl = appUrl
-        ? `${appUrl}/approvals?ref=${encodeURIComponent(referenceNo)}&action=reject`
-        : "";
       const isEmployeeInformation = slug === EMPLOYEE_INFORMATION_SLUG;
       const isSalaryLoan = isSalaryLoanForm(slug, imported.name);
       const hrRecipients = isEmployeeInformation
@@ -1447,6 +1446,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           `- Contact No.: ${employeeRow?.["Contact No"] ?? ""}\n` +
           `- Job Title: ${employeeRow?.["Job Title"] ?? ""}\n` +
           `- Reference No: ${referenceNo}\n` +
+          `- Attachment: None\n` +
           (requestUrl ? `- Request Link: ${requestUrl}\n` : "")
         : `Your ${imported.name} form has been submitted successfully.\n\n` +
           `Submission details:\n` +
@@ -1460,7 +1460,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           Email: ${employeeRow?.Email ?? ""}<br />
           Contact No.: ${employeeRow?.["Contact No"] ?? ""}<br />
           Job Title: ${employeeRow?.["Job Title"] ?? ""}<br />
-          Reference No: ${referenceNo}</p>
+          Reference No: ${referenceNo}<br />
+          Attachment: None</p>
           <p style="margin-top:14px;">
             ${requestUrl ? `<a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
           </p>
@@ -1469,6 +1470,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
       const importedNotificationDetails = buildNotificationDetailsFromFieldMap(importedFieldMap({ fieldLabels: labels, values }), {
         maxRows: 12,
       });
+      const attachmentDetails = buildImportedAttachmentDetails({ fieldLabels: labels, values });
       const notificationJobs: Array<Promise<unknown>> = [];
       notificationJobs.push(
         (async () => {
@@ -1482,12 +1484,13 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             html: submitterHtml,
             summary: isEmployeeInformation ? undefined : `Your ${imported.name} form has been submitted successfully.`,
             details: isEmployeeInformation
-              ? undefined
-              : [
-                  { label: "Reference No.", value: referenceNo },
-                  { label: "Requester", value: name || email },
-                  ...importedNotificationDetails,
-                ],
+                ? undefined
+                : [
+                    { label: "Reference No.", value: referenceNo },
+                    { label: "Requester", value: name || email },
+                    ...importedNotificationDetails,
+                    ...attachmentDetails,
+                  ],
           });
           if (!sentSubmitterViaFlow && isEmployeeInformation) {
             await sendNotificationEmail({
@@ -1508,6 +1511,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           `- Contact No.: ${employeeRow?.["Contact No"] ?? ""}\n` +
           `- Job Title: ${employeeRow?.["Job Title"] ?? ""}\n` +
           `- Reference No: ${referenceNo}\n` +
+          `- Attachment: None\n` +
           `- Spreadsheet Link: ${EMPLOYEE_INFORMATION_SHEET_URL}\n` +
           (requestUrl ? `- Request Link: ${requestUrl}\n` : "");
         const hrHtml = `
@@ -1517,7 +1521,8 @@ export async function submitImportedForm(slug: string, formData: FormData) {
           Email: ${employeeRow?.Email ?? ""}<br />
           Contact No.: ${employeeRow?.["Contact No"] ?? ""}<br />
           Job Title: ${employeeRow?.["Job Title"] ?? ""}<br />
-          Reference No: ${referenceNo}</p>
+          Reference No: ${referenceNo}<br />
+          Attachment: None</p>
           <p style="margin-top:14px;">
             <a href="${EMPLOYEE_INFORMATION_SHEET_URL}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#0f5f35;color:#fff;text-decoration:none;font-weight:600;">Open Spreadsheet</a>
             ${requestUrl ? ` <a href="${requestUrl}" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#1e293b;color:#fff;text-decoration:none;font-weight:600;">Open Request</a>` : ""}
@@ -1564,12 +1569,14 @@ export async function submitImportedForm(slug: string, formData: FormData) {
                 { label: "Email", value: detailsEmail },
                 { label: "Status", value: "Pending" },
                 ...importedNotificationDetails,
+                ...attachmentDetails,
               ],
               text: approverText,
-              ctaUrl: approvalsUrl || requestUrl,
-              ctaLabel: "View all approval views",
-              approveUrl: approveActionUrl || `${requestUrl}/approve`,
-              rejectUrl: rejectActionUrl || `${requestUrl}/approve`,
+              ctaUrl: approvalPageUrl || approvalsUrl || requestUrl,
+              ctaLabel: "Open approval page",
+              approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+              rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+              commentUrl: requestUrl ? `${requestUrl}/approve#comment` : "",
               viewAllUrl: approvalsUrl || requestUrl,
             }),
           );

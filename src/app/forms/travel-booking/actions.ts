@@ -20,7 +20,12 @@ import { uploadAttachment } from "@/lib/storage/attachments";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
-import { buildNotificationDetailsFromFieldMap, diffFields, travelBookingFieldMap } from "@/lib/request-fields";
+import {
+  buildAttachmentDetails,
+  buildNotificationDetailsFromFieldMap,
+  diffFields,
+  travelBookingFieldMap,
+} from "@/lib/request-fields";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -256,6 +261,8 @@ export async function submitTravelBooking(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
+    const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
     const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
       preferredKeys: [
         "fullName",
@@ -272,6 +279,13 @@ export async function submitTravelBooking(
       omitKeys: ["birthday", "contactNumber"],
       maxRows: 10,
     });
+    const attachmentDetails = buildAttachmentDetails([
+      {
+        label: "Activity schedule",
+        fileName: activitySchedule?.fileName || formDataObj.activityScheduleFileName,
+        url: activitySchedule?.driveWebViewLink,
+      },
+    ]);
     await setFlashToast({ tone: "success", message: `Travel Booking submitted: ${referenceNo}` });
 
     try {
@@ -279,18 +293,47 @@ export async function submitTravelBooking(
         formSlug: "travel-booking",
         formName: "Travel Booking",
         event: "submitted",
-        to: [supervisor.email, processor.email, submitterEmail],
+        to: [processor.email, submitterEmail],
         subject: `Travel Booking request submitted (${referenceNo})`,
         summary: "A Travel Booking request has been submitted and routed for review.",
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           ...notificationDetails,
+          ...attachmentDetails,
         ],
         text:
           `A Travel Booking request has been submitted.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
+      await sendFlowNotification({
+        formSlug: "travel-booking",
+        formName: "Travel Booking",
+        event: "next-approver",
+        to: supervisor.email,
+        subject: `Travel Booking request needs your approval (${referenceNo})`,
+        summary: "A Travel Booking request is waiting for your approval.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Travel Booking request is waiting for your approval.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: approvalPageUrl || requestUrl,
+        ctaLabel: "Open approval page",
+        approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+        rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+        commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+        viewAllUrl: approvalsUrl || requestUrl,
       });
     } catch (e) {
       console.error("Email notification failed:", e);
@@ -510,6 +553,31 @@ export async function updateTravelBooking(
 
     const appUrl = (process.env.AUTH_URL || "").replace(/\/$/, "");
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
+    const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
+    const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const notificationDetails = buildNotificationDetailsFromFieldMap(travelBookingFieldMap(formDataObj), {
+      preferredKeys: [
+        "fullName",
+        "employeeId",
+        "department",
+        "landAir",
+        "tripType",
+        "origin",
+        "destination",
+        "departureDate",
+        "returnDate",
+        "travelPurpose",
+      ],
+      omitKeys: ["birthday", "contactNumber"],
+      maxRows: 10,
+    });
+    const attachmentDetails = buildAttachmentDetails([
+      {
+        label: "Activity schedule",
+        fileName: activitySchedule?.fileName || formDataObj.activityScheduleFileName,
+        url: activitySchedule?.driveWebViewLink,
+      },
+    ]);
     await setFlashToast({ tone: "success", message: `Travel Booking updated: ${referenceNo}` });
 
     try {
@@ -517,12 +585,47 @@ export async function updateTravelBooking(
         formSlug: "travel-booking",
         formName: "Travel Booking",
         event: "resubmitted",
-        to: [supervisor.email, submitterEmail],
+        to: [submitterEmail],
         subject: `Travel Booking request updated (${referenceNo})`,
+        summary: "Your Travel Booking request was updated and sent back into the approval workflow.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
         text:
           `A Travel Booking request has been updated and returned to Step 1 for approval.\n\n` +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
+      });
+      await sendFlowNotification({
+        formSlug: "travel-booking",
+        formName: "Travel Booking",
+        event: "next-approver",
+        to: supervisor.email,
+        subject: `Travel Booking request needs your approval (${referenceNo})`,
+        summary: "A Travel Booking request was updated and is back at your approval step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Travel Booking request has been updated and is back at your approval step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: approvalPageUrl || requestUrl,
+        ctaLabel: "Open approval page",
+        approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+        rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+        commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+        viewAllUrl: approvalsUrl || requestUrl,
       });
     } catch (e) {
       console.error("Email notification failed:", e);

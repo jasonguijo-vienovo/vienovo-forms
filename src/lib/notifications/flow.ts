@@ -9,6 +9,7 @@ export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | 
 export type NotificationDetail = {
   label: string;
   value: string;
+  href?: string;
 };
 
 export type NotificationFlowSettings = {
@@ -170,7 +171,11 @@ function notificationDetailsToHtml(details: NotificationDetail[]) {
                   ${escapeHtml(detail.label)}
                 </td>
                 <td style="padding:12px 14px;border-bottom:${index === details.length - 1 ? "0" : "1px solid #e2e8f0"};color:#0f172a;font-size:14px;line-height:1.55;vertical-align:top;">
-                  ${escapeHtml(detail.value)}
+                  ${
+                    detail.href
+                      ? `<a href="${escapeHtml(detail.href)}" style="color:#166534;text-decoration:underline;word-break:break-all;">${escapeHtml(detail.value)}</a>`
+                      : escapeHtml(detail.value)
+                  }
                 </td>
               </tr>`,
           )
@@ -189,6 +194,7 @@ function buildNotificationBodyHtml(opts: {
   ctaLabel?: string;
   approveUrl?: string;
   rejectUrl?: string;
+  commentUrl?: string;
   viewAllUrl?: string;
   accent?: "brand" | "success" | "warn";
 }) {
@@ -210,15 +216,21 @@ function buildNotificationBodyHtml(opts: {
          Reject
        </a>`
     : "";
+  const commentHtml = opts.commentUrl
+    ? `<a href="${opts.commentUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;">
+         Comment
+       </a>`
+    : "";
   const viewAllHtml = opts.viewAllUrl
     ? `<a href="${opts.viewAllUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;">
          View all approval views
        </a>`
     : "";
-  const ctaHtml = [approveHtml, rejectHtml, viewAllHtml, primaryCtaHtml].filter(Boolean).length
+  const ctaHtml = [approveHtml, rejectHtml, commentHtml, viewAllHtml, primaryCtaHtml].filter(Boolean).length
     ? `<p style="margin:20px 0 0;display:flex;flex-wrap:wrap;gap:8px;">
          ${approveHtml}
          ${rejectHtml}
+         ${commentHtml}
          ${viewAllHtml}
          ${primaryCtaHtml}
        </p>`
@@ -250,6 +262,7 @@ export function buildNotificationPreview(formSlug: string, formName: string): No
     { label: "Requester", value: "Juan Dela Cruz" },
     { label: "Department", value: "Finance" },
     { label: "Current step", value: "Manager approval" },
+    { label: "Attachment", value: "None" },
   ];
   const html = buildNotificationBodyHtml({
     title: subject,
@@ -308,6 +321,7 @@ export async function sendFlowNotification(opts: {
   ctaLabel?: string;
   approveUrl?: string;
   rejectUrl?: string;
+  commentUrl?: string;
   viewAllUrl?: string;
 }) {
   const startedAt = Date.now();
@@ -379,6 +393,7 @@ export async function sendFlowNotification(opts: {
           ctaLabel: opts.ctaLabel,
           approveUrl: opts.approveUrl,
           rejectUrl: opts.rejectUrl,
+          commentUrl: opts.commentUrl,
           viewAllUrl: opts.viewAllUrl,
           accent: opts.event === "approved" ? "success" : opts.event === "rejected" ? "warn" : "brand",
         });
