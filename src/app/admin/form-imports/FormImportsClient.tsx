@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -76,6 +76,16 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
   const current = filtered.find((x: any) => String(x._id) === selectedId) ?? filtered[0] ?? null;
   const blockers = filtered.reduce((n: number, it: any) => n + (it.parseDiagnostics?.blockers?.length ?? 0), 0);
   const warnings = filtered.reduce((n: number, it: any) => n + (it.parseDiagnostics?.warnings?.length ?? 0), 0);
+
+  useEffect(() => {
+    if (filtered.length === 0) {
+      if (selectedId !== null) setSelectedId(null);
+      return;
+    }
+
+    const selectedExists = filtered.some((entry: any) => String(entry._id) === selectedId);
+    if (!selectedExists) setSelectedId(String(filtered[0]._id));
+  }, [filtered, selectedId]);
 
   return (
     <div className="space-y-4">
@@ -185,6 +195,7 @@ export function FormImportsClient({ imports, definitionBySlug, syncedStatsBySlug
           <aside className="admin-panel p-4">
             {current ? (
               <DraftPanel
+                key={String(current._id)}
                 item={current}
                 definition={definitionBySlug[current.slug]}
                 synced={syncedStatsBySlugKey[normalizeLookupKey(current.slug)] ?? { valueCount: 0 }}
@@ -235,8 +246,13 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-surface-text">Edit import settings</h3>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-surface-text">Edit import settings</h3>
+          <p className="text-xs text-surface-muted">
+            Selected form: <span className="font-medium text-surface-text">{item.name}</span> ({item.slug})
+          </p>
+        </div>
         <Link href={previewHref} className="btn-secondary">
           <Eye className="h-4 w-4" />
           {previewLabel}
@@ -254,10 +270,12 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         Last parsed: {item.lastParsedAt ? new Date(item.lastParsedAt).toLocaleString() : "Not recorded"}
       </p>
       <ImportReadinessPanel item={item} definition={definition} synced={synced} />
-      <VersionHistory rows={versions ?? []} />
+      <VersionHistory key={`versions-${String(item._id)}`} rows={versions ?? []} item={item} />
 
-      <details>
-        <summary className="cursor-pointer text-sm font-semibold text-brand-700">Status</summary>
+      <details key={`status-${String(item._id)}`}>
+        <summary className="cursor-pointer text-sm font-semibold text-brand-700">
+          {`Status - ${item.name} (${item.slug})`}
+        </summary>
         <form action={updateFormImportStatus} className="mt-2 space-y-2">
           <input type="hidden" name="id" value={String(item._id)} />
           <select name="status" defaultValue={item.status} className="field-input">
@@ -276,8 +294,10 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         </form>
       </details>
 
-      <details>
-        <summary className="cursor-pointer text-sm font-semibold text-brand-700">Spreadsheet</summary>
+      <details key={`spreadsheet-${String(item._id)}`}>
+        <summary className="cursor-pointer text-sm font-semibold text-brand-700">
+          {`Spreadsheet - ${item.spreadsheetId ? "Connected" : "Not connected"}`}
+        </summary>
         <form action={updateFormImportConfig} className="mt-2 space-y-2">
           <input type="hidden" name="id" value={String(item._id)} />
           <input
@@ -488,11 +508,11 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
   );
 }
 
-function VersionHistory({ rows }: { rows: any[] }) {
+function VersionHistory({ rows, item }: { rows: any[]; item: any }) {
   return (
     <details className="rounded border border-surface-border bg-white p-3">
       <summary className="cursor-pointer text-sm font-semibold text-brand-700">
-        Version history ({rows.length})
+        {`Version history (${rows.length}) - ${item.slug}`}
       </summary>
       {rows.length === 0 ? (
         <p className="mt-3 text-sm text-surface-muted">No version snapshots recorded yet.</p>
