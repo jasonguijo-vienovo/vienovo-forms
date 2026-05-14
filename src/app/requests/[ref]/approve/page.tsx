@@ -3,10 +3,16 @@ import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { findActiveDelegation } from "@/lib/approval-delegations";
 import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
+import { humanizeWorkflowRole } from "@/lib/workflow-routing";
 import { RequestModel } from "@/models/Request";
 import { approveCurrentStep, rejectCurrentStep, returnCurrentStep } from "./actions";
+
+function normalizeEmail(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
+}
 
 export default async function ApproveRequestPage({
   params,
@@ -25,7 +31,19 @@ export default async function ApproveRequestPage({
 
   const current = doc.approvalChain.find((a) => a.step === doc.currentStep) ?? null;
   if (!current || current.status !== "pending") redirect(`/requests/${encodeURIComponent(decodedRef)}`);
-  if (current.approverEmail !== userEmail) redirect(`/requests/${encodeURIComponent(decodedRef)}`);
+  const currentApproverEmail = normalizeEmail(current.approverEmail);
+  const activeDelegation =
+    currentApproverEmail === userEmail
+      ? null
+      : await findActiveDelegation({
+          delegatorEmail: currentApproverEmail,
+          delegateEmail: userEmail,
+        });
+  if (currentApproverEmail !== userEmail && !activeDelegation) {
+    redirect(`/requests/${encodeURIComponent(decodedRef)}`);
+  }
+
+  const currentRoleLabel = humanizeWorkflowRole(current.role) || current.role;
 
   const approveAction = approveCurrentStep.bind(null, decodedRef);
   const rejectAction = rejectCurrentStep.bind(null, decodedRef);
@@ -46,9 +64,29 @@ export default async function ApproveRequestPage({
               Current step
             </p>
             <p className="text-sm font-semibold text-gray-800 mt-1">
-              {current.approverName} <span className="text-gray-400">({current.role})</span>
+              {current.approverName} <span className="text-gray-400">({currentRoleLabel})</span>
             </p>
             <p className="text-xs text-gray-500 mt-1">{current.approverEmail}</p>
+            {activeDelegation ? (
+              <p className="text-xs text-brand-700 mt-2">
+                You are acting as delegate for {activeDelegation.delegatorName || activeDelegation.delegatorEmail}.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a href="#approve" className="rounded-full border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50">
+              Approve
+            </a>
+            <a href="#reject" className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
+              Reject
+            </a>
+            <a href="#comment" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              Comment
+            </a>
+            <a href="#return" className="rounded-full border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">
+              Return
+            </a>
           </div>
 
           <div id="comment" className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 scroll-mt-24">

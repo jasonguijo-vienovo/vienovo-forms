@@ -35,6 +35,9 @@ export const TRAVEL_BOOKING_RESPONSE_HEADERS = [
   "Request #",
 ] as const;
 
+const TRAVEL_BOOKING_REF_FORMULA =
+  '={"Ref #";ArrayFormula(IF(ISBLANK($A$2:$A),"",TEXT($A$2:$A,"YYYYMMDDHHmmss")))}';
+
 function normalizeSheetHeader(input: string) {
   return String(input || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -134,12 +137,29 @@ function buildTravelBookingMultiCityTimes(multiCity: any) {
   );
 }
 
+function buildTravelBookingHeaderRow(useGeneratedRefColumn: boolean) {
+  return TRAVEL_BOOKING_RESPONSE_HEADERS.map((header, index) =>
+    useGeneratedRefColumn && index === 2 ? TRAVEL_BOOKING_REF_FORMULA : header,
+  );
+}
+
+function shouldUseGeneratedRefColumn(matrix: string[][], headers: string[]) {
+  const refColumnIndex = headers.findIndex((header) => normalizeSheetHeader(header) === "ref");
+  if (refColumnIndex < 0) return false;
+
+  const dataRows = matrix.slice(1).filter((row) => row.some((cell) => String(cell ?? "").trim()));
+  if (dataRows.length === 0) return true;
+
+  return dataRows.some((row) => /^\d{14}$/.test(String(row?.[refColumnIndex] ?? "").trim()));
+}
+
 export function buildTravelBookingSheetRow(input: {
   referenceNo: string;
   requestNumber: number;
   submittedByEmail: string;
   formData: any;
   submittedAt?: Date | null;
+  keepRefColumnBlank?: boolean;
 }) {
   const formData = input.formData ?? {};
   const hotelAccommodation = joinNonEmpty(
@@ -154,7 +174,7 @@ export function buildTravelBookingSheetRow(input: {
   return [
     formatSheetTimestamp(input.submittedAt ? new Date(input.submittedAt) : new Date()),
     "pending",
-    input.referenceNo,
+    input.keepRefColumnBlank ? "" : input.referenceNo,
     input.submittedByEmail,
     String(formData.fullName || "").trim(),
     formatDateValue(formData.birthday),
@@ -247,6 +267,10 @@ export async function loadTravelBookingResponseSheetState(input: {
   const currentHeaders = (matrix[0] ?? []).map((cell) => String(cell ?? "").trim());
   const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
   const headersMatch = headersMatchExpected(currentHeaders, expectedHeaders);
+  const useGeneratedRefColumn = shouldUseGeneratedRefColumn(
+    matrix,
+    headersMatch && currentHeaders.length > 0 ? currentHeaders : expectedHeaders,
+  );
 
   if (
     !headersMatch &&
@@ -262,7 +286,7 @@ export async function loadTravelBookingResponseSheetState(input: {
     await writeSpreadsheetRow({
       spreadsheetId,
       range: `${resolvedSheetTitle}!A1`,
-      values: expectedHeaders,
+      values: buildTravelBookingHeaderRow(useGeneratedRefColumn),
     });
   }
 
@@ -274,6 +298,7 @@ export async function loadTravelBookingResponseSheetState(input: {
     extraColumnCount: headersMatch
       ? Math.max(currentHeaders.length - expectedHeaders.length, 0)
       : 0,
+    useGeneratedRefColumn,
   };
 }
 
@@ -301,6 +326,7 @@ export async function appendTravelBookingResponseRow(input: {
         submittedByEmail: input.submittedByEmail,
         formData: input.formData,
         submittedAt: input.submittedAt,
+        keepRefColumnBlank: state.useGeneratedRefColumn,
       }),
       ...Array(state.extraColumnCount).fill(""),
     ],
