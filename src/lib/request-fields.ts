@@ -312,6 +312,48 @@ export function formatMoney(v: unknown) {
   }).format(n);
 }
 
+function formatDisplayDate(value: unknown) {
+  if (!value) return "";
+  const raw = String(value).trim();
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[2]}/${isoMatch[3]}/${isoMatch[1]}`;
+  }
+
+  const date = value instanceof Date ? value : new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  const iso = date.toISOString().slice(0, 10);
+  return `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
+}
+
+function formatDisplayTime(value: unknown) {
+  const raw = s(value).trim();
+  if (!raw) return "";
+
+  const twelveHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
+  if (twelveHourMatch) {
+    const hour = Number.parseInt(twelveHourMatch[1], 10);
+    const minute = twelveHourMatch[2];
+    const second = twelveHourMatch[3] || "00";
+    const meridiem = twelveHourMatch[4].toUpperCase();
+    return `${String(hour).padStart(2, "0")}:${minute}:${second} ${meridiem}`;
+  }
+
+  const twentyFourHourMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (twentyFourHourMatch) {
+    const hour24 = Number.parseInt(twentyFourHourMatch[1], 10);
+    const minute = twentyFourHourMatch[2];
+    const second = twentyFourHourMatch[3] || "00";
+    if (hour24 >= 0 && hour24 <= 23) {
+      const meridiem = hour24 >= 12 ? "PM" : "AM";
+      const hour12 = hour24 % 12 || 12;
+      return `${String(hour12).padStart(2, "0")}:${minute}:${second} ${meridiem}`;
+    }
+  }
+
+  return raw;
+}
+
 export function travelBookingFieldMap(formData: any): FieldMap {
   const tripType = s(formData?.tripType);
   const multiCity = formData?.multiCity ?? null;
@@ -321,23 +363,23 @@ export function travelBookingFieldMap(formData: any): FieldMap {
     employeeId: s(formData?.employeeId),
     fullName: s(formData?.fullName),
     department: s(formData?.department),
-    birthday: formData?.birthday ? new Date(formData.birthday).toISOString().slice(0, 10) : s(formData?.birthday),
+    birthday: formatDisplayDate(formData?.birthday),
     contactNumber: s(formData?.contactNumber),
     landAir: s(formData?.landAir),
     tripType,
     origin: s(formData?.origin),
     destination: s(formData?.destination),
-    departureDate: formData?.departureDate ? new Date(formData.departureDate).toISOString().slice(0, 10) : s(formData?.departureDate),
-    returnDate: formData?.returnDate ? new Date(formData.returnDate).toISOString().slice(0, 10) : s(formData?.returnDate),
-    preferredTime: s(formData?.preferredTime),
+    departureDate: formatDisplayDate(formData?.departureDate),
+    returnDate: formatDisplayDate(formData?.returnDate),
+    preferredTime: formatDisplayTime(formData?.preferredTime),
     mc1Origin: s(multiCity?.trip1?.origin),
     mc1Destination: s(multiCity?.trip1?.destination),
-    mc1Date: multiCity?.trip1?.date ? new Date(multiCity.trip1.date).toISOString().slice(0, 10) : s(multiCity?.trip1?.date),
-    mc1Time: s(multiCity?.trip1?.time),
+    mc1Date: formatDisplayDate(multiCity?.trip1?.date),
+    mc1Time: formatDisplayTime(multiCity?.trip1?.time),
     mc2Origin: s(multiCity?.trip2?.origin),
     mc2Destination: s(multiCity?.trip2?.destination),
-    mc2Date: multiCity?.trip2?.date ? new Date(multiCity.trip2.date).toISOString().slice(0, 10) : s(multiCity?.trip2?.date),
-    mc2Time: s(multiCity?.trip2?.time),
+    mc2Date: formatDisplayDate(multiCity?.trip2?.date),
+    mc2Time: formatDisplayTime(multiCity?.trip2?.time),
     airline: s(formData?.airline),
     travelPurpose: s(formData?.travelPurpose),
     baggage: s(formData?.baggage),
