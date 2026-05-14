@@ -9,6 +9,22 @@ function requiredEnv(name: string) {
   return v;
 }
 
+function normalizePrivateKey(input: string) {
+  let value = String(input ?? "").trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1);
+  }
+
+  return value
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\r\n/g, "\n")
+    .trim();
+}
+
 function base64UrlEncode(input: Buffer | string) {
   const buf = typeof input === "string" ? Buffer.from(input) : input;
   return buf
@@ -222,7 +238,7 @@ async function loadServiceAccountCredentials(): Promise<{ clientEmail: string; p
   if (directEmail && directKey) {
     return {
       clientEmail: directEmail,
-      privateKey: directKey.replace(/\\n/g, "\n"),
+      privateKey: normalizePrivateKey(directKey),
     };
   }
 
@@ -239,5 +255,8 @@ async function loadServiceAccountCredentials(): Promise<{ clientEmail: string; p
     throw new Error("Invalid service account key file. Expected client_email and private_key.");
   }
 
-  return { clientEmail: json.client_email, privateKey: json.private_key };
+  return {
+    clientEmail: json.client_email,
+    privateKey: normalizePrivateKey(json.private_key),
+  };
 }
