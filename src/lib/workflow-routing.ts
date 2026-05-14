@@ -24,11 +24,31 @@ export function isProcessorRole(role: string | null | undefined) {
   return normalizeKey(String(role ?? "")) === "processor";
 }
 
+export function humanizeWorkflowRole(role: string | null | undefined) {
+  const key = normalizeKey(String(role ?? ""));
+  if (!key) return "";
+  if (key === "processor") return "Processor";
+  if (key === "supervisor") return "Immediate Superior";
+  if (key === "head") return "Department Head";
+  if (key === "level1") return "Level 1 Approver";
+  if (key === "level2") return "Level 2 Approver";
+  if (key === "ceo") return "CEO";
+  if (key === "finance") return "Finance";
+  if (key === "hr") return "HR";
+
+  return String(role ?? "")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function buildPendingStepNotificationCopy(input: {
   formName: string;
   referenceNo: string;
   role: string;
 }) {
+  const roleLabel = humanizeWorkflowRole(input.role);
   if (isProcessorRole(input.role)) {
     return {
       subject: `${input.formName} request needs processing (${input.referenceNo})`,
@@ -41,8 +61,12 @@ export function buildPendingStepNotificationCopy(input: {
 
   return {
     subject: `${input.formName} request needs your approval (${input.referenceNo})`,
-    summary: `A ${input.formName} request is waiting for your approval.`,
-    text: `A ${input.formName} request is waiting for your approval.\n\n`,
+    summary: roleLabel
+      ? `A ${input.formName} request is waiting for ${roleLabel.toLowerCase()} approval.`
+      : `A ${input.formName} request is waiting for your approval.`,
+    text: roleLabel
+      ? `A ${input.formName} request is waiting for ${roleLabel.toLowerCase()} approval.\n\n`
+      : `A ${input.formName} request is waiting for your approval.\n\n`,
     ctaLabel: "Open approval page",
     statusLabel: "Pending approval",
   };

@@ -10,7 +10,7 @@ import {
   buildStoredRequestSummaryDetails,
 } from "@/lib/request-fields";
 import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
-import { buildPendingStepNotificationCopy } from "@/lib/workflow-routing";
+import { buildPendingStepNotificationCopy, humanizeWorkflowRole } from "@/lib/workflow-routing";
 import { RequestModel } from "@/models/Request";
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
 
@@ -220,6 +220,18 @@ export async function applyApprovalDecision({
   const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
   const summaryDetails = buildStoredRequestSummaryDetails(String(formSlug || ""), (doc as any).formData ?? {});
   const attachmentDetails = buildStoredRequestAttachmentDetails(String(formSlug || ""), (doc as any).formData ?? {});
+  const currentRoleLabel = humanizeWorkflowRole(current.role) || current.role || "Approver";
+  const nextRoleLabel = humanizeWorkflowRole(nextApprover?.role) || nextApprover?.role || "";
+  const actedByName =
+    activeDelegation?.delegateName ||
+    normalizedName ||
+    activeDelegation?.delegateEmail ||
+    current.approverName ||
+    current.approverEmail ||
+    "";
+  const approvedByValue = activeDelegation
+    ? `${current.approverName || current.approverEmail || currentRoleLabel} via delegate ${actedByName}`
+    : `${actedByName}${currentRoleLabel ? ` (${currentRoleLabel})` : ""}`;
 
   try {
     if (isApprove) {
@@ -239,7 +251,7 @@ export async function applyApprovalDecision({
           details: [
             { label: "Reference No.", value: normalizedReference },
             { label: "Requester", value: doc.submittedBy?.name || doc.submittedBy?.email || "" },
-            { label: "Current role", value: nextApprover.role || "" },
+            { label: "Current role", value: humanizeWorkflowRole(nextApprover.role) || nextApprover.role || "" },
             { label: "Status", value: nextStepCopy.statusLabel },
             ...summaryDetails,
             ...attachmentDetails,
@@ -252,6 +264,33 @@ export async function applyApprovalDecision({
           commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
           viewAllUrl: approvalsUrl || requestUrl,
         });
+        if (submittedByEmail) {
+          const requesterSummary = nextRoleLabel
+            ? `Your ${formName} request was approved by ${currentRoleLabel.toLowerCase()} and is now waiting for ${nextRoleLabel.toLowerCase()}.`
+            : `Your ${formName} request was approved by ${currentRoleLabel.toLowerCase()} and moved to the next step.`;
+          const requesterText = nextRoleLabel
+            ? `Your ${formName} request was approved by ${currentRoleLabel} and is now waiting for ${nextRoleLabel}.\n\n`
+            : `Your ${formName} request was approved by ${currentRoleLabel} and moved to the next approval step.\n\n`;
+          await sendFlowNotification({
+            formSlug,
+            formName,
+            event: "approved",
+            to: submittedByEmail,
+            subject: `${formName} request update: approved by ${currentRoleLabel} (${normalizedReference})`,
+            summary: requesterSummary,
+            details: [
+              { label: "Reference No.", value: normalizedReference },
+              { label: "Approved by", value: approvedByValue },
+              ...(nextRoleLabel ? [{ label: "Next step", value: nextRoleLabel }] : []),
+              { label: "Status", value: nextStepCopy.statusLabel },
+              ...summaryDetails,
+              ...attachmentDetails,
+            ].filter((detail) => detail.value),
+            text: requesterText,
+            ctaUrl: requestUrl,
+            ctaLabel: "Open request",
+          });
+        }
       } else if (submittedByEmail) {
         await sendFlowNotification({
           formSlug,

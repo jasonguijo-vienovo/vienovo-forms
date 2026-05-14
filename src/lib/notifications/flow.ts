@@ -4,6 +4,7 @@ import { NotificationFlow } from "@/models/NotificationFlow";
 import { Approver } from "@/models/Approver";
 import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { sendNotificationEmail } from "@/lib/notifications/email";
+import { humanizeWorkflowRole } from "@/lib/workflow-routing";
 
 export type NotificationEvent = "submitted" | "resubmitted" | "next-approver" | "approved" | "rejected" | "returned";
 export type NotificationDetail = {
@@ -105,11 +106,12 @@ function prependGreeting(opts: {
   formSlug: string;
 }) {
   const ln = opts.lastName ? ` ${opts.lastName}` : "";
+  const normalizedRole = humanizeWorkflowRole(opts.roleHint);
   const greeting =
     opts.roleHint === "hr"
       ? `Dear, HR${ln}`
-      : opts.roleHint
-        ? `Dear, ${opts.roleHint}${ln}`
+      : normalizedRole
+        ? `Dear, ${normalizedRole}${ln}`
         : `Dear,${ln}`;
   return `${greeting}\n\nForm: ${opts.formName} (${opts.formSlug})\n\n${opts.body}`;
 }
@@ -223,7 +225,7 @@ function buildNotificationBodyHtml(opts: {
     : "";
   const viewAllHtml = opts.viewAllUrl
     ? `<a href="${opts.viewAllUrl}" style="display:inline-block;padding:11px 16px;border-radius:10px;border:1px solid #cbd5e1;background:#ffffff;color:#0f172a;text-decoration:none;font-weight:700;font-size:14px;">
-         View all approval views
+         View approvals
        </a>`
     : "";
   const ctaHtml = [approveHtml, rejectHtml, commentHtml, viewAllHtml, primaryCtaHtml].filter(Boolean).length
