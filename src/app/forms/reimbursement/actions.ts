@@ -17,6 +17,7 @@ import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { uploadAttachment } from "@/lib/storage/attachments";
+import { buildPendingStepNotificationCopy, resolveAssignedProcessor } from "@/lib/workflow-routing";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -111,7 +112,7 @@ export async function submitReimbursement(
     const [supervisor, head, processor] = await Promise.all([
       supervisorId ? Approver.findById(supervisorId).lean() : null,
       headId ? Approver.findById(headId).lean() : null,
-      Approver.findOne({ roles: "processor", isActive: true }).lean(),
+      resolveAssignedProcessor({ definition }),
     ]);
 
     if (!supervisor) throw new Error("Invalid Immediate Superior");
@@ -318,6 +319,11 @@ export async function submitReimbursement(
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const nextStepCopy = buildPendingStepNotificationCopy({
+      formName: "Reimbursement",
+      referenceNo,
+      role: "supervisor",
+    });
     const notificationDetails = buildNotificationDetailsFromFieldMap(reimbursementFieldMap(formDataObj), {
       preferredKeys: [
         "firstName",
@@ -348,7 +354,7 @@ export async function submitReimbursement(
         formSlug: "reimbursement",
         formName: "Reimbursement",
         event: "submitted",
-        to: [processor.email, submitterEmail],
+        to: [submitterEmail],
         subject: `Reimbursement request submitted (${referenceNo})`,
         summary: "A Reimbursement request has been submitted and is waiting in the approval workflow.",
         details: [
@@ -369,22 +375,22 @@ export async function submitReimbursement(
         formName: "Reimbursement",
         event: "next-approver",
         to: supervisor.email,
-        subject: `Reimbursement request needs your approval (${referenceNo})`,
-        summary: "A Reimbursement request is waiting for your approval.",
+        subject: nextStepCopy.subject,
+        summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
-          { label: "Status", value: "Pending approval" },
+          { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
         ],
         text:
-          `A Reimbursement request is waiting for your approval.\n\n` +
+          nextStepCopy.text +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
         ctaUrl: approvalPageUrl || requestUrl,
-        ctaLabel: "Open approval page",
+        ctaLabel: nextStepCopy.ctaLabel,
         approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
@@ -411,6 +417,7 @@ export async function updateReimbursement(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("reimbursement");
 
     const doc = await RequestModel.findOne({
       referenceNo,
@@ -422,21 +429,16 @@ export async function updateReimbursement(
     const supervisorId = s(formData, "supervisorId");
     const headId = s(formData, "headId");
 
-    const [supervisor, head, fallbackProcessor] = await Promise.all([
+    const [supervisor, head, processor] = await Promise.all([
       supervisorId ? Approver.findById(supervisorId).lean() : null,
       headId ? Approver.findById(headId).lean() : null,
-      Approver.findOne({ roles: "processor", isActive: true }).lean(),
+      resolveAssignedProcessor({
+        definition,
+        existingProcessorEmail: doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "",
+      }),
     ]);
     if (!supervisor) throw new Error("Invalid Immediate Superior");
     if (!head) throw new Error("Invalid Department Head");
-
-    const existingProcessorEmail =
-      doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "";
-    const processor =
-      (existingProcessorEmail
-        ? await Approver.findOne({ email: existingProcessorEmail }).lean()
-        : null) ?? fallbackProcessor;
-    if (!processor) throw new Error("No active processor configured. Ask an admin to assign one.");
 
     const department = s(formData, "department");
     const costCenter = s(formData, "costCenter");
@@ -596,6 +598,11 @@ export async function updateReimbursement(
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const nextStepCopy = buildPendingStepNotificationCopy({
+      formName: "Reimbursement",
+      referenceNo,
+      role: "supervisor",
+    });
     const notificationDetails = buildNotificationDetailsFromFieldMap(reimbursementFieldMap(formDataObj), {
       preferredKeys: [
         "firstName",
@@ -647,22 +654,22 @@ export async function updateReimbursement(
         formName: "Reimbursement",
         event: "next-approver",
         to: supervisor.email,
-        subject: `Reimbursement request needs your approval (${referenceNo})`,
-        summary: "A Reimbursement request was updated and is back at your approval step.",
+        subject: nextStepCopy.subject,
+        summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           { label: "Current role", value: supervisor.roles?.[0] || "Approver" },
-          { label: "Status", value: "Pending approval" },
+          { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
         ],
         text:
-          `A Reimbursement request has been updated and is back at your approval step.\n\n` +
+          nextStepCopy.text +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
         ctaUrl: approvalPageUrl || requestUrl,
-        ctaLabel: "Open approval page",
+        ctaLabel: nextStepCopy.ctaLabel,
         approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,

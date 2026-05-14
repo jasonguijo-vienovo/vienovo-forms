@@ -17,6 +17,7 @@ import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { uploadAttachment } from "@/lib/storage/attachments";
+import { buildPendingStepNotificationCopy, resolveAssignedProcessor } from "@/lib/workflow-routing";
 import { Approver } from "@/models/Approver";
 import { RequestModel } from "@/models/Request";
 import {
@@ -53,7 +54,7 @@ export async function submitCashAdvance(
     const approverId = s(formData, "approverId");
     const [approver, processor] = await Promise.all([
       approverId ? Approver.findById(approverId).lean() : null,
-      Approver.findOne({ roles: "processor", isActive: true }).lean(),
+      resolveAssignedProcessor({ definition }),
     ]);
 
     if (!approver) throw new Error("Invalid Approver");
@@ -216,6 +217,11 @@ export async function submitCashAdvance(
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const nextStepCopy = buildPendingStepNotificationCopy({
+      formName: "Cash Advance",
+      referenceNo,
+      role: "cashAdvanceApprover",
+    });
     const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
       preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "approverName", "supportingFileName"],
       maxRows: 8,
@@ -234,7 +240,7 @@ export async function submitCashAdvance(
         formSlug: "cash-advance",
         formName: "Cash Advance",
         event: "submitted",
-        to: [processor.email, submitterEmail],
+        to: [submitterEmail],
         subject: `Cash Advance request submitted (${referenceNo})`,
         summary: "A Cash Advance request has been submitted and is now in the workflow queue.",
         details: [
@@ -255,22 +261,22 @@ export async function submitCashAdvance(
         formName: "Cash Advance",
         event: "next-approver",
         to: approver.email,
-        subject: `Cash Advance request needs your approval (${referenceNo})`,
-        summary: "A Cash Advance request is waiting for your approval.",
+        subject: nextStepCopy.subject,
+        summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           { label: "Current role", value: approver.roles?.[0] || "Approver" },
-          { label: "Status", value: "Pending approval" },
+          { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
         ],
         text:
-          `A Cash Advance request is waiting for your approval.\n\n` +
+          nextStepCopy.text +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
         ctaUrl: approvalPageUrl || requestUrl,
-        ctaLabel: "Open approval page",
+        ctaLabel: nextStepCopy.ctaLabel,
         approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
@@ -297,6 +303,7 @@ export async function updateCashAdvance(
     if (!submitterEmail) throw new Error("Not signed in");
 
     await connectMongo();
+    const definition = await getFormDefinitionBySlug("cash-advance");
 
     const doc = await RequestModel.findOne({
       referenceNo,
@@ -306,19 +313,14 @@ export async function updateCashAdvance(
     if (!doc) throw new Error("Request not found or not editable.");
 
     const approverId = s(formData, "approverId");
-    const [approver, fallbackProcessor] = await Promise.all([
+    const [approver, processor] = await Promise.all([
       approverId ? Approver.findById(approverId).lean() : null,
-      Approver.findOne({ roles: "processor", isActive: true }).lean(),
+      resolveAssignedProcessor({
+        definition,
+        existingProcessorEmail: doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "",
+      }),
     ]);
     if (!approver) throw new Error("Invalid Approver");
-
-    const existingProcessorEmail =
-      doc.approvalChain?.find((s) => s.role === "processor")?.approverEmail ?? "";
-    const processor =
-      (existingProcessorEmail
-        ? await Approver.findOne({ email: existingProcessorEmail }).lean()
-        : null) ?? fallbackProcessor;
-    if (!processor) throw new Error("No active processor configured. Ask an admin to assign one.");
 
     const supportingFile = formData.get("supportingDocument");
     let supportingDocument: any = (doc as any).formData?.supportingDocument ?? null;
@@ -448,6 +450,11 @@ export async function updateCashAdvance(
     const requestUrl = appUrl ? `${appUrl}/requests/${referenceNo}` : "";
     const approvalPageUrl = requestUrl ? `${requestUrl}/approve` : "";
     const approvalsUrl = appUrl ? `${appUrl}/approvals` : "";
+    const nextStepCopy = buildPendingStepNotificationCopy({
+      formName: "Cash Advance",
+      referenceNo,
+      role: "cashAdvanceApprover",
+    });
     const notificationDetails = buildNotificationDetailsFromFieldMap(cashAdvanceFieldMap(formDataObj), {
       preferredKeys: ["payablesTo", "payeeName", "amount", "reason", "forApprovalNote", "approverName", "supportingFileName"],
       maxRows: 8,
@@ -487,22 +494,22 @@ export async function updateCashAdvance(
         formName: "Cash Advance",
         event: "next-approver",
         to: approver.email,
-        subject: `Cash Advance request needs your approval (${referenceNo})`,
-        summary: "A Cash Advance request was updated and is back at your approval step.",
+        subject: nextStepCopy.subject,
+        summary: nextStepCopy.summary,
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
           { label: "Current role", value: approver.roles?.[0] || "Approver" },
-          { label: "Status", value: "Pending approval" },
+          { label: "Status", value: nextStepCopy.statusLabel },
           ...notificationDetails,
           ...attachmentDetails,
         ],
         text:
-          `A Cash Advance request has been updated and is back at your approval step.\n\n` +
+          nextStepCopy.text +
           `Reference: ${referenceNo}\n` +
           (requestUrl ? `Link: ${requestUrl}\n` : ""),
         ctaUrl: approvalPageUrl || requestUrl,
-        ctaLabel: "Open approval page",
+        ctaLabel: nextStepCopy.ctaLabel,
         approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,

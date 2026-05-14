@@ -5,13 +5,20 @@ import {
   FORM_DEFINITION_STATUSES,
   FORM_DEFINITION_VISIBILITIES,
 } from "@/models/FormDefinition";
+import { Approver } from "@/models/Approver";
 import { FormImport } from "@/models/FormImport";
 import { FormsRegistryClient } from "./FormsRegistryClient";
 
 export default async function AdminFormsPage() {
   const forms = await getAllFormDefinitionsForAdmin();
   await connectMongo();
-  const imports = await FormImport.find({}).select({ slug: 1 }).lean();
+  const [imports, processors] = await Promise.all([
+    FormImport.find({}).select({ slug: 1 }).lean(),
+    Approver.find({ roles: "processor" })
+      .sort({ isActive: -1, name: 1 })
+      .select({ _id: 1, name: 1, email: 1, isActive: 1 })
+      .lean(),
+  ]);
 
   const liveCount = forms.filter(isLiveForRequesters).length;
   const publishedCount = forms.filter((form) => form.status === "published").length;
@@ -31,6 +38,12 @@ export default async function AdminFormsPage() {
       statusOptions={[...FORM_DEFINITION_STATUSES]}
       visibilityOptions={[...FORM_DEFINITION_VISIBILITIES]}
       availabilityOptions={[...FORM_DEFINITION_AVAILABILITIES]}
+      processorOptions={processors.map((item) => ({
+        _id: String(item._id),
+        name: item.name,
+        email: item.email,
+        isActive: Boolean(item.isActive),
+      }))}
     />
   );
 }

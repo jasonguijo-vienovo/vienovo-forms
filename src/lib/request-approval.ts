@@ -10,6 +10,7 @@ import {
   buildStoredRequestSummaryDetails,
 } from "@/lib/request-fields";
 import { updateResponseSheetStatusByReference } from "@/lib/response-sheet";
+import { buildPendingStepNotificationCopy } from "@/lib/workflow-routing";
 import { RequestModel } from "@/models/Request";
 const SALARY_LOAN_SHEET_NAME = "Salary Loan Application";
 
@@ -223,25 +224,29 @@ export async function applyApprovalDecision({
   try {
     if (isApprove) {
       if (!isFinal && nextApprover?.approverEmail) {
+        const nextStepCopy = buildPendingStepNotificationCopy({
+          formName,
+          referenceNo: normalizedReference,
+          role: nextApprover.role || "",
+        });
         await sendFlowNotification({
           formSlug,
           formName,
           event: "next-approver",
           to: normalizeEmail(nextApprover.approverEmail),
-          subject: `${formName} request needs your approval (${normalizedReference})`,
-          summary: `A ${formName} request has advanced to your approval step.`,
+          subject: nextStepCopy.subject,
+          summary: nextStepCopy.summary,
           details: [
             { label: "Reference No.", value: normalizedReference },
             { label: "Requester", value: doc.submittedBy?.name || doc.submittedBy?.email || "" },
             { label: "Current role", value: nextApprover.role || "" },
-            { label: "Status", value: "Pending approval" },
+            { label: "Status", value: nextStepCopy.statusLabel },
             ...summaryDetails,
             ...attachmentDetails,
           ].filter((detail) => detail.value),
-          text:
-            `${formName} request ${normalizedReference} moved to your approval step.\n\n`,
+          text: nextStepCopy.text,
           ctaUrl: approvalPageUrl || requestUrl,
-          ctaLabel: "Open approval page",
+          ctaLabel: nextStepCopy.ctaLabel,
           approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
           rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
           commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,

@@ -18,6 +18,7 @@ import { Lookup, normalizeLookupKey } from "@/models/Lookup";
 import { NotificationFlow } from "@/models/NotificationFlow";
 import { NotificationDeliveryLog } from "@/models/NotificationDeliveryLog";
 import { RequestModel } from "@/models/Request";
+import { Approver } from "@/models/Approver";
 
 const DEFAULT_RESPONSE_SPREADSHEET_ID =
   process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() || process.env.GOOGLE_SHEETS_MASTER_ID?.trim() || "";
@@ -50,6 +51,16 @@ function normalizeExternalFormUrl(input: string) {
   } catch {
     throw new Error("External form URL must be a valid http:// or https:// link.");
   }
+}
+
+function normalizeSpreadsheetIdInput(input: string) {
+  const value = String(input || "").trim();
+  if (!value) return "";
+
+  const match = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match?.[1]) return match[1];
+
+  return value;
 }
 
 export function slugifyFormId(input: string) {
@@ -268,6 +279,7 @@ export async function saveImportDraft(input: {
   createdByName: string;
   ensureRegistryEntry?: boolean;
 }) {
+  const normalizedSpreadsheetId = normalizeSpreadsheetIdInput(input.spreadsheetId);
   const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
   const diagnostics = analyzeImportedSource({
     name: input.name,
@@ -278,7 +290,7 @@ export async function saveImportDraft(input: {
     spreadsheetBindings: input.spreadsheetBindings,
     writeResponsesToSheet: input.writeResponsesToSheet,
     responseSheetName: input.responseSheetName,
-    spreadsheetId: input.spreadsheetId,
+    spreadsheetId: normalizedSpreadsheetId,
     defaultResponseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
   });
 
@@ -297,7 +309,7 @@ export async function saveImportDraft(input: {
           slug: input.slug,
           sourceType: normalizedExternalFormUrl && !input.htmlSource.trim() && !input.appsScriptSource.trim() ? "external-link" : "google-apps-script",
           externalFormUrl: normalizedExternalFormUrl,
-          spreadsheetId: input.spreadsheetId,
+          spreadsheetId: normalizedSpreadsheetId,
           spreadsheetBindings: diagnostics.bindings,
           writeResponsesToSheet: input.writeResponsesToSheet,
           responseSheetName: input.responseSheetName,
@@ -356,6 +368,7 @@ export async function updateImportConfig(input: {
       throw new Error("Import draft not found.");
     }
 
+    const normalizedSpreadsheetId = normalizeSpreadsheetIdInput(input.spreadsheetId);
     const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
     const diagnostics = analyzeImportedSource({
       name: existing.name,
@@ -366,7 +379,7 @@ export async function updateImportConfig(input: {
       spreadsheetBindings: input.spreadsheetBindings,
       writeResponsesToSheet: input.writeResponsesToSheet,
       responseSheetName: input.responseSheetName,
-      spreadsheetId: input.spreadsheetId,
+      spreadsheetId: normalizedSpreadsheetId,
       defaultResponseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID,
     });
 
@@ -375,7 +388,7 @@ export async function updateImportConfig(input: {
       {
         $set: {
           externalFormUrl: normalizedExternalFormUrl,
-          spreadsheetId: input.spreadsheetId,
+          spreadsheetId: normalizedSpreadsheetId,
           spreadsheetBindings: diagnostics.bindings,
           writeResponsesToSheet: input.writeResponsesToSheet,
           responseSheetName: input.responseSheetName,
@@ -399,7 +412,7 @@ export async function updateImportConfig(input: {
         $set: {
           externalFormUrl: normalizedExternalFormUrl,
           writeResponsesToSheet: input.writeResponsesToSheet,
-          responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || input.spreadsheetId,
+          responseSpreadsheetId: DEFAULT_RESPONSE_SPREADSHEET_ID || normalizedSpreadsheetId,
           responseSheetName: input.responseSheetName || `${existing.name} Responses`,
           notes: input.notes,
         },
@@ -581,6 +594,7 @@ export async function updateFormDefinitionSettings(input: {
   availability: FormDefinitionAvailability;
   showInNavbar: boolean;
   isImplemented: boolean;
+  processorApproverId: string;
   writeResponsesToSheet: boolean;
   responseSpreadsheetId: string;
   responseSheetName: string;
@@ -602,7 +616,9 @@ export async function updateFormDefinitionSettings(input: {
   }
 
   const normalizedExternalFormUrl = normalizeExternalFormUrl(input.externalFormUrl);
+  const normalizedResponseSpreadsheetId = normalizeSpreadsheetIdInput(input.responseSpreadsheetId);
   const normalizedTriggerUrl = normalizeTriggerUrl(input.triggerUrl);
+  const normalizedProcessorApproverId = String(input.processorApproverId || "").trim();
   if (input.triggerEnabled && !normalizedTriggerUrl) {
     throw new Error("Turn off trigger automation or provide a valid trigger URL.");
   }
@@ -620,6 +636,23 @@ export async function updateFormDefinitionSettings(input: {
 
   if (form.source === "imported" && input.requestedSlug !== form.slug) {
     await validateImportedSlugRename(form.slug, input.requestedSlug);
+  }
+
+  const processorApprover = normalizedProcessorApproverId
+    ? await Approver.findById(normalizedProcessorApproverId)
+        .select({ _id: 1, name: 1, email: 1, roles: 1, isActive: 1 })
+        .lean()
+    : null;
+  if (normalizedProcessorApproverId) {
+    if (!processorApprover || !processorApprover.roles?.includes("processor")) {
+      throw new Error("Assigned processor is invalid. Pick an active processor-capable approver.");
+    }
+    if (!processorApprover.isActive) {
+      throw new Error("Assigned processor is inactive. Choose an active processor.");
+    }
+    if (!String(processorApprover.email ?? "").trim()) {
+      throw new Error("Assigned processor is missing an email address.");
+    }
   }
 
   const nextRoutePath = form.source === "imported" ? `/forms/${input.requestedSlug}` : input.routePath;
@@ -665,8 +698,11 @@ export async function updateFormDefinitionSettings(input: {
           availability: input.availability,
           showInNavbar: input.showInNavbar,
           isImplemented: input.isImplemented,
+          processorApproverId: normalizedProcessorApproverId,
+          processorApproverName: processorApprover ? String(processorApprover.name || "").trim() : "",
+          processorApproverEmail: processorApprover ? String(processorApprover.email || "").trim().toLowerCase() : "",
           writeResponsesToSheet: input.writeResponsesToSheet,
-          responseSpreadsheetId: input.responseSpreadsheetId,
+          responseSpreadsheetId: normalizedResponseSpreadsheetId,
           responseSheetName: input.responseSheetName,
           triggerEnabled: input.triggerEnabled,
           triggerUrl: normalizedTriggerUrl,
