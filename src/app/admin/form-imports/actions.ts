@@ -23,6 +23,7 @@ import { parseImportedFormHtml, parseSpreadsheetBindings } from "@/lib/imported-
 import { FormImport, FORM_IMPORT_STATUSES, type FormImportStatus } from "@/models/FormImport";
 
 const FORM_IMPORTS_PATH = "/admin/form-imports";
+const FORM_IMPORTS_MANAGE_PATH = "/admin/form-imports?tab=manage";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -135,6 +136,13 @@ function revalidateImportSurfaces(scope: "all" | "importer" = "all") {
   revalidatePath("/admin/notifications");
   revalidatePath("/dashboard");
   revalidatePath("/forms");
+}
+
+function resolveImportRedirectPath(formData: FormData, fallback: "create" | "manage" = "manage") {
+  const tab = s(formData, "tab");
+  if (tab === "manage") return FORM_IMPORTS_MANAGE_PATH;
+  if (tab === "create") return `${FORM_IMPORTS_PATH}?tab=create`;
+  return fallback === "manage" ? FORM_IMPORTS_MANAGE_PATH : `${FORM_IMPORTS_PATH}?tab=create`;
 }
 
 export async function createFormImport(formData: FormData) {
@@ -284,7 +292,7 @@ export async function createFormImport(formData: FormData) {
   }
 
   revalidateImportSurfaces("importer");
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "create"));
 }
 
 export async function updateFormImportConfig(formData: FormData) {
@@ -350,7 +358,7 @@ export async function updateFormImportConfig(formData: FormData) {
   }
 
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function publishFormImport(formData: FormData) {
@@ -378,6 +386,7 @@ export async function publishFormImport(formData: FormData) {
               : `Preflight passed: ${draft.name} is ready to publish.`,
       });
       revalidatePath(FORM_IMPORTS_PATH);
+      revalidatePath(FORM_IMPORTS_MANAGE_PATH);
     } else {
       const result = await publishImportedForm({ id, actorEmail: email });
       await setFlashToast({
@@ -422,7 +431,7 @@ export async function publishFormImport(formData: FormData) {
   }
 
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function createMissingRegistryEntry(formData: FormData) {
@@ -457,7 +466,7 @@ export async function createMissingRegistryEntry(formData: FormData) {
 
   revalidateImportSurfaces();
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function updateFormImportStatus(formData: FormData) {
@@ -483,7 +492,7 @@ export async function updateFormImportStatus(formData: FormData) {
 
   revalidateImportSurfaces();
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function deleteFormImport(formData: FormData) {
@@ -518,7 +527,7 @@ export async function deleteFormImport(formData: FormData) {
   }
 
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function repairFormImport(formData: FormData) {
@@ -575,7 +584,7 @@ export async function repairFormImport(formData: FormData) {
 
   revalidateImportSurfaces();
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function deleteFormEverywhere(formData: FormData) {
@@ -621,7 +630,7 @@ export async function deleteFormEverywhere(formData: FormData) {
   }
 
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
 
 export async function syncImportedDropdowns(formData: FormData) {
@@ -640,7 +649,7 @@ export async function syncImportedDropdowns(formData: FormData) {
         : "Dry run: draft not found.",
     });
     if (inline) return;
-    redirect(FORM_IMPORTS_PATH);
+    redirect(resolveImportRedirectPath(formData, "manage"));
   }
 
   const result = await syncImportedLookupsForImport(id);
@@ -666,8 +675,9 @@ export async function syncImportedDropdowns(formData: FormData) {
   });
 
   revalidatePath(FORM_IMPORTS_PATH);
+  revalidatePath(FORM_IMPORTS_MANAGE_PATH);
   revalidatePath("/admin/lookups");
   revalidatePath("/admin");
   if (inline) return;
-  redirect(FORM_IMPORTS_PATH);
+  redirect(resolveImportRedirectPath(formData, "manage"));
 }
