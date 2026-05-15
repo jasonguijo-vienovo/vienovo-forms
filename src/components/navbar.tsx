@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, ChevronDown, CircleHelp, UserCircle } from "lucide-react";
+import { Bell, ChevronDown, CircleHelp, Menu, UserCircle } from "lucide-react";
 import { signOut } from "@/auth";
 import { ClickDropdown } from "@/components/click-dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
@@ -63,13 +63,61 @@ export async function Navbar({
   }
 
   return (
-    <header className="sticky top-0 z-50 h-14 border-b border-surface-border bg-white">
-      <div className="flex h-full items-center justify-between px-5">
-        <Link href="/dashboard" className="text-xl font-bold tracking-tight text-brand-700">
-          Vienovo Forms
-        </Link>
+    <header className="sticky top-0 z-50 h-14 border-b border-surface-border bg-white/92 backdrop-blur">
+      <div className="flex h-full items-center justify-between gap-3 px-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
+          {session?.user ? (
+            <details className="relative sm:hidden">
+              <summary
+                className="grid h-10 w-10 list-none place-items-center rounded-lg border border-surface-border bg-white text-slate-700 shadow-sm transition hover:text-brand-700"
+                aria-label="Open navigation"
+              >
+                <Menu className="h-4 w-4" />
+              </summary>
+              <div className="absolute left-0 top-12 z-50 w-[min(92vw,320px)] overflow-hidden rounded-2xl border border-surface-border bg-white shadow-lg">
+                <div className="border-b border-surface-border bg-slate-50/70 px-4 py-3">
+                  <p className="text-sm font-semibold text-surface-text">
+                    {session.user.name || "Workspace"}
+                  </p>
+                  <p className="text-xs text-surface-muted truncate">
+                    {session.user.email || ""}
+                  </p>
+                </div>
+                <div className="grid gap-1 p-2">
+                  <MobileNavLink href="/dashboard" label="Dashboard" />
+                  <MobileNavLink href="/forms" label="Browse forms" />
+                  {showApprovals ? <MobileNavLink href="/approvals" label="Approvals" /> : null}
+                  <MobileExternalNavLink href={HELP_DESK_URL} label="Helpdesk" />
+                  {showAdmin && adminShortcut ? (
+                    <MobileNavLink href={adminShortcut.href} label={adminShortcut.label} />
+                  ) : null}
+                  {showAdmin ? <MobileNavLink href="/admin" label="Admin console" /> : null}
+                </div>
+                <div className="border-t border-surface-border p-2">
+                  <form
+                    action={async () => {
+                      "use server";
+                      await signOut({ redirectTo: "/sign-in" });
+                    }}
+                  >
+                    <PendingSubmitButton
+                      type="submit"
+                      title={session.user.email ?? "Sign out"}
+                      idleLabel="Sign out"
+                      pendingLabel="Signing out..."
+                      className="btn-secondary w-full justify-center"
+                    />
+                  </form>
+                </div>
+              </div>
+            </details>
+          ) : null}
+          <Link href="/dashboard" className="truncate text-lg font-bold tracking-tight text-brand-700 sm:text-xl">
+            Vienovo Forms
+          </Link>
+        </div>
 
-        <nav className="hidden sm:flex h-full items-center gap-6 text-sm">
+        <nav className="hidden h-full items-center gap-6 text-sm sm:flex">
           <NavLink href="/dashboard">Dashboard</NavLink>
           {showApprovals ? <NavLink href="/approvals">Approvals</NavLink> : null}
           <NewRequestMenu
@@ -88,7 +136,7 @@ export async function Navbar({
             {showAdmin && adminShortcut ? (
               <Link
                 href={adminShortcut.href}
-                className="hidden md:inline-flex border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+                className="hidden rounded-lg border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 md:inline-flex"
               >
                 {adminShortcut.label}
               </Link>
@@ -96,7 +144,7 @@ export async function Navbar({
             {showAdmin ? (
               <Link
                 href="/admin"
-                className="hidden md:inline-flex border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+                className="hidden rounded-lg border border-surface-border bg-white px-3 py-1.5 text-sm font-semibold text-brand-700 transition hover:bg-brand-50 md:inline-flex"
               >
                 Admin
               </Link>
@@ -244,7 +292,7 @@ function NewRequestMenu({
 }) {
   return (
     <details className="relative">
-      <summary className="flex h-14 list-none items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700 cursor-pointer select-none">
+      <summary className="flex h-14 list-none cursor-pointer select-none items-center border-b-2 border-transparent px-1 font-semibold text-slate-700 transition hover:border-brand-700 hover:text-brand-700">
         <span className="inline-flex items-center gap-1">
           New request <ChevronDown className="h-3.5 w-3.5 opacity-90" />
         </span>
@@ -298,5 +346,29 @@ function MenuLink({
       <div className="text-sm font-semibold text-gray-800">{title}</div>
       <div className="text-[11px] text-gray-500">{subtitle}</div>
     </Link>
+  );
+}
+
+function MobileNavLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-surface-text transition hover:border-brand-100 hover:bg-brand-50"
+    >
+      {label}
+    </Link>
+  );
+}
+
+function MobileExternalNavLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-surface-text transition hover:border-brand-100 hover:bg-brand-50"
+    >
+      {label}
+    </a>
   );
 }

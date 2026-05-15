@@ -3,17 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f6f8fa;
-  --admin-bg-1: #f3f7f4;
+  color-scheme: light;
+  --bg: #f4f7f5;
+  --admin-bg-1: #f0f5ef;
   --admin-bg-2: #eef3f8;
-  --admin-grid: rgba(15, 23, 42, 0.04);
+  --admin-grid: rgba(15, 23, 42, 0.035);
   --fg: #1f2328;
   --surface-panel: #ffffff;
-  --surface-border: #d0d7de;
-  --surface-muted: #636c76;
-  --primary: #006e2a;
-  --primary-dark: #006426;
-  --primary-soft: #eaf0e6;
+  --surface-border: #cfd8d4;
+  --surface-muted: #66707a;
+  --primary: #0f7a37;
+  --primary-dark: #0b682e;
+  --primary-soft: #e6f1e9;
 }
 
 html,
@@ -22,7 +23,10 @@ body {
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(1100px 600px at 0% -8%, rgba(15, 122, 55, 0.09), transparent 60%),
+    radial-gradient(900px 520px at 100% -12%, rgba(13, 94, 167, 0.07), transparent 55%),
+    linear-gradient(180deg, #f7faf8 0%, var(--bg) 100%);
   color: var(--fg);
   font-family: Inter, var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
   -webkit-font-smoothing: antialiased;
@@ -116,9 +120,9 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 }
 
 .app-page {
-  max-width: 920px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 3rem 1rem;
+  padding: 2.25rem 1rem 3rem;
 }
 
 button,
@@ -157,9 +161,9 @@ input[type="button"]:focus-visible {
 
 .admin-bg {
   background:
-    radial-gradient(1200px 500px at 0% -10%, var(--admin-bg-1) 0%, transparent 65%),
-    radial-gradient(1200px 500px at 100% -15%, var(--admin-bg-2) 0%, transparent 62%),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)),
+    radial-gradient(1200px 520px at 0% -10%, var(--admin-bg-1) 0%, transparent 64%),
+    radial-gradient(1000px 520px at 100% -12%, var(--admin-bg-2) 0%, transparent 60%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.92)),
     repeating-linear-gradient(
       0deg,
       transparent 0,
@@ -185,14 +189,14 @@ input[type="button"]:focus-visible {
 .app-panel {
   background: var(--surface-panel);
   border: 1px solid var(--surface-border);
-  border-radius: 0.5rem;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 .admin-panel:hover {
   border-color: #c6d0da;
-  box-shadow: 0 4px 12px rgba(16, 24, 40, 0.06);
+  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.07);
 }
 
 .section-eyebrow {
@@ -209,7 +213,7 @@ input[type="button"]:focus-visible {
   justify-content: center;
   gap: 0.5rem;
   min-height: 2.5rem;
-  border-radius: 0.25rem;
+  border-radius: 0.625rem;
   background: var(--primary-dark);
   border: 1px solid var(--primary-dark);
   color: white;
@@ -241,7 +245,7 @@ input[type="button"]:focus-visible {
   justify-content: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-  border-radius: 0.25rem;
+  border-radius: 0.625rem;
   background: white;
   border: 1px solid var(--surface-border);
   color: var(--fg);
@@ -283,9 +287,9 @@ input[type="button"]:focus-visible {
 .status-pill {
   display: inline-flex;
   align-items: center;
-  border-radius: 0.25rem;
+  border-radius: 999px;
   border: 1px solid transparent;
-  padding: 0.125rem 0.5rem;
+  padding: 0.15rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.25rem;

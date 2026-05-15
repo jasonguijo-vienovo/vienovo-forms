@@ -86,39 +86,49 @@ export function FormsCatalogClient({ forms }: { forms: CatalogForm[] }) {
 
   return (
     <>
-      <div className="mb-8 flex flex-col gap-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="section-eyebrow">Request catalog</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">Available forms</h1>
-            <p className="mt-1 text-sm text-surface-muted">Choose a form and start your request.</p>
-          </div>
-          <div className="grid gap-2 text-sm text-surface-muted sm:text-right">
-            <p>{filtered.length} showing</p>
-            <p>{readyCount} ready to open</p>
+      <div className="app-panel mb-8 overflow-hidden border-brand-100 bg-white/90">
+        <div className="border-b border-brand-100 bg-gradient-to-r from-brand-700 via-brand-700 to-brand-600 px-5 py-6 text-white sm:px-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">Request catalog</p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Choose the right form</h1>
+              <p className="mt-2 text-sm leading-6 text-white/85">
+                Browse live forms, spot what is still coming soon, and launch the right workflow without guessing which route to use.
+              </p>
+            </div>
+            <div className="grid gap-2 text-sm text-white/85 sm:text-right">
+              <p>{filtered.length} showing</p>
+              <p>{readyCount} ready to open now</p>
+            </div>
           </div>
         </div>
-
-        <div className="flex flex-col gap-3">
-          <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-md border border-surface-border bg-white px-3 py-2.5 text-sm text-surface-muted shadow-sm">
-            <Search className="h-4 w-4 shrink-0" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search forms by name, slug, or keyword"
-              className="w-full bg-transparent text-surface-text outline-none placeholder:text-surface-muted"
+        <div className="grid gap-4 px-5 py-5 sm:px-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <CatalogStat label="Ready now" value={readyCount} hint="Live forms requesters can open" />
+            <CatalogStat label="External launch" value={externalCount} hint="Forms that open outside the app" />
+            <CatalogStat label="Coming soon" value={comingSoonCount} hint="Planned workflows not yet ready" />
+          </div>
+          <div className="flex flex-col gap-3">
+            <label className="flex min-w-[240px] flex-1 items-center gap-2 rounded-xl border border-surface-border bg-white px-3 py-2.5 text-sm text-surface-muted shadow-sm">
+              <Search className="h-4 w-4 shrink-0" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search forms by name, slug, or keyword"
+                className="w-full bg-transparent text-surface-text outline-none placeholder:text-surface-muted"
+              />
+            </label>
+            <AdminFilterTabs
+              value={view}
+              onChange={setView}
+              options={[
+                { value: "all", label: `All (${forms.length})` },
+                { value: "ready", label: `Ready (${readyCount})` },
+                { value: "external", label: `External (${externalCount})` },
+                { value: "coming-soon", label: `Coming soon (${comingSoonCount})` },
+              ]}
             />
-          </label>
-          <AdminFilterTabs
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "all", label: `All (${forms.length})` },
-              { value: "ready", label: `Ready (${readyCount})` },
-              { value: "external", label: `External (${externalCount})` },
-              { value: "coming-soon", label: `Coming soon (${comingSoonCount})` },
-            ]}
-          />
+          </div>
         </div>
       </div>
 
@@ -153,8 +163,8 @@ export function FormsCatalogClient({ forms }: { forms: CatalogForm[] }) {
           ) : null}
         </div>
       ) : (
-        <div className="app-panel p-10 text-center text-sm text-surface-muted">
-          No forms match this search yet.
+        <div className="app-panel border-dashed p-10 text-center text-sm text-surface-muted">
+          No forms match this search yet. Try a broader keyword or switch back to `All`.
         </div>
       )}
     </>
@@ -190,7 +200,12 @@ function FormCard({
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h2 className="truncate text-base font-semibold text-surface-text">{name}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="truncate text-base font-semibold text-surface-text">{name}</h2>
+            <span className={`status-pill ${available ? "border-green-200 bg-green-50 text-green-800" : "border-surface-border bg-slate-50 text-surface-muted"}`}>
+              {available ? "Ready now" : badgeText}
+            </span>
+          </div>
           <p className="mt-1 line-clamp-2 text-sm leading-6 text-surface-muted">{description}</p>
         </div>
       </div>
@@ -217,5 +232,23 @@ function FormCard({
     </a>
   ) : (
     <Link href={href}>{inner}</Link>
+  );
+}
+
+function CatalogStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-[0.875rem] border border-surface-border bg-slate-50/70 px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-surface-text">{value}</p>
+      <p className="mt-1 text-xs text-surface-muted">{hint}</p>
+    </div>
   );
 }

@@ -187,32 +187,55 @@ export default async function DashboardPage({
   const pendingHasPrevPage = pendingPage > 1;
   const pendingHasNextPage = pendingPage < pendingTotalPages;
   const visiblePendingApprovals = pendingApprovals;
+  const readyFormCount = forms.filter((form) => form.runtime.requesterCanOpen).length;
 
   return (
     <>
       <Navbar />
       <main className="mx-auto w-full max-w-[1920px] px-3 py-6 sm:px-5 md:px-6 lg:px-8">
-        <div className="mb-8 flex w-full flex-col gap-4 sm:flex-row sm:items-end sm:justify-between lg:mx-auto lg:w-4/5">
-          <div>
-            <p className="section-eyebrow">Requester workspace</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">
-              Welcome, {String(name).split(" ")[0]}
-            </h1>
-            <p className="mt-1 text-sm text-surface-muted">
-              Start a request, track your submissions, and see approvals waiting for you.
-            </p>
+        <section className="app-panel mb-8 overflow-hidden border-brand-100 bg-white/90">
+          <div className="border-b border-brand-100 bg-gradient-to-r from-brand-700 via-brand-700 to-brand-600 px-5 py-6 text-white sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
+                  Requester workspace
+                </p>
+                <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                  Welcome, {String(name).split(" ")[0]}
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-white/85">
+                  Start a request, see where your submissions are stuck, and catch any approvals that need your action without hopping between unrelated screens.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Link href="/forms" className="btn-primary min-w-[180px] justify-center border-white/20 bg-white text-brand-700 hover:bg-white/90">
+                  <Plus className="h-4 w-4" />
+                  Start a request
+                </Link>
+                <Link href="#pending-approvals" className="btn-secondary min-w-[180px] justify-center border-white/20 bg-white/10 text-white hover:bg-white/15">
+                  Review approvals
+                </Link>
+              </div>
+            </div>
           </div>
-          <Link href="/forms" className="btn-primary w-full sm:w-auto">
-            <Plus className="h-4 w-4" />
-            New Request
-          </Link>
-        </div>
+          <div className="grid gap-4 px-5 py-5 sm:grid-cols-3 sm:px-6">
+            <SummaryStat label="Forms ready now" value={readyFormCount} hint="Catalog entries you can open today" />
+            <SummaryStat label="My requests" value={myRequestCount} hint="Submitted items across all statuses" />
+            <SummaryStat label="Needs my attention" value={pendingApprovalsCount} hint="Approvals and tracked items worth checking" />
+          </div>
+        </section>
 
         <section className="mb-8">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-surface-text">Quick request forms</h2>
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="section-eyebrow">Start here</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-surface-text">Quick request forms</h2>
+              <p className="mt-1 text-sm text-surface-muted">
+                Use the most common forms below, or open the full catalog when you need something less frequent.
+              </p>
+            </div>
             <Link href="/forms" className="text-sm font-semibold text-brand-700 hover:underline">
-              View all
+              View full catalog
             </Link>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
@@ -227,7 +250,11 @@ export default async function DashboardPage({
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Panel title="Recent requests" description="Latest forms you submitted.">
+          <Panel
+            eyebrow="Track requests"
+            title="My request queue"
+            description="Search your submissions, filter by status, and open the full history for any request."
+          >
             <div className="mb-4 flex flex-col gap-2">
               <form className="flex flex-col gap-2 sm:flex-row" method="get">
                 <input
@@ -237,8 +264,8 @@ export default async function DashboardPage({
                   placeholder="Search reference or form"
                   className="field-input sm:max-w-xs"
                 />
-                <button type="submit" className="btn-secondary">Search</button>
-              </form>
+                  <button type="submit" className="btn-secondary">Search</button>
+                </form>
               <div className="flex flex-wrap gap-2">
                 {["all", "pending", "approved", "rejected", "returned", "submitted"].map((status) => (
                   <Link
@@ -253,7 +280,7 @@ export default async function DashboardPage({
                     {status === "all" ? "All" : status}
                   </Link>
                 ))}
-                <span className="text-xs text-surface-muted self-center">Total: {myRequestCount}</span>
+                <span className="self-center text-xs text-surface-muted">Total: {myRequestCount}</span>
               </div>
             </div>
             {visibleRequests.length > 0 ? (
@@ -280,55 +307,59 @@ export default async function DashboardPage({
             </div>
           </Panel>
           <div id="pending-approvals">
-          <Panel title="Pending approvals" description="Approval items and tracked approval statuses (except Employee Information).">
-            <div className="mb-4 flex flex-col gap-2">
-              <form className="flex flex-col gap-2 sm:flex-row" method="get">
-                <input
-                  type="text"
-                  name="pq"
-                  defaultValue={pendingQuery}
-                  placeholder="Search pending approvals"
-                  className="field-input sm:max-w-xs"
-                />
-                <button type="submit" className="btn-secondary">Search</button>
-              </form>
-              <span className="text-xs text-surface-muted">Total pending: {pendingApprovalsCount}</span>
-            </div>
-            {visiblePendingApprovals.length > 0 ? (
-              <div className="divide-y divide-surface-border">
-                {visiblePendingApprovals.map((request) => (
-                  <RequestRow key={String(request._id)} request={request} />
-                ))}
+            <Panel
+              eyebrow="Next actions"
+              title="Approvals and tracked steps"
+              description="See approvals assigned to you and requests whose approval progress you may need to follow up on."
+            >
+              <div className="mb-4 flex flex-col gap-2">
+                <form className="flex flex-col gap-2 sm:flex-row" method="get">
+                  <input
+                    type="text"
+                    name="pq"
+                    defaultValue={pendingQuery}
+                    placeholder="Search pending approvals"
+                    className="field-input sm:max-w-xs"
+                  />
+                  <button type="submit" className="btn-secondary">Search</button>
+                </form>
+                <span className="text-xs text-surface-muted">Total pending: {pendingApprovalsCount}</span>
               </div>
-            ) : (
-              <EmptyState message="No pending approvals." />
-            )}
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <span className="text-xs text-surface-muted">
-                Page {pendingPage} of {pendingTotalPages}
-              </span>
-              <div className="flex gap-2">
-                <SmoothPageLink
-                  href={`/dashboard?ppage=${Math.max(1, pendingPage - 1)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
-                  disabled={!pendingHasPrevPage}
-                  aria-disabled={!pendingHasPrevPage}
-                  className={`btn-secondary ${pendingHasPrevPage ? "" : "pointer-events-none opacity-50"}`}
-                  direction="previous"
-                >
-                  Previous
-                </SmoothPageLink>
-                <SmoothPageLink
-                  href={`/dashboard?ppage=${Math.min(pendingTotalPages, pendingPage + 1)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
-                  disabled={!pendingHasNextPage}
-                  aria-disabled={!pendingHasNextPage}
-                  className={`btn-secondary ${pendingHasNextPage ? "" : "pointer-events-none opacity-50"}`}
-                  direction="next"
-                >
-                  Next
-                </SmoothPageLink>
+              {visiblePendingApprovals.length > 0 ? (
+                <div className="divide-y divide-surface-border">
+                  {visiblePendingApprovals.map((request) => (
+                    <RequestRow key={String(request._id)} request={request} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState message="No pending approvals." />
+              )}
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <span className="text-xs text-surface-muted">
+                  Page {pendingPage} of {pendingTotalPages}
+                </span>
+                <div className="flex gap-2">
+                  <SmoothPageLink
+                    href={`/dashboard?ppage=${Math.max(1, pendingPage - 1)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
+                    disabled={!pendingHasPrevPage}
+                    aria-disabled={!pendingHasPrevPage}
+                    className={`btn-secondary ${pendingHasPrevPage ? "" : "pointer-events-none opacity-50"}`}
+                    direction="previous"
+                  >
+                    Previous
+                  </SmoothPageLink>
+                  <SmoothPageLink
+                    href={`/dashboard?ppage=${Math.min(pendingTotalPages, pendingPage + 1)}${pendingQuery ? `&pq=${encodeURIComponent(pendingQuery)}` : ""}`}
+                    disabled={!pendingHasNextPage}
+                    aria-disabled={!pendingHasNextPage}
+                    className={`btn-secondary ${pendingHasNextPage ? "" : "pointer-events-none opacity-50"}`}
+                    direction="next"
+                  >
+                    Next
+                  </SmoothPageLink>
+                </div>
               </div>
-            </div>
-          </Panel>
+            </Panel>
           </div>
         </section>
       </main>
@@ -375,21 +406,32 @@ function FormCard({
         available ? "hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-sm" : "opacity-60"
       }`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
-            <Icon className="h-5 w-5" />
+      <div className="flex h-full flex-col justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-base font-semibold text-surface-text">{name}</h3>
+                <span className={`status-pill ${available ? "border-green-200 bg-green-50 text-green-800" : "border-surface-border bg-slate-50 text-surface-muted"}`}>
+                  {available ? "Available now" : badgeText}
+                </span>
+              </div>
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-surface-muted">{description}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-surface-text">{name}</h3>
-            <p className="mt-1 line-clamp-2 text-sm leading-6 text-surface-muted">{description}</p>
-          </div>
+          {available ? (
+            <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-brand-700" />
+          ) : null}
         </div>
-        {available ? (
-          <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-brand-700" />
-        ) : (
-          <span className="status-pill border-surface-border bg-slate-50 text-surface-muted">{badgeText}</span>
-        )}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-semibold text-brand-700">
+            {available ? "Start request" : availability === "coming-soon" || !isImplemented ? "Planned next" : "Needs setup"}
+          </span>
+          {isExternal ? <span className="text-xs text-surface-muted">External launch</span> : null}
+        </div>
       </div>
     </div>
   );
@@ -405,17 +447,20 @@ function FormCard({
 }
 
 function Panel({
+  eyebrow,
   title,
   description,
   children,
 }: {
+  eyebrow?: string;
   title: string;
   description: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="app-panel overflow-hidden">
-      <div className="border-b border-surface-border px-5 py-4">
+      <div className="border-b border-surface-border bg-slate-50/70 px-5 py-4">
+        {eyebrow ? <p className="section-eyebrow">{eyebrow}</p> : null}
         <h2 className="text-base font-semibold text-surface-text">{title}</h2>
         <p className="mt-1 text-sm text-surface-muted">{description}</p>
       </div>
@@ -425,7 +470,25 @@ function Panel({
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <div className="py-10 text-center text-sm text-surface-muted">{message}</div>;
+  return <div className="rounded-[0.875rem] border border-dashed border-surface-border bg-slate-50 px-5 py-10 text-center text-sm text-surface-muted">{message}</div>;
+}
+
+function SummaryStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-[0.875rem] border border-surface-border bg-slate-50/70 px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-surface-text">{value}</p>
+      <p className="mt-1 text-xs text-surface-muted">{hint}</p>
+    </div>
+  );
 }
 
 function requestFormLabel(request: any) {
@@ -451,10 +514,16 @@ function formatDate(value: unknown) {
 }
 
 function RequestRow({ request }: { request: any }) {
+  const nextStep = request.currentActorName
+    ? `Waiting with ${request.currentActorName}`
+    : request.currentRole
+      ? `Current stage: ${request.currentRole}`
+      : "Open request";
+
   return (
     <div className="py-2 first:pt-0 last:pb-0">
-      <Link href={`/requests/${request.referenceNo}`} className="min-w-0 block">
-        <div className="flex items-center justify-between gap-2">
+      <Link href={`/requests/${request.referenceNo}`} className="group block min-w-0 rounded-xl px-1 py-2 transition hover:bg-slate-50">
+        <div className="flex items-start justify-between gap-3">
           <p className="truncate text-sm font-semibold text-surface-text">{requestFormLabel(request)}</p>
           <span
             className={`status-pill shrink-0 uppercase ${
@@ -469,6 +538,10 @@ function RequestRow({ request }: { request: any }) {
           <span className="font-mono">{request.referenceNo}</span>
           {" - "}
           {formatDate(request.createdAt)}
+        </p>
+        <p className="mt-1 text-xs text-surface-muted">{nextStep}</p>
+        <p className="mt-2 text-xs font-semibold text-brand-700 transition group-hover:translate-x-0.5">
+          Open details
         </p>
       </Link>
     </div>
