@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminEmptyState, AdminHelpPanel, AdminPageHeader, AdminSection, AdminStatusPill } from "@/components/admin-ui";
 import { AdminSearchField } from "@/components/admin-ui-client";
 import { PendingFormState } from "@/components/pending-form-state";
@@ -33,8 +33,14 @@ export type LookupAdminGroup = {
 
 function formatRoleLabel(role: string) {
   if (role === "sla") return "SLA";
+  if (role === "far") return "FAR";
   if (role === "cashAdvanceApprover") return "Cash Advance Approver";
   if (role === "hr") return "HR";
+  if (role === "it") return "IT";
+  if (role === "qa") return "QA";
+  if (role === "ceo") return "CEO";
+  if (role === "cfo") return "CFO";
+  if (role === "coo") return "COO";
   return role
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
@@ -53,6 +59,69 @@ function formatSyncDateTime(value: string) {
   });
 }
 
+const ROLE_DEFAULTS_STORAGE_KEY = "lookup-add-from-approver-role-defaults-v1";
+
+function normalizeKey(input: string) {
+  return input.normalize("NFKC").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeRoleTag(input: string) {
+  return String(input ?? "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function inferDefaultRoleForCategory(input: {
+  category: string;
+  categoryLabel: string;
+  approverRoles: string[];
+}) {
+  const { category, categoryLabel, approverRoles } = input;
+  const byKey = new Map(approverRoles.map((role) => [normalizeRoleTag(role), role]));
+  const key = `${normalizeKey(category)} ${normalizeKey(categoryLabel)}`;
+
+  const firstMatch = (candidates: string[]) => {
+    for (const candidate of candidates) {
+      const found = byKey.get(normalizeRoleTag(candidate));
+      if (found) return found;
+    }
+    return null;
+  };
+
+  if (key.includes("cashadvance")) {
+    const found = firstMatch(["cashAdvanceApprover", "cashadvanceapprover", "cashadvance"]);
+    if (found) return found;
+  }
+  if (key.includes("manager") || key.includes("supervisor")) {
+    const found = firstMatch(["supervisor", "head", "sla"]);
+    if (found) return found;
+  }
+  if (key.includes("processor")) {
+    const found = firstMatch(["processor"]);
+    if (found) return found;
+  }
+  if (key.includes("hr")) {
+    const found = firstMatch(["hr"]);
+    if (found) return found;
+  }
+  if (key.includes("head")) {
+    const found = firstMatch(["head"]);
+    if (found) return found;
+  }
+  if (key.includes("sla")) {
+    const found = firstMatch(["sla"]);
+    if (found) return found;
+  }
+  if (key.includes("far") || key.includes("finalapprover") || key.includes("finalapproval")) {
+    const found = firstMatch(["far", "finalapprover", "finalapprovalapprover"]);
+    if (found) return found;
+  }
+  if (key.includes("approver")) {
+    const found = firstMatch(["far", "approver", "supervisor", "head", "sla"]);
+    if (found) return found;
+  }
+
+  return approverRoles.includes("sla") ? "sla" : approverRoles[0] ?? "";
+}
+
 export default function LookupsClient(props: {
   categoryLabels: Record<string, string>;
   groups: LookupAdminGroup[];
@@ -64,11 +133,39 @@ export default function LookupsClient(props: {
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
   const [openAddPanelByCategory, setOpenAddPanelByCategory] = useState<Record<string, "bulk" | "single">>({});
+  const [selectedRoleByCategory, setSelectedRoleByCategory] = useState<Record<string, string>>({});
   const selectedGroup = groups.find((g) => g.key === selectedGroupKey) ?? groups[0];
   const visibleCategories =
     selectedGroup?.categories.filter((category) =>
       (categoryLabels[category] ?? category).toLowerCase().includes(categoryQuery.toLowerCase()),
     ) ?? [];
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(ROLE_DEFAULTS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== "object") return;
+      const next: Record<string, string> = {};
+      for (const [category, value] of Object.entries(parsed)) {
+        const role = String(value ?? "").trim();
+        if (!role) continue;
+        if (!approverRoles.includes(role)) continue;
+        next[category] = role;
+      }
+      setSelectedRoleByCategory(next);
+    } catch {
+      // Ignore malformed local storage payload.
+    }
+  }, [approverRoles]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ROLE_DEFAULTS_STORAGE_KEY, JSON.stringify(selectedRoleByCategory));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [selectedRoleByCategory]);
 
   return (
     <div className="admin-page">
@@ -148,14 +245,29 @@ export default function LookupsClient(props: {
                 />
               ) : (
                 <div className="grid gap-4">
-                  {visibleCategories.map((cat, idx) => (
+                  {visibleCategories.map((cat) => {
+                    const categoryLabel = categoryLabels[cat] ?? cat;
+                    const inferredDefaultRole = inferDefaultRoleForCategory({
+                      category: cat,
+                      categoryLabel,
+                      approverRoles,
+                    });
+                    const selectedRole = selectedRoleByCategory[cat];
+                    const resolvedRole =
+                      approverRoles.length === 0
+                        ? ""
+                        : selectedRole && approverRoles.includes(selectedRole)
+                          ? selectedRole
+                          : inferredDefaultRole;
+
+                    return (
                 <details
                   key={cat}
                   className="border border-surface-border bg-white p-5"
                 >
                   <summary className="flex items-center justify-between cursor-pointer select-none list-none">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-surface-text">{categoryLabels[cat] ?? cat}</h3>
+                      <h3 className="text-sm font-semibold text-surface-text">{categoryLabel}</h3>
                       <AdminStatusPill tone="neutral">
                         {(itemsByCategory[cat]?.length ?? 0).toString()} entries
                       </AdminStatusPill>
@@ -183,7 +295,11 @@ export default function LookupsClient(props: {
                           <input type="hidden" name="category" value={cat} />
                           <select
                             name="approverRole"
-                            defaultValue={approverRoles.includes("sla") ? "sla" : approverRoles[0] ?? ""}
+                            value={resolvedRole}
+                            onChange={(event) => {
+                              const nextRole = event.target.value;
+                              setSelectedRoleByCategory((prev) => ({ ...prev, [cat]: nextRole }));
+                            }}
                             className="field-input min-w-[140px] py-1 text-xs"
                           >
                             {approverRoles.length > 0 ? (
@@ -378,7 +494,8 @@ export default function LookupsClient(props: {
                     )}
                   </div>
                 </details>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </AdminSection>
@@ -393,6 +510,3 @@ export default function LookupsClient(props: {
     </div>
   );
 }
-
-
-

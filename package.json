@@ -9,6 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "smoke:buttons": "node scripts/smoke-buttons.mjs",
+    "health:system": "node scripts/health-system.mjs",
+    "health:system:auto": "node scripts/health-system.mjs --start-server",
     "verify": "npm run typecheck && npm run build",
     "db:backfill-request-queue": "node scripts/backfill-request-queue-fields.mjs",
     "db:backfill-import-diagnostics": "node scripts/backfill-import-diagnostics.mjs",

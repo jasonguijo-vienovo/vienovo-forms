@@ -28,13 +28,12 @@ export async function Navbar({
 
   let dashboardNotifications: Array<{ referenceNo: string; status: string; updatedAt: string }> = [];
   let systemItems: Array<{ action: string; target: string; createdAt: string }> = [];
-  let pendingApprovalsCount = 0;
   const checkedAt = new Date().toISOString();
 
   if (showAdmin && userEmail) {
     try {
       await connectMongo();
-      const [requests, audits, pendingCount] = await Promise.all([
+      const [requests, audits] = await Promise.all([
         RequestModel.find({ "submittedBy.email": userEmail })
           .sort({ updatedAt: -1 })
           .limit(8)
@@ -45,13 +44,6 @@ export async function Navbar({
           .limit(8)
           .select({ action: 1, targetType: 1, targetId: 1, createdAt: 1 })
           .lean(),
-        RequestModel.countDocuments({
-          status: "pending",
-          $or: [
-            { currentActorEmail: userEmail },
-            { approvalChain: { $elemMatch: { approverEmail: userEmail, status: "pending" } } },
-          ],
-        }),
       ]);
 
       dashboardNotifications = requests.map((row: any) => ({
@@ -64,11 +56,9 @@ export async function Navbar({
         target: `${String(row.targetType || "")}:${String(row.targetId || "")}`.replace(/:$/, ""),
         createdAt: new Date(row.createdAt).toISOString(),
       }));
-      pendingApprovalsCount = Number(pendingCount ?? 0);
     } catch {
       dashboardNotifications = [];
       systemItems = [];
-      pendingApprovalsCount = 0;
     }
   }
 
