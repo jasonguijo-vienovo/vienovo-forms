@@ -39,6 +39,7 @@ export function ApprovalsClient({ data }: Props) {
   const [activeTab, setActiveTab] = useState<QueueTab>("all");
   const [formFilter, setFormFilter] = useState("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isDelegationOpen, setIsDelegationOpen] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkComment, setBulkComment] = useState("");
   const [approvedPage, setApprovedPage] = useState(1);
@@ -48,12 +49,27 @@ export function ApprovalsClient({ data }: Props) {
     () => [...data.pending, ...data.recentlyApproved, ...data.recentlyRejected],
     [data.pending, data.recentlyApproved, data.recentlyRejected],
   );
-  const formOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(allQueueItems.map((item) => item.formName || item.formSlug || item.formType).filter(Boolean)),
-      ).sort((a, b) => a.localeCompare(b)),
-    [allQueueItems],
+  const tabScopedItems = useMemo(() => {
+    if (activeTab === "pending") return data.pending;
+    if (activeTab === "approved") return data.recentlyApproved;
+    if (activeTab === "rejected") return data.recentlyRejected;
+    return allQueueItems;
+  }, [activeTab, allQueueItems, data.pending, data.recentlyApproved, data.recentlyRejected]);
+  const formCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    tabScopedItems.forEach((item) => {
+      if (!matchesQuery(item, query)) return;
+      const formName = item.formName || item.formSlug || item.formType;
+      if (!formName) return;
+      counts.set(formName, (counts.get(formName) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tabScopedItems, query]);
+  const totalFormMatches = useMemo(
+    () => tabScopedItems.filter((item) => matchesQuery(item, query)).length,
+    [tabScopedItems, query],
   );
 
   const filteredPending = useMemo(
@@ -117,6 +133,12 @@ export function ApprovalsClient({ data }: Props) {
   }, [approvedPage, approvedTotalPages]);
 
   useEffect(() => {
+    if (formFilter === "all") return;
+    const existsInCurrentOptions = formCounts.some((form) => form.name === formFilter);
+    if (!existsInCurrentOptions) setFormFilter("all");
+  }, [formCounts, formFilter]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setIsFilterOpen(false);
     }
@@ -163,8 +185,8 @@ export function ApprovalsClient({ data }: Props) {
   }
 
   return (
-    <main className="app-page app-page--full space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <main className="app-page app-page--full space-y-4">
+      <div>
         <div>
           <p className="section-eyebrow">Approver workspace</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-surface-text">Approvals</h1>
@@ -172,20 +194,11 @@ export function ApprovalsClient({ data }: Props) {
             Review requests assigned to you, leave notes, and move through approvals faster.
           </p>
         </div>
-        <div className="w-full sm:w-auto sm:min-w-[320px]">
-          <button type="button" onClick={openFilterPanel} className="btn-secondary w-full sm:w-auto">
-            <Filter className="h-4 w-4" />
-            Open filters
-          </button>
-          <p className="mt-2 text-xs text-surface-muted">
-            {hasActiveFilters ? "Filters active" : "No filters active"}{query ? ` · "${query}"` : ""}
-          </p>
-        </div>
       </div>
 
       {isFilterOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" onClick={() => setIsFilterOpen(false)}>
-          <div className="w-full max-w-3xl rounded-lg border border-surface-border bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-5xl rounded-lg border border-surface-border bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-surface-text">Filter approvals</h2>
@@ -211,12 +224,28 @@ export function ApprovalsClient({ data }: Props) {
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-surface-text">Form</span>
                 <select value={formFilter} onChange={(event) => setFormFilter(event.target.value)} className="field-input">
-                  <option value="all">All forms</option>
-                  {formOptions.map((form) => (
-                    <option key={form} value={form}>{form}</option>
+                  <option value="all">All forms ({totalFormMatches})</option>
+                  {formCounts.map((form) => (
+                    <option key={form.name} value={form.name}>{form.name} ({form.count})</option>
                   ))}
                 </select>
               </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <QueueFilterChip
+                active={formFilter === "all"}
+                onClick={() => setFormFilter("all")}
+                label={`All forms (${totalFormMatches})`}
+              />
+              {formCounts.map((form) => (
+                <QueueFilterChip
+                  key={form.name}
+                  active={formFilter === form.name}
+                  onClick={() => setFormFilter(form.name)}
+                  label={`${form.name} (${form.count})`}
+                />
+              ))}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -234,60 +263,88 @@ export function ApprovalsClient({ data }: Props) {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(260px,0.9fr)]">
         <MetricCard label="Waiting for me" value={data.metrics.pending} tone="warn" />
         <MetricCard label="Overdue" value={data.metrics.overdue} tone="danger" />
         <MetricCard label="Due soon" value={data.metrics.dueSoon} tone="warn" />
         <MetricCard label="Recently approved" value={data.metrics.approvedRecently} tone="ok" />
+        <div className="app-panel flex flex-col justify-between gap-2 border border-surface-border bg-white p-3">
+          <button type="button" onClick={openFilterPanel} className="btn-secondary w-full">
+            <Filter className="h-4 w-4" />
+            Open filters
+          </button>
+          <p className="text-xs text-surface-muted truncate" title={query ? query : ""}>
+            {hasActiveFilters ? "Filters active" : "No filters active"}{query ? ` - "${query}"` : ""}
+          </p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            disabled={!hasActiveFilters}
+            className={`btn-secondary w-full ${!hasActiveFilters ? "pointer-events-none opacity-50" : ""}`}
+          >
+            Clear filters
+          </button>
+        </div>
       </div>
 
       {(activeTab === "all" || activeTab === "pending") ? (
       <>
-      <section className="app-panel p-5">
-        <div className="mb-4 flex flex-col gap-1">
-          <h2 className="text-base font-semibold text-surface-text">Delegation</h2>
-          <p className="text-sm text-surface-muted">
-            Temporarily let another approver act on requests assigned to you.
-          </p>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <form action={createApprovalDelegation} className="space-y-3 rounded border border-surface-border bg-slate-50 p-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate email</span>
-                <input name="delegateEmail" type="email" className="field-input" placeholder="approver@vienovo.ph" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate name</span>
-                <input name="delegateName" className="field-input" placeholder="Optional" />
-              </label>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-surface-text">Reason</span>
-                <input name="reason" className="field-input" placeholder="Leave, travel, temporary coverage" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-surface-text">Ends on</span>
-                <input name="endsAt" type="date" className="field-input" />
-              </label>
-            </div>
-            <PendingSubmitButton
-              type="submit"
-              idleLabel="Set delegation"
-              pendingLabel="Saving delegation..."
-              className="btn-primary"
-            />
-          </form>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <DelegationList title="Delegated to me" rows={data.delegations.toMe} mode="to-me" />
-            <DelegationList title="My delegation" rows={data.delegations.fromMe} mode="from-me" />
+      <section className="app-panel p-4">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-surface-text">Delegation</h2>
+            <p className="text-sm text-surface-muted">
+              Temporarily let another approver act on requests assigned to you.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setIsDelegationOpen((prev) => !prev)}
+            className="btn-secondary w-full sm:w-auto"
+          >
+            {isDelegationOpen ? "Collapse delegation" : "Expand delegation"}
+          </button>
         </div>
+        {isDelegationOpen ? (
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <form action={createApprovalDelegation} className="space-y-3 rounded border border-surface-border bg-slate-50 p-3.5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate email</span>
+                  <input name="delegateEmail" type="email" className="field-input" placeholder="approver@vienovo.ph" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate name</span>
+                  <input name="delegateName" className="field-input" placeholder="Optional" />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-surface-text">Reason</span>
+                  <input name="reason" className="field-input" placeholder="Leave, travel, temporary coverage" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-surface-text">Ends on</span>
+                  <input name="endsAt" type="date" className="field-input" />
+                </label>
+              </div>
+              <PendingSubmitButton
+                type="submit"
+                idleLabel="Set delegation"
+                pendingLabel="Saving delegation..."
+                className="btn-primary"
+              />
+            </form>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <DelegationList title="Delegated to me" rows={data.delegations.toMe} mode="to-me" />
+              <DelegationList title="My delegation" rows={data.delegations.fromMe} mode="from-me" />
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="app-panel p-5">
+      <section className="app-panel p-4">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-surface-text">Needs action</h2>
@@ -341,11 +398,11 @@ export function ApprovalsClient({ data }: Props) {
         </div>
 
         {selected.length > 0 ? (
-          <form className="mb-5">
+          <form className="sticky top-3 z-20 mb-4">
             {selected.map((referenceNo) => (
               <input key={`selected-${referenceNo}`} type="hidden" name="referenceNo" value={referenceNo} />
             ))}
-            <PendingFormState className="rounded-lg border border-brand-200 bg-brand-50 p-4">
+            <PendingFormState className="rounded-lg border border-brand-200 bg-brand-50/95 p-3.5 shadow-sm backdrop-blur">
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="text-sm font-semibold text-surface-text">
@@ -363,7 +420,7 @@ export function ApprovalsClient({ data }: Props) {
                   placeholder="Optional shared note for all selected requests"
                   className="field-input min-h-24"
                 />
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <PendingSubmitButton
                     type="submit"
                     formAction={bulkApproveFromQueue}
@@ -374,7 +431,7 @@ export function ApprovalsClient({ data }: Props) {
                       </span>
                     }
                     pendingLabel="Approving..."
-                    className="btn-primary flex-1"
+                    className="btn-primary w-full"
                   />
                   <PendingSubmitButton
                     type="submit"
@@ -386,7 +443,7 @@ export function ApprovalsClient({ data }: Props) {
                       </span>
                     }
                     pendingLabel="Rejecting..."
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
                   />
                   <PendingSubmitButton
                     type="submit"
@@ -398,7 +455,7 @@ export function ApprovalsClient({ data }: Props) {
                       </span>
                     }
                     pendingLabel="Returning..."
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
                   />
                 </div>
               </div>
@@ -409,7 +466,7 @@ export function ApprovalsClient({ data }: Props) {
         {visiblePending.length === 0 ? (
           <EmptyState message={query ? "No pending approvals match this search." : "No requests are waiting for your action."} />
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             {visibleGroups.map((group) => (
               <PendingGroup
                 key={group.key}
@@ -486,7 +543,7 @@ function PendingGroup({
         <span>{title}</span>
         <span className="text-xs font-normal text-surface-muted">({items.length})</span>
       </div>
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3">
         {items.map((item) => (
           <PendingApprovalCard
             key={item.referenceNo}
@@ -571,8 +628,8 @@ function PendingApprovalCard({
   onToggle: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-sm transition hover:shadow-md">
-      <div className="grid gap-3 border-b border-surface-border pb-3">
+    <div className="rounded-lg border border-surface-border bg-white p-3.5">
+      <div className="grid gap-2.5 border-b border-surface-border pb-2.5">
         <div className="flex items-start gap-3">
           <label className="mt-1 inline-flex cursor-pointer items-center">
             <input
@@ -584,33 +641,33 @@ function PendingApprovalCard({
           </label>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Link href={`/requests/${item.referenceNo}`} className="font-mono text-xs font-semibold text-brand-700 hover:underline">
+              <Link href={`/requests/${item.referenceNo}`} className="max-w-full truncate font-mono text-xs font-semibold text-brand-700 hover:underline" title={item.referenceNo}>
                 {item.referenceNo}
               </Link>
               <span className={`status-pill uppercase ${STATUS_TONES[item.status] ?? "border-surface-border bg-slate-50 text-slate-700"}`}>
                 {item.status}
               </span>
             </div>
-            <h3 className="mt-2 text-base font-semibold text-surface-text">{item.formName}</h3>
-            <p className="mt-1 text-sm text-surface-muted">
+            <h3 className="mt-1.5 truncate text-sm font-semibold text-surface-text" title={item.formName}>{item.formName}</h3>
+            <p className="mt-1 truncate text-xs text-surface-muted" title={item.submittedBy.name || item.submittedBy.email || "Requester"}>
               Requester: {item.submittedBy.name || item.submittedBy.email || "Requester"}
             </p>
-            <p className="mt-1 text-sm text-surface-muted">
+            <p className="mt-1 truncate text-xs text-surface-muted" title={`Waiting on step ${item.activeStep?.step ?? item.currentStep} ${item.activeStep?.role ? `(${item.activeStep.role})` : ""}`}>
               Waiting on step {item.activeStep?.step ?? item.currentStep} {item.activeStep?.role ? `(${item.activeStep.role})` : ""}
             </p>
             {item.delegatedFromEmail ? (
-              <p className="mt-1 text-xs font-semibold text-brand-700">
+              <p className="mt-1 truncate text-xs font-semibold text-brand-700" title={item.delegatedFromName || item.delegatedFromEmail}>
                 Delegated from {item.delegatedFromName || item.delegatedFromEmail}
               </p>
             ) : null}
             <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
               <Clock3 className="h-3.5 w-3.5" />
-              Submitted {formatDate(item.createdAt)} · waiting about {formatAge(item.ageHours)}
+              Submitted {formatDate(item.createdAt)} - waiting about {formatAge(item.ageHours)}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <Link href={`/requests/${item.referenceNo}`} className="btn-secondary">
             Open details
           </Link>
@@ -620,19 +677,19 @@ function PendingApprovalCard({
         </div>
       </div>
 
-      <form className="mt-4 space-y-3">
+      <form className="mt-3 space-y-2.5">
         <input type="hidden" name="referenceNo" value={item.referenceNo} />
-        <div>
-          <label className="mb-1 block text-sm font-semibold text-surface-text">
-            Approval note
-          </label>
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold text-surface-muted hover:text-surface-text">
+            Add approval note (optional)
+          </summary>
           <textarea
             name="comment"
             placeholder="Optional note for your approval or rejection"
-            className="field-input min-h-24"
+            className="field-input mt-2 min-h-20"
           />
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        </details>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <PendingSubmitButton
             type="submit"
             formAction={approveFromQueue}
@@ -643,7 +700,7 @@ function PendingApprovalCard({
               </span>
             }
             pendingLabel="Approving..."
-            className="btn-primary flex-1"
+            className="btn-primary w-full"
           />
           <PendingSubmitButton
             type="submit"
@@ -655,7 +712,7 @@ function PendingApprovalCard({
               </span>
             }
             pendingLabel="Rejecting..."
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
           />
           <PendingSubmitButton
             type="submit"
@@ -667,7 +724,7 @@ function PendingApprovalCard({
               </span>
             }
             pendingLabel="Returning..."
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
           />
         </div>
       </form>
@@ -701,49 +758,51 @@ function HistorySection({
     : 0;
 
   return (
-    <section className="app-panel flex h-full flex-col p-5">
+    <section className="app-panel flex flex-col p-4">
       <h2 className="text-base font-semibold text-surface-text">{title}</h2>
       <p className="mt-1 text-sm text-surface-muted">{description}</p>
 
       {items.length === 0 ? (
         <EmptyState message={emptyMessage} className="pt-8" />
       ) : (
-        <div className="mt-4 min-h-[360px] space-y-3">
+        <div className="mt-3 space-y-2">
           {items.map((item) => (
             <div
               key={`${title}-${item.referenceNo}`}
-              className="rounded-lg border border-surface-border bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md"
+              className="rounded-lg border border-surface-border bg-white px-3 py-2.5"
             >
-              <div className="grid gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/requests/${item.referenceNo}`} className="font-mono text-xs font-semibold text-brand-700 hover:underline">
+              <div className="grid gap-2 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] md:items-center">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Link href={`/requests/${item.referenceNo}`} className="truncate font-mono text-xs font-semibold text-brand-700 hover:underline" title={item.referenceNo}>
                       {item.referenceNo}
                     </Link>
-                    <span className={`status-pill uppercase ${STATUS_TONES[item.latestUserDecision?.status ?? item.status] ?? "border-surface-border bg-slate-50 text-slate-700"}`}>
+                    <span className={`status-pill shrink-0 uppercase ${STATUS_TONES[item.latestUserDecision?.status ?? item.status] ?? "border-surface-border bg-slate-50 text-slate-700"}`}>
                       {item.latestUserDecision?.status ?? item.status}
                     </span>
                   </div>
-                  <Link href={`/requests/${item.referenceNo}`} className="text-sm font-semibold text-brand-700 hover:underline">
-                    Open
-                  </Link>
+                  <p className="mt-1 truncate text-xs font-semibold text-surface-text" title={item.formName}>
+                    {item.formName}
+                  </p>
                 </div>
-                <div className="rounded-md border border-surface-border bg-slate-50/70 p-3">
-                  <h3 className="text-sm font-semibold text-surface-text">{item.formName}</h3>
-                  <p className="mt-1 text-xs text-surface-muted">
+                <div className="min-w-0 rounded border border-surface-border bg-slate-50/70 px-2.5 py-2">
+                  <p className="truncate text-xs text-surface-muted" title={item.submittedBy.name || item.submittedBy.email || "Requester"}>
                     {item.submittedBy.name || item.submittedBy.email || "Requester"}
                   </p>
-                  <p className="mt-1 text-xs text-surface-muted">
+                  <p className="mt-0.5 truncate text-xs text-surface-muted" title={formatDate(item.latestUserDecision?.actedAt ?? item.updatedAt ?? item.createdAt)}>
                     {item.latestUserDecision?.status === "approved" ? "Approved" : "Rejected"} on{" "}
                     {formatDate(item.latestUserDecision?.actedAt ?? item.updatedAt ?? item.createdAt)}
                   </p>
                   {item.latestUserDecision?.comment ? (
-                    <p className="mt-2 inline-flex items-start gap-2 text-xs text-surface-muted">
-                      <MessageSquare className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span>{item.latestUserDecision.comment}</span>
+                    <p className="mt-1 inline-flex max-w-full items-center gap-1.5 text-xs text-surface-muted" title={item.latestUserDecision.comment}>
+                      <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{item.latestUserDecision.comment}</span>
                     </p>
                   ) : null}
                 </div>
+                <Link href={`/requests/${item.referenceNo}`} className="btn-secondary w-full md:w-auto">
+                  Open
+                </Link>
               </div>
             </div>
           ))}
@@ -805,16 +864,18 @@ function DelegationList({
         <div className="mt-3 space-y-3">
           {rows.map((row) => (
             <div key={row.id} className="rounded border border-surface-border bg-slate-50 p-3">
-              <p className="text-sm font-semibold text-surface-text">
+              <p className="truncate text-sm font-semibold text-surface-text" title={mode === "to-me"
+                  ? row.delegatorName || row.delegatorEmail
+                  : row.delegateName || row.delegateEmail}>
                 {mode === "to-me"
                   ? row.delegatorName || row.delegatorEmail
                   : row.delegateName || row.delegateEmail}
               </p>
-              <p className="mt-1 text-xs text-surface-muted">
+              <p className="mt-1 truncate text-xs text-surface-muted" title={`${mode === "to-me" ? row.delegatorEmail : row.delegateEmail}${row.endsAt ? ` - until ${formatDate(row.endsAt)}` : ""}`}>
                 {mode === "to-me" ? row.delegatorEmail : row.delegateEmail}
-                {row.endsAt ? ` · until ${formatDate(row.endsAt)}` : ""}
+                {row.endsAt ? ` - until ${formatDate(row.endsAt)}` : ""}
               </p>
-              {row.reason ? <p className="mt-1 text-xs text-surface-muted">{row.reason}</p> : null}
+              {row.reason ? <p className="mt-1 truncate text-xs text-surface-muted" title={row.reason}>{row.reason}</p> : null}
               {mode === "from-me" ? (
                 <form action={revokeApprovalDelegation} className="mt-2">
                   <input type="hidden" name="id" value={row.id} />
@@ -852,6 +913,10 @@ function matchesFilters(item: ApprovalQueueItem, query: string, formFilter: stri
     if (itemForm !== formFilter) return false;
   }
 
+  return matchesQuery(item, query);
+}
+
+function matchesQuery(item: ApprovalQueueItem, query: string) {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
 
@@ -869,3 +934,4 @@ function matchesFilters(item: ApprovalQueueItem, query: string, formFilter: stri
     .toLowerCase()
     .includes(normalizedQuery);
 }
+
