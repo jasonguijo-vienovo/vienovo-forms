@@ -278,6 +278,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         </summary>
         <form action={updateFormImportStatus} className="mt-2 space-y-2">
           <input type="hidden" name="id" value={String(item._id)} />
+          <input type="hidden" name="inline" value="1" />
           <select name="status" defaultValue={item.status} className="field-input">
             {statuses.map((status: string) => (
               <option key={status} value={status}>
@@ -300,6 +301,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         </summary>
         <form action={updateFormImportConfig} className="mt-2 space-y-2">
           <input type="hidden" name="id" value={String(item._id)} />
+          <input type="hidden" name="inline" value="1" />
           <input
             name="externalFormUrl"
             defaultValue={item.externalFormUrl ?? ""}
@@ -352,6 +354,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         {nextAction === "registry" ? (
           <form action={createMissingRegistryEntry}>
             <input type="hidden" name="id" value={String(item._id)} />
+            <input type="hidden" name="inline" value="1" />
             <PendingSubmitButton
               type="submit"
               idleLabel="Next: Add registry"
@@ -363,6 +366,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         {nextAction === "sync" ? (
           <form action={syncImportedDropdowns}>
             <input type="hidden" name="id" value={String(item._id)} />
+            <input type="hidden" name="inline" value="1" />
             <PendingSubmitButton
               type="submit"
               idleLabel="Next: Sync from spreadsheet"
@@ -375,6 +379,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         {nextAction === "publish" ? (
           <form action={publishFormImport}>
             <input type="hidden" name="id" value={String(item._id)} />
+            <input type="hidden" name="inline" value="1" />
             <PendingSubmitButton
               type="submit"
               idleLabel="Next: Publish live"
@@ -392,6 +397,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         <form action={publishFormImport}>
           <input type="hidden" name="id" value={String(item._id)} />
           <input type="hidden" name="dryRun" value="1" />
+          <input type="hidden" name="inline" value="1" />
           <PendingSubmitButton
             type="submit"
             idleLabel={
@@ -406,6 +412,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         </form>
         <form action={repairFormImport}>
           <input type="hidden" name="id" value={String(item._id)} />
+          <input type="hidden" name="inline" value="1" />
           <PendingSubmitButton
             type="submit"
             idleLabel={
@@ -421,6 +428,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         {!definition ? (
           <form action={createMissingRegistryEntry}>
             <input type="hidden" name="id" value={String(item._id)} />
+            <input type="hidden" name="inline" value="1" />
             <PendingSubmitButton
               type="submit"
               idleLabel={
@@ -436,6 +444,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         ) : null}
         <form action={syncImportedDropdowns}>
           <input type="hidden" name="id" value={String(item._id)} />
+          <input type="hidden" name="inline" value="1" />
           <PendingSubmitButton
             type="submit"
             idleLabel={
@@ -451,6 +460,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         </form>
         <form action={publishFormImport}>
           <input type="hidden" name="id" value={String(item._id)} />
+          <input type="hidden" name="inline" value="1" />
           <PendingSubmitButton
             type="submit"
             disabled={blockerCount > 0}
@@ -471,6 +481,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
           }}
         >
           <input type="hidden" name="id" value={String(item._id)} />
+          <input type="hidden" name="inline" value="1" />
           <PendingSubmitButton
             type="submit"
             idleLabel={
@@ -491,6 +502,7 @@ function DraftPanel({ item, definition, synced, versions, statuses }: any) {
         >
           <input type="hidden" name="id" value={String(item._id)} />
           <input type="hidden" name="slug" value={String(item.slug)} />
+          <input type="hidden" name="inline" value="1" />
           <PendingSubmitButton
             type="submit"
             idleLabel={

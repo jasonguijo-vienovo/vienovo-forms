@@ -289,6 +289,7 @@ export async function createFormImport(formData: FormData) {
 
 export async function updateFormImportConfig(formData: FormData) {
   const id = s(formData, "id");
+  const inline = bool(formData, "inline");
   try {
     const { email } = await requireAdmin();
     await connectMongo();
@@ -345,14 +346,17 @@ export async function updateFormImportConfig(formData: FormData) {
   } catch (error) {
     console.error("updateFormImportConfig failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
+    if (inline) return;
   }
 
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function publishFormImport(formData: FormData) {
   const id = s(formData, "id");
   const dryRun = bool(formData, "dryRun");
+  const inline = bool(formData, "inline");
   try {
     const { email } = await requireAdmin();
     await connectMongo();
@@ -414,12 +418,15 @@ export async function publishFormImport(formData: FormData) {
   } catch (error) {
     console.error("publishFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
+    if (inline) return;
   }
 
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function createMissingRegistryEntry(formData: FormData) {
+  const inline = bool(formData, "inline");
   const { email } = await requireAdmin();
   await connectMongo();
 
@@ -449,10 +456,12 @@ export async function createMissingRegistryEntry(formData: FormData) {
   });
 
   revalidateImportSurfaces();
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function updateFormImportStatus(formData: FormData) {
+  const inline = bool(formData, "inline");
   const { email } = await requireAdmin();
   await connectMongo();
 
@@ -473,11 +482,13 @@ export async function updateFormImportStatus(formData: FormData) {
   });
 
   revalidateImportSurfaces();
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function deleteFormImport(formData: FormData) {
   const id = s(formData, "id");
+  const inline = bool(formData, "inline");
   try {
     const { email } = await requireAdmin();
     await connectMongo();
@@ -503,12 +514,15 @@ export async function deleteFormImport(formData: FormData) {
   } catch (error) {
     console.error("deleteFormImport failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
+    if (inline) return;
   }
 
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function repairFormImport(formData: FormData) {
+  const inline = bool(formData, "inline");
   const { email } = await requireAdmin();
   await connectMongo();
 
@@ -560,12 +574,14 @@ export async function repairFormImport(formData: FormData) {
   }
 
   revalidateImportSurfaces();
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function deleteFormEverywhere(formData: FormData) {
   const id = s(formData, "id");
   const slug = s(formData, "slug");
+  const inline = bool(formData, "inline");
   try {
     const { email } = await requireAdmin();
     await connectMongo();
@@ -601,12 +617,15 @@ export async function deleteFormEverywhere(formData: FormData) {
   } catch (error) {
     console.error("deleteFormEverywhere (importer) failed:", error);
     await setFlashToast({ tone: "error", message: messageFromError(error) });
+    if (inline) return;
   }
 
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
 
 export async function syncImportedDropdowns(formData: FormData) {
+  const inline = bool(formData, "inline");
   const { email } = await requireAdmin();
   const id = s(formData, "id");
   if (!id) return;
@@ -620,6 +639,7 @@ export async function syncImportedDropdowns(formData: FormData) {
         ? `Dry run: ${draft.name} would sync dropdowns and people from spreadsheet.`
         : "Dry run: draft not found.",
     });
+    if (inline) return;
     redirect(FORM_IMPORTS_PATH);
   }
 
@@ -648,5 +668,6 @@ export async function syncImportedDropdowns(formData: FormData) {
   revalidatePath(FORM_IMPORTS_PATH);
   revalidatePath("/admin/lookups");
   revalidatePath("/admin");
+  if (inline) return;
   redirect(FORM_IMPORTS_PATH);
 }
