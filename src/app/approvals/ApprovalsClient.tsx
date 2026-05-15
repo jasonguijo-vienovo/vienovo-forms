@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckSquare, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { AlertTriangle, CheckSquare, ChevronLeft, ChevronRight, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -23,6 +23,7 @@ type Props = {
 
 type PendingView = "all" | "overdue" | "due-soon" | "normal";
 type QueueTab = "all" | "pending" | "approved" | "rejected";
+type HistoryListKind = "approved" | "rejected";
 
 const STATUS_TONES: Record<string, string> = {
   pending: "border-amber-200 bg-amber-50 text-amber-800",
@@ -40,6 +41,8 @@ export function ApprovalsClient({ data }: Props) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkComment, setBulkComment] = useState("");
+  const [approvedHistoryQuery, setApprovedHistoryQuery] = useState("");
+  const [historyPreview, setHistoryPreview] = useState<{ kind: HistoryListKind; referenceNo: string } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const allQueueItems = useMemo(
@@ -65,6 +68,10 @@ export function ApprovalsClient({ data }: Props) {
   const filteredRejected = useMemo(
     () => data.recentlyRejected.filter((item) => matchesFilters(item, query, formFilter)),
     [data.recentlyRejected, query, formFilter],
+  );
+  const filteredApprovedHistory = useMemo(
+    () => filteredApproved.filter((item) => matchesHistoryFilter(item, approvedHistoryQuery)),
+    [filteredApproved, approvedHistoryQuery],
   );
   const overduePending = filteredPending.filter((item) => item.urgency === "overdue");
   const dueSoonPending = filteredPending.filter((item) => item.urgency === "due-soon");
@@ -101,11 +108,16 @@ export function ApprovalsClient({ data }: Props) {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsFilterOpen(false);
+      if (event.key !== "Escape") return;
+      if (historyPreview) {
+        setHistoryPreview(null);
+        return;
+      }
+      setIsFilterOpen(false);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [historyPreview]);
 
   useEffect(() => {
     if (!isFilterOpen) return;
@@ -123,6 +135,7 @@ export function ApprovalsClient({ data }: Props) {
     setFormFilter("all");
     setPendingView("all");
     setActiveTab("all");
+    setApprovedHistoryQuery("");
   }
 
   const hasActiveFilters =
@@ -143,6 +156,25 @@ export function ApprovalsClient({ data }: Props) {
       }
       return Array.from(new Set([...current, ...visiblePendingRefs]));
     });
+  }
+
+  function openHistoryPreview(kind: HistoryListKind, referenceNo: string) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setHistoryPreview({ kind, referenceNo });
+  }
+
+  const previewItems = historyPreview?.kind === "rejected" ? filteredRejected : filteredApprovedHistory;
+  const previewIndex = historyPreview
+    ? previewItems.findIndex((item) => item.referenceNo === historyPreview.referenceNo)
+    : -1;
+  const previewItem = previewIndex >= 0 ? previewItems[previewIndex] : null;
+
+  function movePreview(step: -1 | 1) {
+    if (!historyPreview) return;
+    if (previewIndex < 0) return;
+    const nextIndex = previewIndex + step;
+    if (nextIndex < 0 || nextIndex >= previewItems.length) return;
+    setHistoryPreview({ kind: historyPreview.kind, referenceNo: previewItems[nextIndex].referenceNo });
   }
 
   return (
@@ -415,8 +447,12 @@ export function ApprovalsClient({ data }: Props) {
             <HistorySection
               title="Recently approved"
               description="Requests you approved most recently."
-              items={filteredApproved}
+              items={filteredApprovedHistory}
               emptyMessage={query ? "No recently approved requests match this search." : "No recently approved requests yet."}
+              filterQuery={approvedHistoryQuery}
+              onFilterQueryChange={setApprovedHistoryQuery}
+              filterPlaceholder="Filter approved history by reference, form, requester"
+              onOpenPreview={(referenceNo) => openHistoryPreview("approved", referenceNo)}
             />
           ) : null}
           {(activeTab === "all" || activeTab === "rejected") ? (
@@ -425,9 +461,65 @@ export function ApprovalsClient({ data }: Props) {
               description="Requests you rejected most recently."
               items={filteredRejected}
               emptyMessage={query ? "No recently rejected requests match this search." : "No recently rejected requests yet."}
+              onOpenPreview={(referenceNo) => openHistoryPreview("rejected", referenceNo)}
             />
           ) : null}
         </section>
+      ) : null}
+
+      {historyPreview && previewItem ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4" onClick={() => setHistoryPreview(null)}>
+          <div className="w-full max-w-2xl rounded-lg border border-surface-border bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                  {historyPreview.kind === "approved" ? "Recently approved" : "Recently rejected"}
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-surface-text">{previewItem.formName}</h3>
+              </div>
+              <button type="button" onClick={() => setHistoryPreview(null)} className="btn-secondary px-3">
+                <X className="h-4 w-4" />
+                Close
+              </button>
+            </div>
+
+            <div className="rounded border border-surface-border bg-slate-50 p-4 text-sm">
+              <p className="font-mono font-semibold text-brand-700">{previewItem.referenceNo}</p>
+              <p className="mt-1 text-surface-muted">
+                Requester: {previewItem.submittedBy.name || previewItem.submittedBy.email || "Requester"}
+              </p>
+              <p className="mt-1 text-surface-muted">
+                {previewItem.latestUserDecision?.status === "approved" ? "Approved" : "Rejected"} on{" "}
+                {formatDate(previewItem.latestUserDecision?.actedAt ?? previewItem.updatedAt ?? previewItem.createdAt)}
+              </p>
+              {previewItem.latestUserDecision?.comment ? (
+                <p className="mt-2 inline-flex items-start gap-2 text-surface-muted">
+                  <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{previewItem.latestUserDecision.comment}</span>
+                </p>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-surface-muted">
+                {previewIndex + 1} of {previewItems.length}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => movePreview(-1)} disabled={previewIndex <= 0} className={`btn-secondary ${previewIndex <= 0 ? "pointer-events-none opacity-50" : ""}`}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+                <button type="button" onClick={() => movePreview(1)} disabled={previewIndex >= previewItems.length - 1} className={`btn-secondary ${previewIndex >= previewItems.length - 1 ? "pointer-events-none opacity-50" : ""}`}>
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <Link href={`/requests/${previewItem.referenceNo}`} className="btn-primary">
+                  Open full request
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : null}
     </main>
   );
@@ -655,16 +747,34 @@ function HistorySection({
   description,
   items,
   emptyMessage,
+  filterQuery,
+  onFilterQueryChange,
+  filterPlaceholder,
+  onOpenPreview,
 }: {
   title: string;
   description: string;
   items: ApprovalQueueItem[];
   emptyMessage: string;
+  filterQuery?: string;
+  onFilterQueryChange?: (next: string) => void;
+  filterPlaceholder?: string;
+  onOpenPreview?: (referenceNo: string) => void;
 }) {
   return (
     <section className="app-panel p-5">
       <h2 className="text-base font-semibold text-surface-text">{title}</h2>
       <p className="mt-1 text-sm text-surface-muted">{description}</p>
+      {onFilterQueryChange ? (
+        <div className="mt-3">
+          <input
+            value={filterQuery ?? ""}
+            onChange={(event) => onFilterQueryChange(event.target.value)}
+            placeholder={filterPlaceholder ?? "Filter history"}
+            className="field-input"
+          />
+        </div>
+      ) : null}
 
       {items.length === 0 ? (
         <EmptyState message={emptyMessage} className="pt-8" />
@@ -697,9 +807,19 @@ function HistorySection({
                     </p>
                   ) : null}
                 </div>
-                <Link href={`/requests/${item.referenceNo}`} className="text-sm font-semibold text-brand-700 hover:underline">
-                  Open
-                </Link>
+                {onOpenPreview ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPreview(item.referenceNo)}
+                    className="text-sm font-semibold text-brand-700 hover:underline"
+                  >
+                    Open
+                  </button>
+                ) : (
+                  <Link href={`/requests/${item.referenceNo}`} className="text-sm font-semibold text-brand-700 hover:underline">
+                    Open
+                  </Link>
+                )}
               </div>
             </div>
           ))}
@@ -770,6 +890,22 @@ function formatAge(ageHours: number) {
   if (ageHours < 24) return `${ageHours} hour${ageHours === 1 ? "" : "s"}`;
   const days = Math.floor(ageHours / 24);
   return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+function matchesHistoryFilter(item: ApprovalQueueItem, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+  return [
+    item.referenceNo,
+    item.formName,
+    item.formSlug,
+    item.formType,
+    item.submittedBy.name,
+    item.submittedBy.email,
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(normalizedQuery);
 }
 
 function matchesFilters(item: ApprovalQueueItem, query: string, formFilter: string) {
