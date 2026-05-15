@@ -246,6 +246,7 @@ export async function submitCashAdvance(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: approver.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],
@@ -479,6 +480,7 @@ export async function updateCashAdvance(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: approver.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],

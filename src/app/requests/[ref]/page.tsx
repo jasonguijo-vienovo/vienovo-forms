@@ -533,6 +533,9 @@ function DetailRow({
   value: React.ReactNode;
   changed?: { from: string; to: string };
 }) {
+  const formattedValue = formatDetailValue(label, value);
+  const previousValue = changed?.from ? formatDetailString(label, changed.from) : "";
+
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0">
@@ -542,13 +545,23 @@ function DetailRow({
             <span className="status-pill border-amber-200 bg-amber-50 text-amber-800">Edited</span>
           ) : null}
         </div>
-        {changed?.from ? (
+        {previousValue ? (
           <div className="mt-1 text-[11px] text-gray-400">
-            Previous: <span className="font-mono">{changed.from}</span>
+            Previous: <span className="font-mono">{previousValue}</span>
           </div>
         ) : null}
       </div>
-      <div className="max-w-[60%] break-words text-right text-sm text-gray-700">{value}</div>
+      <div className="max-w-[60%] break-words text-right text-sm text-gray-700">{formattedValue}</div>
     </div>
   );
+}
+
+function formatDetailValue(label: string, value: React.ReactNode) {
+  if (typeof value !== "string") return value;
+  return formatDetailString(label, value);
+}
+
+function formatDetailString(label: string, value: string) {
+  if (!/status/i.test(label)) return value;
+  return humanizeStatus(value);
 }

@@ -31,6 +31,7 @@ export type CashAdvanceFormProps = {
   user: { email: string; name: string };
   prefill: EmployeePrefill;
   initial?: CashAdvanceInitialValues;
+  initialApproverId?: string;
   payableToOptions: Array<{ value: string; label: string }>;
   approvers: Approver[];
   submitAction: (formData: FormData) => Promise<FormActionResult>;
@@ -43,6 +44,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
     user,
     prefill,
     initial,
+    initialApproverId,
     payableToOptions,
     approvers,
     submitAction,
@@ -66,7 +68,7 @@ export function CashAdvanceForm(props: CashAdvanceFormProps) {
   );
   const [agreed, setAgreed] = useState(Boolean(initial?.agreed));
 
-  const [approverId, setApproverId] = useState("");
+  const [approverId, setApproverId] = useState(initialApproverId ?? "");
   const [fileName, setFileName] = useState("");
 
   const approverEmail = useMemo(
