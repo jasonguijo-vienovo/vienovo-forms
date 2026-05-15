@@ -133,6 +133,8 @@ export default async function RequestDetailPage({
   const approveHref = isCurrentApprover
     ? `/requests/${encodeURIComponent(doc.referenceNo)}/approve`
     : null;
+  const latestEditRestartedApproval =
+    lastEdit?.details?.resetToStep === 1 && doc.status === "pending" && doc.currentStep === 1;
 
   return (
     <>
@@ -204,6 +206,14 @@ export default async function RequestDetailPage({
                       Edit request
                     </Link>
                   }
+                />
+              ) : null}
+
+              {latestEditRestartedApproval ? (
+                <ActionBanner
+                  tone="info"
+                  title="Approval restarted from level 1 after your edit."
+                  description="The saved request details below are current, and the approval tracker has been reset so level 1 review happens again from the start."
                 />
               ) : null}
 
@@ -406,6 +416,15 @@ function humanizeHistoryAction(action: string) {
 
 function buildHistorySummary(details: any) {
   if (!details || typeof details !== "object") return "";
+  if (details.resetToStep) {
+    const changedCount =
+      details.changedFields && typeof details.changedFields === "object"
+        ? Object.keys(details.changedFields).length
+        : 0;
+    return changedCount > 0
+      ? `Request updated. Approval restarted at level ${details.resetToStep}. ${changedCount} field${changedCount === 1 ? "" : "s"} changed.`
+      : `Request updated. Approval restarted at level ${details.resetToStep}.`;
+  }
   if (details.role) {
     const roleLabel = humanizeWorkflowRole(details.role) || String(details.role);
     if (details.comment) return `${roleLabel}: ${details.comment}`;
