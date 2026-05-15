@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckSquare, Clock3, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, CheckSquare, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -22,6 +22,7 @@ type Props = {
 };
 
 type PendingView = "all" | "overdue" | "due-soon" | "normal";
+type QueueTab = "all" | "pending" | "approved" | "rejected";
 
 const STATUS_TONES: Record<string, string> = {
   pending: "border-amber-200 bg-amber-50 text-amber-800",
@@ -34,20 +35,36 @@ const STATUS_TONES: Record<string, string> = {
 export function ApprovalsClient({ data }: Props) {
   const [query, setQuery] = useState("");
   const [pendingView, setPendingView] = useState<PendingView>("all");
+  const [activeTab, setActiveTab] = useState<QueueTab>("all");
+  const [formFilter, setFormFilter] = useState("all");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkComment, setBulkComment] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const allQueueItems = useMemo(
+    () => [...data.pending, ...data.recentlyApproved, ...data.recentlyRejected],
+    [data.pending, data.recentlyApproved, data.recentlyRejected],
+  );
+  const formOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(allQueueItems.map((item) => item.formName || item.formSlug || item.formType).filter(Boolean)),
+      ).sort((a, b) => a.localeCompare(b)),
+    [allQueueItems],
+  );
 
   const filteredPending = useMemo(
-    () => data.pending.filter((item) => matchesQuery(item, query)),
-    [data.pending, query],
+    () => data.pending.filter((item) => matchesFilters(item, query, formFilter)),
+    [data.pending, query, formFilter],
   );
   const filteredApproved = useMemo(
-    () => data.recentlyApproved.filter((item) => matchesQuery(item, query)),
-    [data.recentlyApproved, query],
+    () => data.recentlyApproved.filter((item) => matchesFilters(item, query, formFilter)),
+    [data.recentlyApproved, query, formFilter],
   );
   const filteredRejected = useMemo(
-    () => data.recentlyRejected.filter((item) => matchesQuery(item, query)),
-    [data.recentlyRejected, query],
+    () => data.recentlyRejected.filter((item) => matchesFilters(item, query, formFilter)),
+    [data.recentlyRejected, query, formFilter],
   );
   const overduePending = filteredPending.filter((item) => item.urgency === "overdue");
   const dueSoonPending = filteredPending.filter((item) => item.urgency === "due-soon");
@@ -82,6 +99,35 @@ export function ApprovalsClient({ data }: Props) {
     setSelected((current) => current.filter((referenceNo) => validRefs.has(referenceNo)));
   }, [data.pending]);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsFilterOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!isFilterOpen) return;
+    const timer = window.setTimeout(() => searchRef.current?.focus(), 50);
+    return () => window.clearTimeout(timer);
+  }, [isFilterOpen]);
+
+  function openFilterPanel() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setIsFilterOpen(true);
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setFormFilter("all");
+    setPendingView("all");
+    setActiveTab("all");
+  }
+
+  const hasActiveFilters =
+    query.trim().length > 0 || formFilter !== "all" || pendingView !== "all" || activeTab !== "all";
+
   function toggle(referenceNo: string) {
     setSelected((current) =>
       current.includes(referenceNo)
@@ -109,16 +155,67 @@ export function ApprovalsClient({ data }: Props) {
             Review requests assigned to you, leave notes, and move through approvals faster.
           </p>
         </div>
-        <div className="w-full sm:w-[26rem]">
-          <label className="mb-1 block text-sm font-semibold text-surface-text">Search</label>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Reference, form, requester, or email"
-            className="field-input"
-          />
+        <div className="w-full sm:w-auto sm:min-w-[320px]">
+          <button type="button" onClick={openFilterPanel} className="btn-secondary w-full sm:w-auto">
+            <Filter className="h-4 w-4" />
+            Open filters
+          </button>
+          <p className="mt-2 text-xs text-surface-muted">
+            {hasActiveFilters ? "Filters active" : "No filters active"}{query ? ` · "${query}"` : ""}
+          </p>
         </div>
       </div>
+
+      {isFilterOpen ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" onClick={() => setIsFilterOpen(false)}>
+          <div className="w-full max-w-3xl rounded-lg border border-surface-border bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-surface-text">Filter approvals</h2>
+                <p className="text-sm text-surface-muted">Use search and form filters to navigate the queue faster.</p>
+              </div>
+              <button type="button" onClick={() => setIsFilterOpen(false)} className="btn-secondary px-3">
+                <X className="h-4 w-4" />
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Search</span>
+                <input
+                  ref={searchRef}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Reference, form, requester, or email"
+                  className="field-input"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-semibold text-surface-text">Form</span>
+                <select value={formFilter} onChange={(event) => setFormFilter(event.target.value)} className="field-input">
+                  <option value="all">All forms</option>
+                  {formOptions.map((form) => (
+                    <option key={form} value={form}>{form}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <QueueFilterChip active={activeTab === "all"} onClick={() => setActiveTab("all")} label={`All queues (${filteredPending.length + filteredApproved.length + filteredRejected.length})`} />
+              <QueueFilterChip active={activeTab === "pending"} onClick={() => setActiveTab("pending")} label={`Needs action (${filteredPending.length})`} tone="warn" />
+              <QueueFilterChip active={activeTab === "approved"} onClick={() => setActiveTab("approved")} label={`Approved (${filteredApproved.length})`} />
+              <QueueFilterChip active={activeTab === "rejected"} onClick={() => setActiveTab("rejected")} label={`Rejected (${filteredRejected.length})`} tone="danger" />
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={clearFilters} className="btn-secondary">Clear filters</button>
+              <button type="button" onClick={() => setIsFilterOpen(false)} className="btn-primary">Apply filters</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting for me" value={data.metrics.pending} tone="warn" />
@@ -127,6 +224,8 @@ export function ApprovalsClient({ data }: Props) {
         <MetricCard label="Recently approved" value={data.metrics.approvedRecently} tone="ok" />
       </div>
 
+      {(activeTab === "all" || activeTab === "pending") ? (
+      <>
       <section className="app-panel p-5">
         <div className="mb-4 flex flex-col gap-1">
           <h2 className="text-base font-semibold text-surface-text">Delegation</h2>
@@ -307,21 +406,29 @@ export function ApprovalsClient({ data }: Props) {
           </div>
         )}
       </section>
+      </>
+      ) : null}
 
-      <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <HistorySection
-          title="Recently approved"
-          description="Requests you approved most recently."
-          items={filteredApproved}
-          emptyMessage={query ? "No recently approved requests match this search." : "No recently approved requests yet."}
-        />
-        <HistorySection
-          title="Recently rejected"
-          description="Requests you rejected most recently."
-          items={filteredRejected}
-          emptyMessage={query ? "No recently rejected requests match this search." : "No recently rejected requests yet."}
-        />
-      </section>
+      {(activeTab === "all" || activeTab === "approved" || activeTab === "rejected") ? (
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {(activeTab === "all" || activeTab === "approved") ? (
+            <HistorySection
+              title="Recently approved"
+              description="Requests you approved most recently."
+              items={filteredApproved}
+              emptyMessage={query ? "No recently approved requests match this search." : "No recently approved requests yet."}
+            />
+          ) : null}
+          {(activeTab === "all" || activeTab === "rejected") ? (
+            <HistorySection
+              title="Recently rejected"
+              description="Requests you rejected most recently."
+              items={filteredRejected}
+              emptyMessage={query ? "No recently rejected requests match this search." : "No recently rejected requests yet."}
+            />
+          ) : null}
+        </section>
+      ) : null}
     </main>
   );
 }
@@ -665,7 +772,12 @@ function formatAge(ageHours: number) {
   return `${days} day${days === 1 ? "" : "s"}`;
 }
 
-function matchesQuery(item: ApprovalQueueItem, query: string) {
+function matchesFilters(item: ApprovalQueueItem, query: string, formFilter: string) {
+  if (formFilter !== "all") {
+    const itemForm = item.formName || item.formSlug || item.formType;
+    if (itemForm !== formFilter) return false;
+  }
+
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return true;
 
