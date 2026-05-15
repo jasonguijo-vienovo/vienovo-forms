@@ -316,11 +316,23 @@ export function ApprovalsClient({ data }: Props) {
               <div className="grid gap-2 lg:grid-cols-[minmax(220px,1.25fr)_minmax(180px,1fr)_minmax(240px,1.35fr)_170px_auto]">
                 <label className="block">
                   <span className="sr-only">Delegate email</span>
-                  <input name="delegateEmail" type="email" className="field-input" placeholder="Delegate email (approver@vienovo.ph)" />
+                  <input
+                    name="delegateEmail"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    className="field-input"
+                    placeholder="Delegate email (approver@vienovo.ph)"
+                  />
                 </label>
                 <label className="block">
                   <span className="sr-only">Delegate name</span>
-                  <input name="delegateName" className="field-input" placeholder="Delegate name (optional)" />
+                  <input
+                    name="delegateName"
+                    autoComplete="name"
+                    className="field-input"
+                    placeholder="Delegate name (optional)"
+                  />
                 </label>
                 <label className="block">
                   <span className="sr-only">Reason</span>
@@ -337,6 +349,9 @@ export function ApprovalsClient({ data }: Props) {
                   className="btn-primary w-full lg:w-auto"
                 />
               </div>
+              <p className="mt-2 text-xs text-surface-muted">
+                Enter at least a valid delegate email. End date is optional.
+              </p>
             </form>
           </div>
         ) : null}
