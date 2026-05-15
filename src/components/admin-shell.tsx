@@ -89,8 +89,8 @@ export function AdminShell({
         ].join(" ")}
       >
         <div className="px-6 py-5">
-          <div className={collapsed ? "space-y-3" : "flex items-center justify-between gap-3"}>
-            <div className={collapsed ? "flex justify-center" : "flex min-w-0 flex-1 items-start gap-3"}>
+          <div className={collapsed ? "flex flex-col items-center gap-3" : "flex items-center justify-between gap-3"}>
+            <div className={collapsed ? "flex justify-center self-center" : "flex min-w-0 flex-1 items-start gap-3"}>
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded bg-brand-700 text-lg font-black text-white">
                 V
               </div>
@@ -101,7 +101,7 @@ export function AdminShell({
                 </div>
               </div>
             </div>
-            <div className={collapsed ? "flex justify-center" : "shrink-0 self-center"}>
+            <div className={collapsed ? "flex justify-center self-center" : "shrink-0 self-center"}>
               <button
                 type="button"
                 onClick={() => setCollapsed((value) => !value)}
