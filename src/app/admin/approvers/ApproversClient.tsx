@@ -6,7 +6,6 @@ import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
   AdminHelpPanel,
-  AdminMetricCard,
   AdminPageHeader,
   AdminSection,
   AdminStatusPill,

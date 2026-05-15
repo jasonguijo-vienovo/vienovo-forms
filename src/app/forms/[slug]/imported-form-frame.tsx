@@ -597,7 +597,7 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [draftKey]);
 
   return (
     <>

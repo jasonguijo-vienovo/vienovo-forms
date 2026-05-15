@@ -91,10 +91,6 @@ function normalizeEmail(value: string | null | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
-function escapeRegExp(input: string) {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function toIso(value: Date | string | null | undefined) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);

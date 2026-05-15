@@ -55,7 +55,6 @@ export default async function RequestDetailPage({
   if (!canView) redirect("/dashboard");
 
   const currentStep = doc.approvalChain.find((s) => s.step === doc.currentStep) ?? null;
-  const isCurrentApprover = currentStep?.approverEmail === userEmail && currentStep?.status === "pending";
   const hasEditableRuntime = ["travel-booking", "cash-advance", "reimbursement"].includes(doc.formType);
 
   const lastEdit = [...(doc.history ?? [])]
