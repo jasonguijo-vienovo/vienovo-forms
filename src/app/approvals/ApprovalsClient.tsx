@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckSquare, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { AlertTriangle, CheckSquare, ChevronLeft, ChevronRight, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -23,6 +23,7 @@ type Props = {
 
 type PendingView = "all" | "overdue" | "due-soon" | "normal";
 type QueueTab = "all" | "pending" | "approved" | "rejected";
+const APPROVED_PAGE_SIZE = 5;
 
 const STATUS_TONES: Record<string, string> = {
   pending: "border-amber-200 bg-amber-50 text-amber-800",
@@ -40,6 +41,7 @@ export function ApprovalsClient({ data }: Props) {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkComment, setBulkComment] = useState("");
+  const [approvedPage, setApprovedPage] = useState(1);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const allQueueItems = useMemo(
@@ -65,6 +67,13 @@ export function ApprovalsClient({ data }: Props) {
   const filteredRejected = useMemo(
     () => data.recentlyRejected.filter((item) => matchesFilters(item, query, formFilter)),
     [data.recentlyRejected, query, formFilter],
+  );
+  const approvedTotalPages = Math.max(1, Math.ceil(filteredApproved.length / APPROVED_PAGE_SIZE));
+  const safeApprovedPage = Math.min(approvedPage, approvedTotalPages);
+  const approvedPageStart = (safeApprovedPage - 1) * APPROVED_PAGE_SIZE;
+  const paginatedApproved = filteredApproved.slice(
+    approvedPageStart,
+    approvedPageStart + APPROVED_PAGE_SIZE,
   );
   const overduePending = filteredPending.filter((item) => item.urgency === "overdue");
   const dueSoonPending = filteredPending.filter((item) => item.urgency === "due-soon");
@@ -98,6 +107,14 @@ export function ApprovalsClient({ data }: Props) {
     const validRefs = new Set(data.pending.map((item) => item.referenceNo));
     setSelected((current) => current.filter((referenceNo) => validRefs.has(referenceNo)));
   }, [data.pending]);
+
+  useEffect(() => {
+    setApprovedPage(1);
+  }, [query, formFilter, activeTab]);
+
+  useEffect(() => {
+    if (approvedPage > approvedTotalPages) setApprovedPage(approvedTotalPages);
+  }, [approvedPage, approvedTotalPages]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -415,8 +432,16 @@ export function ApprovalsClient({ data }: Props) {
             <HistorySection
               title="Recently approved"
               description="Requests you approved most recently."
-              items={filteredApproved}
+              items={paginatedApproved}
               emptyMessage={query ? "No recently approved requests match this search." : "No recently approved requests yet."}
+              pagination={{
+                page: safeApprovedPage,
+                totalPages: approvedTotalPages,
+                totalItems: filteredApproved.length,
+                pageSize: APPROVED_PAGE_SIZE,
+                onPrevious: () => setApprovedPage((page) => Math.max(1, page - 1)),
+                onNext: () => setApprovedPage((page) => Math.min(approvedTotalPages, page + 1)),
+              }}
             />
           ) : null}
           {(activeTab === "all" || activeTab === "rejected") ? (
@@ -655,21 +680,35 @@ function HistorySection({
   description,
   items,
   emptyMessage,
+  pagination,
 }: {
   title: string;
   description: string;
   items: ApprovalQueueItem[];
   emptyMessage: string;
+  pagination?: {
+    page: number;
+    totalPages: number;
+    totalItems: number;
+    pageSize: number;
+    onPrevious: () => void;
+    onNext: () => void;
+  };
 }) {
+  const rangeStart = pagination ? (pagination.page - 1) * pagination.pageSize + 1 : 0;
+  const rangeEnd = pagination
+    ? Math.min(pagination.totalItems, pagination.page * pagination.pageSize)
+    : 0;
+
   return (
-    <section className="app-panel p-5">
+    <section className="app-panel flex h-full flex-col p-5">
       <h2 className="text-base font-semibold text-surface-text">{title}</h2>
       <p className="mt-1 text-sm text-surface-muted">{description}</p>
 
       {items.length === 0 ? (
         <EmptyState message={emptyMessage} className="pt-8" />
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 min-h-[360px] space-y-3">
           {items.map((item) => (
             <div key={`${title}-${item.referenceNo}`} className="rounded-lg border border-surface-border bg-white p-4">
               <div className="flex items-start justify-between gap-3">
@@ -705,6 +744,36 @@ function HistorySection({
           ))}
         </div>
       )}
+      {pagination ? (
+        <div className="mt-4 flex flex-col gap-2 border-t border-surface-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-surface-muted">
+            Showing {pagination.totalItems === 0 ? 0 : rangeStart}-{rangeEnd} of {pagination.totalItems}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={pagination.onPrevious}
+              disabled={pagination.page <= 1}
+              className={`btn-secondary ${pagination.page <= 1 ? "pointer-events-none opacity-50" : ""}`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </button>
+            <span className="text-xs text-surface-muted">
+              Page {pagination.page} of {pagination.totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={pagination.onNext}
+              disabled={pagination.page >= pagination.totalPages}
+              className={`btn-secondary ${pagination.page >= pagination.totalPages ? "pointer-events-none opacity-50" : ""}`}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
