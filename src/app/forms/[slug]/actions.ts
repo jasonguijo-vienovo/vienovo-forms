@@ -893,11 +893,6 @@ function isFieldMissing(slug: string, field: ImportedFieldDefinition, value: unk
   return !String(value ?? "").trim();
 }
 
-function stringifyValue(value: unknown) {
-  if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
-  return String(value ?? "");
-}
-
 function normalizeEmailValue(value: string) {
   return value.trim().toLowerCase();
 }

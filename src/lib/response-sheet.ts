@@ -108,6 +108,9 @@ export function buildResponseSheetRows(opts: {
   submittedByName: string;
   status?: string;
   submittedAt?: Date;
+  requestVersion?: number;
+  requestRevisionStatus?: string;
+  requestRevisionNote?: string;
   labels?: Record<string, string>;
   values: Record<string, unknown>;
 }) {
@@ -122,6 +125,9 @@ export function buildResponseSheetRows(opts: {
     "Submitted By Email": opts.submittedByEmail,
     "Submitted By Name": opts.submittedByName,
     Status: opts.status || "submitted",
+    "Request Version": opts.requestVersion ? `Version ${opts.requestVersion}` : "",
+    "Request Revision Status": opts.requestRevisionStatus || "",
+    "Request Revision Note": opts.requestRevisionNote || "",
     ...flattenObject(opts.values, "", opts.labels ?? {}),
   };
 }

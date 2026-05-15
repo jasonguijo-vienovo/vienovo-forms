@@ -30,7 +30,9 @@ import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
 import {
+  buildApprovalChainDetails,
   buildAttachmentDetails,
+  buildChangedFieldDetails,
   buildNotificationDetailsFromFieldMap,
   diffFields,
   travelBookingFieldMap,
@@ -43,6 +45,12 @@ function s(formData: FormData, key: string) {
 function d(formData: FormData, key: string) {
   const v = s(formData, key);
   return v ? new Date(v) : null;
+}
+
+function buildTravelRequestVersionLabel(version: number, updated: boolean) {
+  return updated
+    ? `[Version ${version} - Updated request; approval restarted at level 1]`
+    : `[Version ${version} - Original submission]`;
 }
 
 export async function submitTravelBooking(
@@ -82,8 +90,8 @@ export async function submitTravelBooking(
     if (!processor) throw new Error("No active processor configured. Ask an admin to assign one.");
     if (!configuredLevelOne && !supervisor) throw new Error("Invalid Immediate Superior");
     if (!configuredLevelTwo && !head) throw new Error("Invalid Department Head");
-    const resolvedLevelOne = configuredLevelOne ?? supervisor;
-    const resolvedLevelTwo = configuredLevelTwo ?? head;
+    const resolvedLevelOne = supervisor ?? configuredLevelOne;
+    const resolvedLevelTwo = head ?? configuredLevelTwo;
     const requiresCeoStep = Boolean(configuredLevelOne || configuredLevelTwo);
     const ceoApprover = requiresCeoStep ? await resolveDefaultCeoApprover() : null;
 
@@ -291,6 +299,12 @@ export async function submitTravelBooking(
           submittedByEmail: submitterEmail,
           formData: formDataObj,
           submittedAt: createdRequest.createdAt,
+          travelPurposeSuffix: buildTravelRequestVersionLabel(1, false),
+          extraValues: {
+            "Request Version": "Version 1",
+            "Request Revision Status": "Original submission",
+            "Request Revision Note": "Version 1 - Original submission",
+          },
         });
         await RequestModel.updateOne(
           { _id: createdRequest._id },
@@ -380,6 +394,8 @@ export async function submitTravelBooking(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: resolvedLevelOne!.name },
+          { label: "Level 2 approver", value: resolvedLevelTwo!.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],
@@ -470,8 +486,8 @@ export async function updateTravelBooking(
 
     if (!configuredLevelOne && !supervisor) throw new Error("Invalid Immediate Superior");
     if (!configuredLevelTwo && !head) throw new Error("Invalid Department Head");
-    const resolvedLevelOne = configuredLevelOne ?? supervisor;
-    const resolvedLevelTwo = configuredLevelTwo ?? head;
+    const resolvedLevelOne = supervisor ?? configuredLevelOne;
+    const resolvedLevelTwo = head ?? configuredLevelTwo;
     const requiresCeoStep = Boolean(configuredLevelOne || configuredLevelTwo);
     const ceoApprover = requiresCeoStep ? await resolveDefaultCeoApprover() : null;
 
@@ -692,6 +708,77 @@ export async function updateTravelBooking(
         url: activitySchedule?.driveWebViewLink,
       },
     ]);
+    const approvalRoutingDetails = buildApprovalChainDetails(nextApprovalChain);
+    const changedFieldDetails = buildChangedFieldDetails(changedFields, {
+      omitKeys: ["activityDriveLink", "immediateSuperiorEmail", "departmentHeadEmail"],
+      maxRows: 8,
+    });
+    const requestVersion = 1 + nextHistory.filter((item: any) => item.action === "edited").length;
+    let sheetExportErrorMessage = "";
+    try {
+      const responseSpreadsheetId =
+        normalizeSpreadsheetId(
+          String((doc as any).responseSpreadsheetId ?? definition?.responseSpreadsheetId ?? "").trim(),
+        ) ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+      const sheetTitle =
+        String((doc as any).responseSheetName ?? definition?.responseSheetName ?? "").trim() ||
+        "Travel Booking Responses";
+      if (definition?.writeResponsesToSheet && responseSpreadsheetId) {
+        const sheetWrite = await appendTravelBookingResponseRow({
+          spreadsheetId: responseSpreadsheetId,
+          sheetTitle,
+          referenceNo,
+          submittedByEmail: submitterEmail,
+          formData: formDataObj,
+          submittedAt: historyEntry.at,
+          travelPurposeSuffix: buildTravelRequestVersionLabel(requestVersion, true),
+          extraValues: {
+            "Request Version": `Version ${requestVersion}`,
+            "Request Revision Status": "Updated request",
+            "Request Revision Note": `Version ${requestVersion} - Updated request; approval restarted at level 1`,
+          },
+        });
+        await RequestModel.updateOne(
+          { _id: (doc as any)._id },
+          {
+            $set: {
+              responseSpreadsheetId: sheetWrite.spreadsheetId,
+              responseSheetName: sheetWrite.sheetTitle,
+              sheetStatusSyncedAt: new Date(),
+              sheetStatusSyncError: "",
+            },
+          },
+        );
+      }
+    } catch (error) {
+      console.error("Travel Booking update export failed:", error);
+      sheetExportErrorMessage =
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : "Travel Booking update export failed.";
+      await RequestModel.updateOne(
+        { _id: (doc as any)._id },
+        {
+          $set: {
+            responseSpreadsheetId:
+              normalizeSpreadsheetId(
+                String((doc as any).responseSpreadsheetId ?? definition?.responseSpreadsheetId ?? "").trim(),
+              ) ||
+              process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+              process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+              "",
+            responseSheetName:
+              String((doc as any).responseSheetName ?? definition?.responseSheetName ?? "").trim() ||
+              "Travel Booking Responses",
+            sheetStatusSyncedAt: null,
+            sheetStatusSyncError: sheetExportErrorMessage || "Unknown response export error",
+          },
+        },
+      );
+    }
     await setFlashToast({ tone: "success", message: `Travel Booking updated: ${referenceNo}` });
 
     try {
@@ -701,10 +788,14 @@ export async function updateTravelBooking(
         event: "resubmitted",
         to: [submitterEmail],
         subject: `Travel Booking request updated (${referenceNo})`,
-        summary: "Your Travel Booking request was updated and sent back into the approval workflow.",
+        summary:
+          "Your Travel Booking request was updated. Approval restarted from level 1, and the latest approvers are shown below.",
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Approval restart", value: "Level 1" },
+          ...approvalRoutingDetails,
+          ...changedFieldDetails,
           ...notificationDetails,
           ...attachmentDetails,
         ],

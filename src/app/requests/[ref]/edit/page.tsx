@@ -84,9 +84,9 @@ export default async function EditRequestPage({
     ]);
 
     const supervisorEmail =
-      doc.approvalChain?.find((s) => s.role === "supervisor")?.approverEmail ?? "";
+      doc.approvalChain?.find((s) => s.role === "level1" || s.role === "supervisor")?.approverEmail ?? "";
     const headEmail =
-      doc.approvalChain?.find((s) => s.role === "head")?.approverEmail ?? "";
+      doc.approvalChain?.find((s) => s.role === "level2" || s.role === "head")?.approverEmail ?? "";
 
     const prefill = {
       employeeId: fd.employeeId ?? employee?.employeeId ?? "",
@@ -172,6 +172,15 @@ export default async function EditRequestPage({
       lastName: fd.lastName ?? nameParts.lastName,
     };
 
+    const currentApproverEmail =
+      doc.approvalChain?.find((s) => s.role === "cashAdvanceApprover")?.approverEmail ??
+      fd.approverEmail ??
+      "";
+    const currentApprover = approvers.find(
+      (a) => a.email.toLowerCase() === String(currentApproverEmail).toLowerCase(),
+    );
+    const initialApproverId = currentApprover ? String(currentApprover._id) : "";
+
     const initial: CashAdvanceInitialValues = {
       payablesTo: fd.payablesTo ?? "",
       payeeName: fd.payeeName ?? "",
@@ -190,6 +199,7 @@ export default async function EditRequestPage({
             user={{ email: userEmail, name: userName }}
             prefill={prefill}
             initial={initial}
+            initialApproverId={initialApproverId}
             payableToOptions={payablesTo.map((p) => ({ value: p.value, label: p.label || p.value }))}
             approvers={approvers.map((a) => ({
               id: String(a._id),
@@ -237,9 +247,9 @@ export default async function EditRequestPage({
     ]);
 
     const supervisorEmail =
-      doc.approvalChain?.find((s) => s.role === "supervisor")?.approverEmail ?? "";
+      doc.approvalChain?.find((s) => s.role === "level1" || s.role === "supervisor")?.approverEmail ?? "";
     const headEmail =
-      doc.approvalChain?.find((s) => s.role === "head")?.approverEmail ?? "";
+      doc.approvalChain?.find((s) => s.role === "level2" || s.role === "head")?.approverEmail ?? "";
 
     const nameParts = splitName(employee?.fullName || userName);
 

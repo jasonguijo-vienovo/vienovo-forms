@@ -21,7 +21,9 @@ import { buildPendingStepNotificationCopy, resolveAssignedProcessor } from "@/li
 import { Approver } from "@/models/Approver";
 import { RequestModel } from "@/models/Request";
 import {
+  buildApprovalChainDetails,
   buildAttachmentDetails,
+  buildChangedFieldDetails,
   buildNotificationDetailsFromFieldMap,
   cashAdvanceFieldMap,
   diffFields,
@@ -205,6 +207,9 @@ export async function submitCashAdvance(
             formName: "Cash Advance",
             submittedByEmail: submitterEmail,
             submittedByName: submitterName,
+            requestVersion: 1,
+            requestRevisionStatus: "Original submission",
+            requestRevisionNote: "Version 1 - Original submission",
             values: formDataObj,
           }),
         });
@@ -246,6 +251,7 @@ export async function submitCashAdvance(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: approver.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],
@@ -466,6 +472,41 @@ export async function updateCashAdvance(
         url: supportingDocument?.driveWebViewLink,
       },
     ]);
+    const approvalRoutingDetails = buildApprovalChainDetails(nextApprovalChain);
+    const changedFieldDetails = buildChangedFieldDetails(changedFields, {
+      omitKeys: ["supportingDriveLink", "approverEmail"],
+      maxRows: 8,
+    });
+    const requestVersion = 1 + nextHistory.filter((item: any) => item.action === "edited").length;
+    try {
+      const spreadsheetId =
+        definition?.responseSpreadsheetId?.trim() ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+      const sheetTitle = definition?.responseSheetName?.trim() || "Cash Advance Responses";
+      if (definition?.writeResponsesToSheet && spreadsheetId) {
+        await appendResponseSheetRow({
+          spreadsheetId,
+          sheetTitle,
+          rowValues: buildResponseSheetRows({
+            referenceNo,
+            formSlug: "cash-advance",
+            formName: "Cash Advance",
+            submittedByEmail: submitterEmail,
+            submittedByName: submitterName,
+            status: "pending",
+            submittedAt: historyEntry.at,
+            requestVersion,
+            requestRevisionStatus: "Updated request",
+            requestRevisionNote: `Version ${requestVersion} - Updated request; approval restarted at level 1`,
+            values: formDataObj,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error("Cash Advance update export failed:", error);
+    }
     await setFlashToast({ tone: "success", message: `Cash Advance updated: ${referenceNo}` });
 
     try {
@@ -475,10 +516,14 @@ export async function updateCashAdvance(
         event: "resubmitted",
         to: [submitterEmail],
         subject: `Cash Advance request updated (${referenceNo})`,
-        summary: "Your Cash Advance request was updated and sent back into the approval workflow.",
+        summary:
+          "Your Cash Advance request was updated. Approval restarted from level 1, and the latest approvers are shown below.",
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Approval restart", value: "Level 1" },
+          ...approvalRoutingDetails,
+          ...changedFieldDetails,
           ...notificationDetails,
           ...attachmentDetails,
         ],

@@ -6,7 +6,6 @@ import {
   ArrowUp,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   ExternalLink,
   FilterX,
   Layers3,
@@ -22,7 +21,6 @@ import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
   AdminEmptyState,
   AdminHelpPanel,
-  AdminMetricCard,
   AdminPageHeader,
   AdminSection,
   AdminStatusPill,

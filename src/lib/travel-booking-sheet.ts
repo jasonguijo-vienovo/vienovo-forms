@@ -62,11 +62,6 @@ function formatSheetTimestamp(value: Date) {
   });
 }
 
-function formatSheetDate(value: Date | null | undefined) {
-  if (!value) return "";
-  return formatDateValue(value);
-}
-
 function formatDateValue(value: Date | string | null | undefined) {
   if (!value) return "";
   const raw = String(value).trim();
@@ -160,11 +155,16 @@ export function buildTravelBookingSheetRow(input: {
   formData: any;
   submittedAt?: Date | null;
   keepRefColumnBlank?: boolean;
+  travelPurposeSuffix?: string;
 }) {
   const formData = input.formData ?? {};
   const hotelAccommodation = joinNonEmpty(
     [formData.hotelAccommodation, formData.hotelOther],
     formData.hotelAccommodation && formData.hotelOther ? " - " : "",
+  );
+  const travelPurpose = joinNonEmpty(
+    [String(formData.travelPurpose || "").trim(), input.travelPurposeSuffix],
+    " | ",
   );
   const attachmentValue =
     String(formData?.activitySchedule?.driveWebViewLink || "").trim() ||
@@ -186,7 +186,7 @@ export function buildTravelBookingSheetRow(input: {
     buildTravelBookingMultiCityDates(formData.multiCity),
     buildTravelBookingMultiCityTimes(formData.multiCity),
     String(formData.airline || "").trim(),
-    String(formData.travelPurpose || "").trim(),
+    travelPurpose,
     String(formData.baggage || "").trim(),
     hotelAccommodation,
     String(formData.immediateSuperiorName || "").trim(),
@@ -309,27 +309,49 @@ export async function appendTravelBookingResponseRow(input: {
   submittedByEmail: string;
   formData: any;
   submittedAt?: Date | null;
+  travelPurposeSuffix?: string;
+  extraValues?: Record<string, unknown>;
 }) {
   const state = await loadTravelBookingResponseSheetState({
     spreadsheetId: input.spreadsheetId,
     sheetTitle: input.sheetTitle,
   });
   const requestNumber = getNextTravelBookingRequestNumber(state.matrix, state.headers);
+  const extraValues = input.extraValues ?? {};
+  const extraHeaders = Object.keys(extraValues).filter(Boolean);
+  const missingExtraHeaders = extraHeaders.filter((header) => !state.headers.includes(header));
+  const headers =
+    missingExtraHeaders.length > 0 ? [...state.headers, ...missingExtraHeaders] : state.headers;
+
+  if (missingExtraHeaders.length > 0) {
+    await writeSpreadsheetRow({
+      spreadsheetId: state.spreadsheetId,
+      range: `${state.sheetTitle}!A1`,
+      values: headers,
+    });
+  }
+
+  const baseValues = buildTravelBookingSheetRow({
+    referenceNo: input.referenceNo,
+    requestNumber,
+    submittedByEmail: input.submittedByEmail,
+    formData: input.formData,
+    submittedAt: input.submittedAt,
+    keepRefColumnBlank: state.useGeneratedRefColumn,
+    travelPurposeSuffix: input.travelPurposeSuffix,
+  });
+  const rowByHeader: Record<string, string> = {};
+  for (let index = 0; index < TRAVEL_BOOKING_RESPONSE_HEADERS.length; index += 1) {
+    rowByHeader[TRAVEL_BOOKING_RESPONSE_HEADERS[index]] = String(baseValues[index] ?? "");
+  }
+  for (const [header, value] of Object.entries(extraValues)) {
+    rowByHeader[header] = String(value ?? "");
+  }
 
   await appendSpreadsheetRow({
     spreadsheetId: state.spreadsheetId,
     sheetTitle: state.sheetTitle,
-    values: [
-      ...buildTravelBookingSheetRow({
-        referenceNo: input.referenceNo,
-        requestNumber,
-        submittedByEmail: input.submittedByEmail,
-        formData: input.formData,
-        submittedAt: input.submittedAt,
-        keepRefColumnBlank: state.useGeneratedRefColumn,
-      }),
-      ...Array(state.extraColumnCount).fill(""),
-    ],
+    values: headers.map((header) => rowByHeader[header] ?? ""),
   });
 
   return {
