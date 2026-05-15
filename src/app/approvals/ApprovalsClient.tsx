@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckSquare, ChevronLeft, ChevronRight, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { AlertTriangle, CheckSquare, ChevronLeft, ChevronRight, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -152,9 +152,8 @@ export function ApprovalsClient({ data }: Props) {
     return () => window.clearTimeout(timer);
   }, [isFilterOpen]);
 
-  function openFilterPanel() {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    setIsFilterOpen(true);
+function openFilterPanel() {
+    setIsFilterOpen((prev) => !prev);
   }
 
   function clearFilters() {
@@ -196,95 +195,11 @@ export function ApprovalsClient({ data }: Props) {
         </div>
       </div>
 
-      {isFilterOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4" onClick={() => setIsFilterOpen(false)}>
-          <div className="w-full max-w-5xl rounded-lg border border-surface-border bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold text-surface-text">Filter approvals</h2>
-                <p className="text-sm text-surface-muted">Use search and form filters to navigate the queue faster.</p>
-              </div>
-              <button type="button" onClick={() => setIsFilterOpen(false)} className="btn-secondary px-3">
-                <X className="h-4 w-4" />
-                Close
-              </button>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-surface-text">Search</span>
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Reference, form, requester, or email"
-                  className="field-input"
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold text-surface-text">Form</span>
-                <select value={formFilter} onChange={(event) => setFormFilter(event.target.value)} className="field-input">
-                  <option value="all">All forms ({totalFormMatches})</option>
-                  {formCounts.map((form) => (
-                    <option key={form.name} value={form.name}>{form.name} ({form.count})</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <QueueFilterChip
-                active={formFilter === "all"}
-                onClick={() => setFormFilter("all")}
-                label={`All forms (${totalFormMatches})`}
-              />
-              {formCounts.map((form) => (
-                <QueueFilterChip
-                  key={form.name}
-                  active={formFilter === form.name}
-                  onClick={() => setFormFilter(form.name)}
-                  label={`${form.name} (${form.count})`}
-                />
-              ))}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <QueueFilterChip active={activeTab === "all"} onClick={() => setActiveTab("all")} label={`All queues (${filteredPending.length + filteredApproved.length + filteredRejected.length})`} />
-              <QueueFilterChip active={activeTab === "pending"} onClick={() => setActiveTab("pending")} label={`Needs action (${filteredPending.length})`} tone="warn" />
-              <QueueFilterChip active={activeTab === "approved"} onClick={() => setActiveTab("approved")} label={`Approved (${filteredApproved.length})`} />
-              <QueueFilterChip active={activeTab === "rejected"} onClick={() => setActiveTab("rejected")} label={`Rejected (${filteredRejected.length})`} tone="danger" />
-            </div>
-
-            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button type="button" onClick={clearFilters} className="btn-secondary">Clear filters</button>
-              <button type="button" onClick={() => setIsFilterOpen(false)} className="btn-primary">Apply filters</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(260px,0.9fr)]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting for me" value={data.metrics.pending} tone="warn" />
         <MetricCard label="Overdue" value={data.metrics.overdue} tone="danger" />
         <MetricCard label="Due soon" value={data.metrics.dueSoon} tone="warn" />
         <MetricCard label="Recently approved" value={data.metrics.approvedRecently} tone="ok" />
-        <div className="app-panel flex flex-col justify-between gap-2 border border-surface-border bg-white p-3">
-          <button type="button" onClick={openFilterPanel} className="btn-secondary w-full">
-            <Filter className="h-4 w-4" />
-            Open filters
-          </button>
-          <p className="text-xs text-surface-muted truncate" title={query ? query : ""}>
-            {hasActiveFilters ? "Filters active" : "No filters active"}{query ? ` - "${query}"` : ""}
-          </p>
-          <button
-            type="button"
-            onClick={clearFilters}
-            disabled={!hasActiveFilters}
-            className={`btn-secondary w-full ${!hasActiveFilters ? "pointer-events-none opacity-50" : ""}`}
-          >
-            Clear filters
-          </button>
-        </div>
       </div>
 
       {(activeTab === "all" || activeTab === "pending") ? (
@@ -497,7 +412,55 @@ export function ApprovalsClient({ data }: Props) {
       ) : null}
 
       {(activeTab === "all" || activeTab === "approved" || activeTab === "rejected") ? (
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <section className="space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-surface-muted truncate" title={query ? query : ""}>
+              {hasActiveFilters ? "Filters active" : "No filters active"}{query ? ` - "${query}"` : ""}
+            </p>
+            <button type="button" onClick={openFilterPanel} className="btn-secondary w-full sm:w-auto">
+              <Filter className="h-4 w-4" />
+              {isFilterOpen ? "Hide filters" : "Open filters"}
+            </button>
+          </div>
+
+          {isFilterOpen ? (
+            <div className="rounded-lg border border-surface-border bg-white p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-surface-text">Search</span>
+                  <input
+                    ref={searchRef}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Reference, form, requester, or email"
+                    className="field-input"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-semibold text-surface-text">Form</span>
+                  <select value={formFilter} onChange={(event) => setFormFilter(event.target.value)} className="field-input">
+                    <option value="all">All forms ({totalFormMatches})</option>
+                    {formCounts.map((form) => (
+                      <option key={form.name} value={form.name}>{form.name} ({form.count})</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <QueueFilterChip active={activeTab === "all"} onClick={() => setActiveTab("all")} label={`All queues (${filteredPending.length + filteredApproved.length + filteredRejected.length})`} />
+                <QueueFilterChip active={activeTab === "pending"} onClick={() => setActiveTab("pending")} label={`Needs action (${filteredPending.length})`} tone="warn" />
+                <QueueFilterChip active={activeTab === "approved"} onClick={() => setActiveTab("approved")} label={`Approved (${filteredApproved.length})`} />
+                <QueueFilterChip active={activeTab === "rejected"} onClick={() => setActiveTab("rejected")} label={`Rejected (${filteredRejected.length})`} tone="danger" />
+              </div>
+
+              <div className="mt-3 flex justify-end">
+                <button type="button" onClick={clearFilters} className="btn-secondary">Clear filters</button>
+              </div>
+            </div>
+          ) : null}
+
+          <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           {(activeTab === "all" || activeTab === "approved") ? (
             <HistorySection
               title="Recently approved"
@@ -522,6 +485,7 @@ export function ApprovalsClient({ data }: Props) {
               emptyMessage={query ? "No recently rejected requests match this search." : "No recently rejected requests yet."}
             />
           ) : null}
+          </section>
         </section>
       ) : null}
     </main>
