@@ -550,7 +550,7 @@ export async function updateReimbursement(
       byEmail: submitterEmail,
       byName: submitterName,
       action: "edited",
-      details: { changedFields },
+      details: { resetToStep: 1, changedFields },
     };
     const nextHistory = [...(((doc as any).history ?? []) as unknown[]), historyEntry];
     const queueFields = deriveRequestQueueFields({
