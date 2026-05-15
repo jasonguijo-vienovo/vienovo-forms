@@ -306,40 +306,38 @@ export function ApprovalsClient({ data }: Props) {
           </button>
         </div>
         {isDelegationOpen ? (
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-            <form action={createApprovalDelegation} className="space-y-3 rounded border border-surface-border bg-slate-50 p-3.5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate email</span>
-                  <input name="delegateEmail" type="email" className="field-input" placeholder="approver@vienovo.ph" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-surface-text">Delegate name</span>
-                  <input name="delegateName" className="field-input" placeholder="Optional" />
-                </label>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-surface-text">Reason</span>
-                  <input name="reason" className="field-input" placeholder="Leave, travel, temporary coverage" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold text-surface-text">Ends on</span>
-                  <input name="endsAt" type="date" className="field-input" />
-                </label>
-              </div>
-              <PendingSubmitButton
-                type="submit"
-                idleLabel="Set delegation"
-                pendingLabel="Saving delegation..."
-                className="btn-primary"
-              />
-            </form>
-
+          <div className="grid gap-3">
             <div className="grid gap-3 md:grid-cols-2">
               <DelegationList title="Delegated to me" rows={data.delegations.toMe} mode="to-me" />
               <DelegationList title="My delegation" rows={data.delegations.fromMe} mode="from-me" />
             </div>
+
+            <form action={createApprovalDelegation} className="rounded border border-surface-border bg-slate-50 p-3.5">
+              <div className="grid gap-2 lg:grid-cols-[minmax(220px,1.25fr)_minmax(180px,1fr)_minmax(240px,1.35fr)_170px_auto]">
+                <label className="block">
+                  <span className="sr-only">Delegate email</span>
+                  <input name="delegateEmail" type="email" className="field-input" placeholder="Delegate email (approver@vienovo.ph)" />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Delegate name</span>
+                  <input name="delegateName" className="field-input" placeholder="Delegate name (optional)" />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Reason</span>
+                  <input name="reason" className="field-input" placeholder="Reason (leave, travel, temporary coverage)" />
+                </label>
+                <label className="block">
+                  <span className="sr-only">Ends on</span>
+                  <input name="endsAt" type="date" className="field-input" />
+                </label>
+                <PendingSubmitButton
+                  type="submit"
+                  idleLabel="Set delegation"
+                  pendingLabel="Saving..."
+                  className="btn-primary w-full lg:w-auto"
+                />
+              </div>
+            </form>
           </div>
         ) : null}
       </section>
