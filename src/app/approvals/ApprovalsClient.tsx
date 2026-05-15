@@ -571,8 +571,8 @@ function PendingApprovalCard({
   onToggle: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-surface-border bg-white p-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="rounded-lg border border-surface-border bg-white p-4 shadow-sm transition hover:shadow-md">
+      <div className="grid gap-3 border-b border-surface-border pb-3">
         <div className="flex items-start gap-3">
           <label className="mt-1 inline-flex cursor-pointer items-center">
             <input
@@ -610,7 +610,7 @@ function PendingApprovalCard({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href={`/requests/${item.referenceNo}`} className="btn-secondary">
             Open details
           </Link>
@@ -710,9 +710,12 @@ function HistorySection({
       ) : (
         <div className="mt-4 min-h-[360px] space-y-3">
           {items.map((item) => (
-            <div key={`${title}-${item.referenceNo}`} className="rounded-lg border border-surface-border bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+            <div
+              key={`${title}-${item.referenceNo}`}
+              className="rounded-lg border border-surface-border bg-white p-4 shadow-sm transition hover:border-brand-200 hover:shadow-md"
+            >
+              <div className="grid gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link href={`/requests/${item.referenceNo}`} className="font-mono text-xs font-semibold text-brand-700 hover:underline">
                       {item.referenceNo}
@@ -721,7 +724,12 @@ function HistorySection({
                       {item.latestUserDecision?.status ?? item.status}
                     </span>
                   </div>
-                  <h3 className="mt-2 text-sm font-semibold text-surface-text">{item.formName}</h3>
+                  <Link href={`/requests/${item.referenceNo}`} className="text-sm font-semibold text-brand-700 hover:underline">
+                    Open
+                  </Link>
+                </div>
+                <div className="rounded-md border border-surface-border bg-slate-50/70 p-3">
+                  <h3 className="text-sm font-semibold text-surface-text">{item.formName}</h3>
                   <p className="mt-1 text-xs text-surface-muted">
                     {item.submittedBy.name || item.submittedBy.email || "Requester"}
                   </p>
@@ -736,9 +744,6 @@ function HistorySection({
                     </p>
                   ) : null}
                 </div>
-                <Link href={`/requests/${item.referenceNo}`} className="text-sm font-semibold text-brand-700 hover:underline">
-                  Open
-                </Link>
               </div>
             </div>
           ))}
