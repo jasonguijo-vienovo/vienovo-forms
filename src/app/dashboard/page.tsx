@@ -382,8 +382,6 @@ function FormCard({
   name,
   description,
   status,
-  availability,
-  isImplemented,
   routePath,
   externalFormUrl,
   runtime,
@@ -392,8 +390,6 @@ function FormCard({
   name: string;
   description: string;
   status: "published" | "draft" | "archived";
-  availability: "available" | "coming-soon";
-  isImplemented: boolean;
   routePath: string;
   externalFormUrl: string;
   runtime: FormRuntimeState;

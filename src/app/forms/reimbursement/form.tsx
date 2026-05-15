@@ -77,7 +77,6 @@ export function ReimbursementForm(props: ReimbursementFormProps) {
   const router = useRouter();
   const {
     user,
-    requesterPreview,
     prefill,
     initial,
     submitAction,

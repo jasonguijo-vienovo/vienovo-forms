@@ -167,7 +167,7 @@ export default async function LookupsPage() {
       humanizeImportedField(parsed.fieldKey);
   }
 
-  for (const [slugKey, categories] of importedGroups.entries()) {
+  for (const [, categories] of importedGroups.entries()) {
     for (const category of categories) {
       if (!allCategories.includes(category)) allCategories.push(category);
       if (!itemsByCategory[category]) itemsByCategory[category] = [];
