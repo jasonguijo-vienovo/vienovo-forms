@@ -360,6 +360,8 @@ export async function submitReimbursement(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: supervisor.name },
+          { label: "Level 2 approver", value: head.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],
@@ -639,6 +641,8 @@ export async function updateReimbursement(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: supervisor.name },
+          { label: "Level 2 approver", value: head.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],

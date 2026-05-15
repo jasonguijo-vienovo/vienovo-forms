@@ -82,8 +82,8 @@ export async function submitTravelBooking(
     if (!processor) throw new Error("No active processor configured. Ask an admin to assign one.");
     if (!configuredLevelOne && !supervisor) throw new Error("Invalid Immediate Superior");
     if (!configuredLevelTwo && !head) throw new Error("Invalid Department Head");
-    const resolvedLevelOne = configuredLevelOne ?? supervisor;
-    const resolvedLevelTwo = configuredLevelTwo ?? head;
+    const resolvedLevelOne = supervisor ?? configuredLevelOne;
+    const resolvedLevelTwo = head ?? configuredLevelTwo;
     const requiresCeoStep = Boolean(configuredLevelOne || configuredLevelTwo);
     const ceoApprover = requiresCeoStep ? await resolveDefaultCeoApprover() : null;
 
@@ -380,6 +380,8 @@ export async function submitTravelBooking(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: resolvedLevelOne!.name },
+          { label: "Level 2 approver", value: resolvedLevelTwo!.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],
@@ -470,8 +472,8 @@ export async function updateTravelBooking(
 
     if (!configuredLevelOne && !supervisor) throw new Error("Invalid Immediate Superior");
     if (!configuredLevelTwo && !head) throw new Error("Invalid Department Head");
-    const resolvedLevelOne = configuredLevelOne ?? supervisor;
-    const resolvedLevelTwo = configuredLevelTwo ?? head;
+    const resolvedLevelOne = supervisor ?? configuredLevelOne;
+    const resolvedLevelTwo = head ?? configuredLevelTwo;
     const requiresCeoStep = Boolean(configuredLevelOne || configuredLevelTwo);
     const ceoApprover = requiresCeoStep ? await resolveDefaultCeoApprover() : null;
 
@@ -705,6 +707,8 @@ export async function updateTravelBooking(
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Level 1 approver", value: resolvedLevelOne!.name },
+          { label: "Level 2 approver", value: resolvedLevelTwo!.name },
           ...notificationDetails,
           ...attachmentDetails,
         ],
