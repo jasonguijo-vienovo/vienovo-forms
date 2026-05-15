@@ -22,7 +22,9 @@ import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
 import {
+  buildApprovalChainDetails,
   buildAttachmentDetails,
+  buildChangedFieldDetails,
   buildNotificationDetailsFromFieldMap,
   diffFields,
   reimbursementFieldMap,
@@ -307,6 +309,9 @@ export async function submitReimbursement(
             formName: "Reimbursement",
             submittedByEmail: submitterEmail,
             submittedByName: submitterName,
+            requestVersion: 1,
+            requestRevisionStatus: "Original submission",
+            requestRevisionNote: "Version 1 - Original submission",
             values: formDataObj,
           }),
         });
@@ -628,6 +633,41 @@ export async function updateReimbursement(
         url: supportingDocument?.driveWebViewLink,
       },
     ]);
+    const approvalRoutingDetails = buildApprovalChainDetails(nextApprovalChain);
+    const changedFieldDetails = buildChangedFieldDetails(changedFields, {
+      omitKeys: ["supportingDriveLink", "immediateSuperiorEmail", "departmentHeadEmail"],
+      maxRows: 8,
+    });
+    const requestVersion = 1 + nextHistory.filter((item: any) => item.action === "edited").length;
+    try {
+      const spreadsheetId =
+        definition?.responseSpreadsheetId?.trim() ||
+        process.env.GOOGLE_SHEETS_RESPONSES_ID?.trim() ||
+        process.env.GOOGLE_SHEETS_MASTER_ID?.trim() ||
+        "";
+      const sheetTitle = definition?.responseSheetName?.trim() || "Reimbursement Responses";
+      if (definition?.writeResponsesToSheet && spreadsheetId) {
+        await appendResponseSheetRow({
+          spreadsheetId,
+          sheetTitle,
+          rowValues: buildResponseSheetRows({
+            referenceNo,
+            formSlug: "reimbursement",
+            formName: "Reimbursement",
+            submittedByEmail: submitterEmail,
+            submittedByName: submitterName,
+            status: "pending",
+            submittedAt: historyEntry.at,
+            requestVersion,
+            requestRevisionStatus: "Updated request",
+            requestRevisionNote: `Version ${requestVersion} - Updated request; approval restarted at level 1`,
+            values: formDataObj,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error("Reimbursement update export failed:", error);
+    }
     await setFlashToast({ tone: "success", message: `Reimbursement updated: ${referenceNo}` });
 
     try {
@@ -637,12 +677,14 @@ export async function updateReimbursement(
         event: "resubmitted",
         to: [submitterEmail],
         subject: `Reimbursement request updated (${referenceNo})`,
-        summary: "Your Reimbursement request was updated and sent back into the approval workflow.",
+        summary:
+          "Your Reimbursement request was updated. Approval restarted from level 1, and the latest approvers are shown below.",
         details: [
           { label: "Reference No.", value: referenceNo },
           { label: "Requester", value: submitterName || submitterEmail },
-          { label: "Level 1 approver", value: supervisor.name },
-          { label: "Level 2 approver", value: head.name },
+          { label: "Approval restart", value: "Level 1" },
+          ...approvalRoutingDetails,
+          ...changedFieldDetails,
           ...notificationDetails,
           ...attachmentDetails,
         ],

@@ -1,3 +1,5 @@
+import { humanizeWorkflowRole } from "@/lib/workflow-routing";
+
 export type FieldDiff = {
   from: string;
   to: string;
@@ -14,6 +16,13 @@ export type NotificationAttachmentInput = {
   label: string;
   fileName?: string;
   url?: string;
+};
+
+export type ApprovalChainNotificationInput = {
+  step?: number;
+  role?: string;
+  approverName?: string;
+  approverEmail?: string;
 };
 
 const NOTIFICATION_LABELS: Record<string, string> = {
@@ -152,6 +161,43 @@ export function buildAttachmentDetails(items: NotificationAttachmentInput[]): No
     });
   }
   return rows;
+}
+
+export function buildApprovalChainDetails(
+  approvalChain: ApprovalChainNotificationInput[],
+): NotificationDetailRow[] {
+  return (approvalChain ?? [])
+    .map((step) => {
+      const roleLabel = humanizeWorkflowRole(step.role) || `Step ${step.step ?? ""}`.trim();
+      const approverName = s(step.approverName).trim();
+      const approverEmail = s(step.approverEmail).trim();
+      const value = approverName && approverEmail ? `${approverName} (${approverEmail})` : approverName || approverEmail;
+      if (!roleLabel || !value) return null;
+      return {
+        label: roleLabel,
+        value,
+      } satisfies NotificationDetailRow;
+    })
+    .filter((row): row is NotificationDetailRow => Boolean(row));
+}
+
+export function buildChangedFieldDetails(
+  changedFields: Record<string, FieldDiff>,
+  options?: {
+    omitKeys?: string[];
+    maxRows?: number;
+  },
+): NotificationDetailRow[] {
+  const omitKeys = new Set(options?.omitKeys ?? []);
+  const maxRows = Math.max(1, options?.maxRows ?? 6);
+
+  return Object.entries(changedFields ?? {})
+    .filter(([key]) => !omitKeys.has(key))
+    .slice(0, maxRows)
+    .map(([key, diff]) => ({
+      label: `Updated: ${humanizeFieldKey(key)}`,
+      value: `Now: ${diff.to || "(blank)"}; Was: ${diff.from || "(blank)"}`,
+    }));
 }
 
 function findImportedValue(values: Record<string, unknown>, labels: Record<string, string>, ...aliases: string[]) {
