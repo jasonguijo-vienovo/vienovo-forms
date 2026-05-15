@@ -16,7 +16,7 @@ export default async function FormsIndexPage() {
   return (
     <>
       <Navbar />
-      <main className="app-page">
+      <main className="app-page app-page--full">
         <FormsCatalogClient forms={forms} />
       </main>
     </>

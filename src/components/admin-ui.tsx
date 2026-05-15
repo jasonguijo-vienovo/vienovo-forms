@@ -15,8 +15,8 @@ export function AdminPageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="admin-header-wrap flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+    <div className="admin-header-wrap admin-panel flex flex-col gap-4 border-brand-100 bg-white/85 p-5 backdrop-blur-sm lg:flex-row lg:items-end lg:justify-between lg:p-6">
+      <div className="min-w-0">
         {eyebrow ? <p className="section-eyebrow">{eyebrow}</p> : null}
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-surface-text">{title}</h1>
         <p className="mt-1 max-w-3xl text-sm leading-6 text-surface-muted">{description}</p>
@@ -34,7 +34,7 @@ export function AdminHelpPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="admin-panel border-l-4 border-l-brand-700 bg-gradient-to-r from-brand-50/50 to-white p-4">
+    <section className="admin-panel border-l-4 border-l-brand-700 bg-gradient-to-r from-brand-50/70 via-white to-white p-4">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 text-brand-700">
           <Info className="h-4 w-4" />
@@ -92,7 +92,7 @@ export function AdminMetricCard({
         : "text-surface-text";
 
   return (
-    <div className="admin-panel p-5">
+    <div className="admin-panel bg-white/90 p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
       <p className={cn("mt-2 text-3xl font-semibold tracking-tight", valueClass)}>{value}</p>
       {hint ? <p className="mt-2 text-xs text-surface-muted">{hint}</p> : null}
@@ -108,7 +108,7 @@ export function AdminEmptyState({
   description: string;
 }) {
   return (
-    <div className="border border-dashed border-surface-border bg-slate-50 px-6 py-10 text-center">
+    <div className="rounded-[0.875rem] border border-dashed border-surface-border bg-slate-50 px-6 py-10 text-center">
       <p className="text-sm font-semibold text-surface-text">{title}</p>
       <p className="mt-1 text-sm text-surface-muted">{description}</p>
     </div>
@@ -133,5 +133,5 @@ export function AdminStatusPill({
             ? "border-brand-100 bg-brand-50 text-brand-700"
             : "border-surface-border bg-slate-50 text-surface-muted";
 
-  return <span className={cn("status-pill uppercase", toneClass)}>{children}</span>;
+  return <span className={cn("status-pill uppercase tracking-[0.08em]", toneClass)}>{children}</span>;
 }

@@ -4,8 +4,8 @@ import { Navbar } from "@/components/navbar";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { findActiveDelegation } from "@/lib/approval-delegations";
-import { safeAuth } from "@/lib/safe-auth";
 import { connectMongo } from "@/lib/db/mongo";
+import { safeAuth } from "@/lib/safe-auth";
 import { humanizeWorkflowRole } from "@/lib/workflow-routing";
 import { RequestModel } from "@/models/Request";
 import { approveCurrentStep, rejectCurrentStep, returnCurrentStep } from "./actions";
@@ -29,8 +29,9 @@ export default async function ApproveRequestPage({
   const doc = await RequestModel.findOne({ referenceNo: decodedRef }).lean();
   if (!doc) notFound();
 
-  const current = doc.approvalChain.find((a) => a.step === doc.currentStep) ?? null;
+  const current = doc.approvalChain.find((step) => step.step === doc.currentStep) ?? null;
   if (!current || current.status !== "pending") redirect(`/requests/${encodeURIComponent(decodedRef)}`);
+
   const currentApproverEmail = normalizeEmail(current.approverEmail);
   const activeDelegation =
     currentApproverEmail === userEmail
@@ -39,11 +40,13 @@ export default async function ApproveRequestPage({
           delegatorEmail: currentApproverEmail,
           delegateEmail: userEmail,
         });
+
   if (currentApproverEmail !== userEmail && !activeDelegation) {
     redirect(`/requests/${encodeURIComponent(decodedRef)}`);
   }
 
   const currentRoleLabel = humanizeWorkflowRole(current.role) || current.role;
+  const submittedBy = doc.submittedBy?.name || doc.submittedBy?.email || "Requester";
 
   const approveAction = approveCurrentStep.bind(null, decodedRef);
   const rejectAction = rejectCurrentStep.bind(null, decodedRef);
@@ -52,105 +55,158 @@ export default async function ApproveRequestPage({
   return (
     <>
       <Navbar />
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-6">
-          <h1 className="text-xl font-bold text-gray-800">Approve request</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Reference <span className="font-mono font-semibold">{doc.referenceNo}</span>
-          </p>
+      <main className="app-page app-page--full">
+        <div className="mx-auto max-w-5xl space-y-4">
+          <section className="app-panel overflow-hidden border-brand-100 bg-white/90">
+            <div className="border-b border-brand-100 bg-gradient-to-r from-brand-700 via-brand-700 to-brand-600 px-5 py-6 text-white sm:px-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-3xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
+                    Approval action
+                  </p>
+                  <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                    Review request {doc.referenceNo}
+                  </h1>
+                  <p className="mt-2 text-sm leading-6 text-white/85">
+                    Use the same workflow language as the request detail page, then choose the action that best matches the current state.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="status-pill border-white/20 bg-white/10 text-white">
+                    {currentRoleLabel}
+                  </span>
+                  <span className="status-pill border-white/20 bg-white/10 font-mono text-white">
+                    {doc.referenceNo}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-          <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50 p-4">
-            <p className="text-xs font-bold tracking-[0.1em] uppercase text-brand-700">
-              Current step
-            </p>
-            <p className="text-sm font-semibold text-gray-800 mt-1">
-              {current.approverName} <span className="text-gray-400">({currentRoleLabel})</span>
-            </p>
-            <p className="text-xs text-gray-500 mt-1">{current.approverEmail}</p>
-            {activeDelegation ? (
-              <p className="text-xs text-brand-700 mt-2">
-                You are acting as delegate for {activeDelegation.delegatorName || activeDelegation.delegatorEmail}.
-              </p>
-            ) : null}
-          </div>
+            <div className="space-y-6 p-5 sm:p-6">
+              {activeDelegation ? (
+                <div className="rounded-[0.875rem] border border-blue-200 bg-blue-50 px-4 py-4">
+                  <p className="text-sm font-semibold text-surface-text">
+                    You are acting as a delegate for{" "}
+                    {activeDelegation.delegatorName || activeDelegation.delegatorEmail}.
+                  </p>
+                  <p className="mt-1 text-sm text-surface-muted">
+                    The action you take here will apply to the current approval step on their behalf.
+                  </p>
+                </div>
+              ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a href="#approve" className="rounded-full border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-50">
-              Approve
-            </a>
-            <a href="#reject" className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
-              Reject
-            </a>
-            <a href="#comment" className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              Comment
-            </a>
-            <a href="#return" className="rounded-full border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">
-              Return
-            </a>
-          </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <InfoCard label="Current approver" value={current.approverName || current.approverEmail} />
+                <InfoCard label="Submitted by" value={submittedBy} />
+                <InfoCard label="Current stage" value={currentRoleLabel} />
+              </div>
 
-          <div id="comment" className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 scroll-mt-24">
-            Leave a note in any box below, then choose the action you want to take.
-          </div>
+              <div className="rounded-[0.875rem] border border-surface-border bg-slate-50/70 px-4 py-4">
+                <p className="text-sm font-semibold text-surface-text">How to use this page</p>
+                <p className="mt-1 text-sm text-surface-muted">
+                  Add a note when it helps the requester or the next approver understand your decision. Use return when the request can continue after corrections, and reject when it should stop entirely.
+                </p>
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-            <form id="approve" action={approveAction} className="space-y-2 scroll-mt-24">
-              <PendingFormState className="space-y-2">
-                <textarea
-                  name="comment"
+              <div className="grid gap-4 lg:grid-cols-3">
+                <ActionCard
+                  id="approve"
+                  title="Approve and continue"
+                  description="Use this when the request is ready to move to the next stage or finish."
                   placeholder="Optional approval note"
-                  className="w-full field-input min-h-[88px]"
-                />
-                <PendingSubmitButton
-                  type="submit"
-                  idleLabel="Approve"
+                  action={approveAction}
+                  buttonClassName="btn-primary w-full justify-center"
+                  idleLabel="Approve request"
                   pendingLabel="Approving..."
-                  className="w-full bg-gradient-to-br from-brand-600 to-brand-700 text-white font-semibold py-2.5 rounded-lg hover:opacity-95 active:scale-[0.99] transition"
                 />
-              </PendingFormState>
-            </form>
-
-            <form id="reject" action={rejectAction} className="space-y-2 scroll-mt-24">
-              <PendingFormState className="space-y-2">
-                <textarea
-                  name="comment"
-                  placeholder="Reason for rejection (recommended)"
-                  className="w-full field-input min-h-[88px]"
-                />
-                <PendingSubmitButton
-                  type="submit"
-                  idleLabel="Reject"
-                  pendingLabel="Rejecting..."
-                  className="w-full bg-red-600 text-white font-semibold py-2.5 rounded-lg hover:bg-red-700 active:scale-[0.99] transition"
-                />
-              </PendingFormState>
-            </form>
-
-            <form id="return" action={returnAction} className="space-y-2 scroll-mt-24">
-              <PendingFormState className="space-y-2">
-                <textarea
-                  name="comment"
+                <ActionCard
+                  id="return"
+                  title="Return for correction"
+                  description="Use this when the requester can fix the issue and submit again."
                   placeholder="Correction note required"
-                  className="w-full field-input min-h-[88px]"
-                />
-                <PendingSubmitButton
-                  type="submit"
-                  idleLabel="Return for correction"
+                  action={returnAction}
+                  buttonClassName="w-full justify-center rounded-[0.625rem] bg-blue-600 px-4 py-2.5 font-semibold text-white transition hover:bg-blue-700"
+                  idleLabel="Return to requester"
                   pendingLabel="Returning..."
-                  className="w-full bg-blue-600 text-white font-semibold py-2.5 rounded-lg hover:bg-blue-700 active:scale-[0.99] transition"
                 />
-              </PendingFormState>
-            </form>
-          </div>
+                <ActionCard
+                  id="reject"
+                  title="Reject request"
+                  description="Use this when the request should stop and not proceed in its current form."
+                  placeholder="Reason for rejection"
+                  action={rejectAction}
+                  buttonClassName="w-full justify-center rounded-[0.625rem] bg-red-600 px-4 py-2.5 font-semibold text-white transition hover:bg-red-700"
+                  idleLabel="Reject request"
+                  pendingLabel="Rejecting..."
+                />
+              </div>
 
-          <div className="mt-5">
-            <Link href={`/requests/${encodeURIComponent(decodedRef)}`} className="text-sm text-brand-700 hover:underline">
-              Back to request
-            </Link>
-          </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Link href={`/requests/${encodeURIComponent(decodedRef)}`} className="btn-secondary w-full justify-center sm:w-auto">
+                  Back to request details
+                </Link>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
     </>
   );
 }
 
+function InfoCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[0.875rem] border border-surface-border bg-white px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">{label}</p>
+      <div className="mt-2 text-sm font-semibold text-surface-text">{value}</div>
+    </div>
+  );
+}
+
+function ActionCard({
+  id,
+  title,
+  description,
+  placeholder,
+  action,
+  buttonClassName,
+  idleLabel,
+  pendingLabel,
+}: {
+  id: string;
+  title: string;
+  description: string;
+  placeholder: string;
+  action: (formData: FormData) => Promise<void>;
+  buttonClassName: string;
+  idleLabel: string;
+  pendingLabel: string;
+}) {
+  return (
+    <section id={id} className="app-panel p-5">
+      <p className="section-eyebrow">{title}</p>
+      <p className="mt-2 text-sm text-surface-muted">{description}</p>
+      <form action={action} className="mt-4">
+        <PendingFormState className="space-y-3">
+          <textarea
+            name="comment"
+            placeholder={placeholder}
+            className="field-input min-h-[132px]"
+          />
+          <PendingSubmitButton
+            type="submit"
+            idleLabel={idleLabel}
+            pendingLabel={pendingLabel}
+            className={buttonClassName}
+          />
+        </PendingFormState>
+      </form>
+    </section>
+  );
+}
