@@ -196,6 +196,28 @@ function openFilterPanel() {
         </div>
       </div>
 
+      {(activeTab === "all" || activeTab === "pending") ? (
+        <div className={`rounded-lg border px-4 py-3 ${
+          filteredPending.length > 0
+            ? "border-amber-200 bg-amber-50/70"
+            : "border-surface-border bg-white"
+        }`}>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+            Needs action notification
+          </p>
+          <p className="mt-1 text-sm font-semibold text-surface-text">
+            {filteredPending.length > 0
+              ? `${filteredPending.length} request(s) currently waiting for your decision.`
+              : "No requests are currently waiting for your decision."}
+          </p>
+          {(overduePending.length > 0 || dueSoonPending.length > 0) ? (
+            <p className="mt-1 text-xs text-surface-muted">
+              Overdue: {overduePending.length} - Due soon: {dueSoonPending.length}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting for me" value={data.metrics.pending} tone="warn" />
         <MetricCard label="Overdue" value={data.metrics.overdue} tone="danger" />
