@@ -132,15 +132,10 @@ export async function syncImportedLookupsForImport(importId: string) {
   let processorsSynced = 0;
   const seenPeople = new Set<string>();
 
-  for (const field of runtime.fields) {
-    if (!["select", "radio", "checkbox-group"].includes(field.type)) continue;
-    const options = (field.options ?? [])
-      .map((option) => option.value.trim())
-      .filter(Boolean);
-    if (options.length === 0) continue;
+  async function syncLookupCategory(category: string, options: string[]) {
+    const uniqueOptions = [...new Set(options.map((option) => option.trim()).filter(Boolean))];
+    if (uniqueOptions.length === 0) return;
 
-    const category = importedLookupCategory(imported.slug, field.name);
-    const uniqueOptions = [...new Set(options)];
     categoriesSynced += 1;
     valuesSynced += uniqueOptions.length;
 
@@ -165,6 +160,17 @@ export async function syncImportedLookupsForImport(importId: string) {
       category,
       value: { $nin: uniqueOptions },
     });
+  }
+
+  for (const field of runtime.fields) {
+    if (!["select", "radio", "checkbox-group"].includes(field.type)) continue;
+    const options = (field.options ?? [])
+      .map((option) => option.value.trim())
+      .filter(Boolean);
+    if (options.length === 0) continue;
+
+    const category = importedLookupCategory(imported.slug, field.name);
+    await syncLookupCategory(category, options);
 
     if (shouldSyncPeopleField(field)) {
       const people = extractPeopleCandidates(field);
@@ -177,6 +183,13 @@ export async function syncImportedLookupsForImport(importId: string) {
         if (person.roles.includes("processor")) processorsSynced += 1;
       }
     }
+  }
+
+  for (const [key, options] of Object.entries(runtime.optionSets ?? {})) {
+    await syncLookupCategory(
+      importedLookupCategory(imported.slug, key),
+      options.map((option) => option.value),
+    );
   }
 
   return {

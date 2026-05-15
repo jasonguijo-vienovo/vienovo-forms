@@ -37,8 +37,12 @@ export type ImportedFormRuntime = {
   sheetNames: string[];
   spreadsheetBindings: Record<string, string>;
   autoDetectedBindings: Record<string, string>;
+  optionSets: Record<string, ImportedFieldOption[]>;
   hydratedHtml: string;
 };
+
+const REQUEST_FOR_PAYMENT_SERVICE_SUPPLIERS_KEY = "__rfpSupplierService";
+const REQUEST_FOR_PAYMENT_RAW_SUPPLIERS_KEY = "__rfpSupplierRawMatsDiesel";
 
 function decodeHtml(value: string) {
   return value
@@ -300,6 +304,7 @@ export function parseImportedFormHtml(htmlSource: string): ImportedFormRuntime {
     sheetNames: [],
     spreadsheetBindings: {},
     autoDetectedBindings: {},
+    optionSets: {},
     hydratedHtml: "",
   };
 }
@@ -348,6 +353,81 @@ function findOptionsRangeFromPreview(
   return "";
 }
 
+function uniqueOptions(values: string[]) {
+  return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))].map((value) => ({
+    value,
+    label: value,
+  }));
+}
+
+function findSheetPreviewValueColumn(rows: string[][], headerCandidates: string[]) {
+  const normalizedCandidates = headerCandidates.map(normalizeKey).filter(Boolean);
+  const maxHeaderRows = Math.min(rows.length, 10);
+  for (let rowIndex = 0; rowIndex < maxHeaderRows; rowIndex += 1) {
+    const headerRow = rows[rowIndex] ?? [];
+    const columnIndex = headerRow.findIndex((header) => headerMatches(header, normalizedCandidates));
+    if (columnIndex < 0) continue;
+    return rows
+      .slice(rowIndex + 1)
+      .map((row) => String(row[columnIndex] ?? "").trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+async function buildRequestForPaymentOptionSets(opts: {
+  spreadsheetId: string;
+  sheetNames: string[];
+  importedLookupOptions: Map<string, string[]>;
+}) {
+  const optionSets: Record<string, ImportedFieldOption[]> = {};
+  const serviceLookup =
+    opts.importedLookupOptions.get(normalizeKey(REQUEST_FOR_PAYMENT_SERVICE_SUPPLIERS_KEY)) ?? [];
+  const rawLookup =
+    opts.importedLookupOptions.get(normalizeKey(REQUEST_FOR_PAYMENT_RAW_SUPPLIERS_KEY)) ?? [];
+
+  if (serviceLookup.length > 0) {
+    optionSets[REQUEST_FOR_PAYMENT_SERVICE_SUPPLIERS_KEY] = uniqueOptions(serviceLookup);
+  }
+  if (rawLookup.length > 0) {
+    optionSets[REQUEST_FOR_PAYMENT_RAW_SUPPLIERS_KEY] = uniqueOptions(rawLookup);
+  }
+  if (optionSets[REQUEST_FOR_PAYMENT_SERVICE_SUPPLIERS_KEY] || optionSets[REQUEST_FOR_PAYMENT_RAW_SUPPLIERS_KEY]) {
+    return optionSets;
+  }
+
+  const previews = new Map<string, string[][]>();
+  async function getPreview(sheetName: string) {
+    if (!previews.has(sheetName)) {
+      previews.set(sheetName, await readSpreadsheetMatrix(opts.spreadsheetId, `${sheetName}!A1:ZZ500`));
+    }
+    return previews.get(sheetName) ?? [];
+  }
+
+  async function loadColumnValues(sheetNameCandidates: string[], headerCandidates: string[]) {
+    for (const candidate of opts.sheetNames) {
+      if (!sheetNameCandidates.includes(normalizeKey(candidate))) continue;
+      const rows = await getPreview(candidate);
+      const values = findSheetPreviewValueColumn(rows, headerCandidates);
+      if (values.length > 0) return values;
+    }
+    return [];
+  }
+
+  const serviceValues = [
+    ...(await loadColumnValues(["formdropdowns", "dropdowns"], ["Service"])),
+    ...(await loadColumnValues(["servicevendors"], ["SUPPLIER NAME (Services)", "Supplier", "Supplier Name"])),
+  ];
+  const rawValues = [
+    ...(await loadColumnValues(["formdropdowns", "dropdowns"], ["Raw Mats & Diesel"])),
+    ...(await loadColumnValues(["vendors"], ["SUPPLIER NAME (RM)", "Supplier", "Supplier Name"])),
+  ];
+
+  optionSets[REQUEST_FOR_PAYMENT_SERVICE_SUPPLIERS_KEY] = uniqueOptions(serviceValues);
+  optionSets[REQUEST_FOR_PAYMENT_RAW_SUPPLIERS_KEY] = uniqueOptions(rawValues);
+  return optionSets;
+}
+
 export async function hydrateImportedFormRuntime(opts: {
   slug?: string;
   htmlSource: string;
@@ -380,6 +460,13 @@ export async function hydrateImportedFormRuntime(opts: {
       if (syncedOptions?.length) {
         field.options = syncedOptions.map((value) => ({ value, label: value }));
       }
+    }
+    if (opts.slug === "request-for-payment") {
+      runtime.optionSets = await buildRequestForPaymentOptionSets({
+        spreadsheetId,
+        sheetNames: [],
+        importedLookupOptions,
+      });
     }
     runtime.hydratedHtml = hydrateOriginalHtml(opts.htmlSource, runtime.fields);
     return runtime;
@@ -472,6 +559,14 @@ export async function hydrateImportedFormRuntime(opts: {
     if (values.length > 0) {
       field.options = values.map((value) => ({ value, label: value }));
     }
+  }
+
+  if (opts.slug === "request-for-payment") {
+    runtime.optionSets = await buildRequestForPaymentOptionSets({
+      spreadsheetId,
+      sheetNames,
+      importedLookupOptions,
+    });
   }
 
   return {

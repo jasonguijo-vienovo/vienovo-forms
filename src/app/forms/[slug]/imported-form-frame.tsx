@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ImportedFieldDefinition } from "@/lib/imported-forms";
+import type { ImportedFieldDefinition, ImportedFieldOption } from "@/lib/imported-forms";
 
 type ImportedFormFrameProps = {
   slug?: string;
   htmlSource: string;
   fields: ImportedFieldDefinition[];
+  optionSets?: Record<string, ImportedFieldOption[]>;
   submitAction: (formData: FormData) => void | Promise<void>;
 };
 
@@ -28,7 +29,12 @@ function safeScriptJson(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[], slug?: string) {
+function injectBridgeScript(
+  htmlSource: string,
+  fields: ImportedFieldDefinition[],
+  optionSets?: Record<string, ImportedFieldOption[]>,
+  slug?: string,
+) {
   const optionsByName = Object.fromEntries(
     fields.map((field) => [
       field.name,
@@ -39,7 +45,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     ])
   );
   const labelsByName = Object.fromEntries(fields.map((field) => [field.name, field.label]));
-  const bridgeData = safeScriptJson({ optionsByName, labelsByName, slug: slug ?? "" });
+  const bridgeData = safeScriptJson({ optionsByName, optionSets: optionSets ?? {}, labelsByName, slug: slug ?? "" });
 
   const bridgeScript = `
 <style>
@@ -134,6 +140,17 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     return found ? bridge.optionsByName[found] : [];
   }
 
+  function findOptionSet(name) {
+    if (!name || !bridge.optionSets) return [];
+    if (bridge.optionSets[name]) return bridge.optionSets[name];
+    var key = normalize(name);
+    var found = Object.keys(bridge.optionSets).find(function (candidate) {
+      var normalized = normalize(candidate);
+      return normalized === key || normalized.indexOf(key) >= 0 || key.indexOf(normalized) >= 0;
+    });
+    return found ? bridge.optionSets[found] : [];
+  }
+
   function optionLabel(option) {
     return typeof option === "string" ? option : option.label || option.value || "";
   }
@@ -162,15 +179,28 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
     return regular.concat(others);
   }
 
-  function isSearchableField(name) {
+  function isSearchableField(name, select) {
     var key = normalize(name || "");
+    if (select && String(select.getAttribute("data-searchable") || "").toLowerCase() === "true") return true;
     return key.indexOf("manager") >= 0 || key.indexOf("supervisor") >= 0 || key.indexOf("department") >= 0;
+  }
+
+  function updateSearchableSelectDisplay(select) {
+    if (!select) return;
+    var shell = select.nextElementSibling;
+    if (!shell || !shell.classList || !shell.classList.contains("vf-search-shell")) return;
+    var input = shell.querySelector(".vf-search-input");
+    if (!input) return;
+    var current = Array.prototype.slice.call(select.options || []).find(function (opt) {
+      return opt.value === select.value;
+    });
+    input.value = current && current.value ? String(current.textContent || current.value || "") : "";
   }
 
   function attachSearchableSelect(select) {
     if (!select || select.dataset.vfSearchInit === "1") return;
     var name = select.getAttribute("name") || select.id || "";
-    if (!isSearchableField(name)) return;
+    if (!isSearchableField(name, select)) return;
     select.dataset.vfSearchInit = "1";
 
     var shell = document.createElement("div");
@@ -278,6 +308,25 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       if (menu.getAttribute("data-open") !== "1") return;
       positionMenu(menu.getAttribute("data-direction") === "up" ? "up" : "down");
     }, true);
+    select.addEventListener("change", function () {
+      updateSearchableSelectDisplay(select);
+    });
+  }
+
+  function fillSelectOptions(select, options, placeholder) {
+    if (!select) return;
+    select.innerHTML = "";
+    var first = document.createElement("option");
+    first.value = "";
+    first.textContent = placeholder || "Select";
+    select.appendChild(first);
+    sortOptionsOtherLast(options).forEach(function (option) {
+      var node = document.createElement("option");
+      node.value = optionValue(option);
+      node.textContent = optionLabel(option);
+      select.appendChild(node);
+    });
+    updateSearchableSelectDisplay(select);
   }
 
   function populateNativeSelects() {
@@ -285,17 +334,52 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       var name = select.getAttribute("name") || select.id;
       var options = findOptions(name);
       if (!options.length) return;
-      select.innerHTML = select.required ? "" : '<option value="">-- Select --</option>';
-      sortOptionsOtherLast(options).forEach(function (option) {
-        var node = document.createElement("option");
-        node.value = optionValue(option);
-        node.textContent = optionLabel(option);
-        select.appendChild(node);
-      });
+      fillSelectOptions(select, options, select.required ? "Select" : "-- Select --");
       select.disabled = false;
       select.removeAttribute("readonly");
       attachSearchableSelect(select);
     });
+  }
+
+  function applyRequestForPaymentSupplierOptions() {
+    if (String(bridge.slug || "") !== "request-for-payment") return;
+
+    var supplier = document.getElementById("supplier");
+    if (!supplier) return;
+
+    var serviceOptions = findOptionSet("__rfpSupplierService");
+    var rawOptions = findOptionSet("__rfpSupplierRawMatsDiesel");
+    if (!serviceOptions.length && !rawOptions.length) return;
+
+    function syncSupplierOptions() {
+      var checked = document.querySelector('input[name="supplierType"]:checked');
+      var supplierType = checked ? String(checked.value || "").trim() : "";
+      var nextOptions = [];
+      if (supplierType === "Service") nextOptions = serviceOptions;
+      if (supplierType === "Raw Mats & Diesel") nextOptions = rawOptions;
+
+      var previousValue = supplier.value;
+      fillSelectOptions(supplier, nextOptions, supplierType ? "Select" : "Select supplier type first");
+      supplier.disabled = !supplierType || !nextOptions.length;
+      if (previousValue && nextOptions.some(function (option) { return optionValue(option) === previousValue; })) {
+        supplier.value = previousValue;
+      } else {
+        supplier.value = "";
+      }
+      updateSearchableSelectDisplay(supplier);
+      supplier.dispatchEvent(new Event("change", { bubbles: true }));
+      queueHeightPost();
+    }
+
+    attachSearchableSelect(supplier);
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="supplierType"]'), function (radio) {
+      if (radio.dataset.vfSupplierInit === "1") return;
+      radio.dataset.vfSupplierInit = "1";
+      radio.addEventListener("change", syncSupplierOptions);
+      radio.addEventListener("input", syncSupplierOptions);
+    });
+
+    syncSupplierOptions();
   }
 
   function hideReferenceFieldsForControlLog() {
@@ -427,9 +511,9 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   function collectValues() {
     var values = {};
     var labels = {};
-    var controls = document.querySelectorAll("input[name], select[name], textarea[name]");
+    var controls = document.querySelectorAll("input[name], input[id], select[name], select[id], textarea[name], textarea[id]");
     Array.prototype.forEach.call(controls, function (control) {
-      var name = control.name;
+      var name = control.name || control.id;
       if (!name || ["submit", "button", "reset", "image"].indexOf((control.type || "").toLowerCase()) >= 0) {
         return;
       }
@@ -465,8 +549,8 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
 
   function applyValues(values) {
     values = values || {};
-    Array.prototype.forEach.call(document.querySelectorAll("input[name], select[name], textarea[name]"), function (control) {
-      var name = control.name;
+    Array.prototype.forEach.call(document.querySelectorAll("input[name], input[id], select[name], select[id], textarea[name], textarea[id]"), function (control) {
+      var name = control.name || control.id;
       if (!name || !(name in values)) return;
       var value = values[name];
       var type = (control.type || "").toLowerCase();
@@ -474,16 +558,21 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
       if (type === "checkbox") {
         if (Array.isArray(value)) control.checked = value.indexOf(control.value) >= 0;
         else control.checked = value === "Yes" || value === true || value === control.value;
+        control.dispatchEvent(new Event("change", { bubbles: true }));
         return;
       }
       if (type === "radio") {
         control.checked = String(control.value) === String(value);
+        if (control.checked) control.dispatchEvent(new Event("change", { bubbles: true }));
         return;
       }
       if (type === "file") return;
       control.value = Array.isArray(value) ? value.join(", ") : String(value == null ? "" : value);
       control.dispatchEvent(new Event("change", { bubbles: true }));
+      updateSearchableSelectDisplay(control);
     });
+    applyRequestForPaymentSupplierOptions();
+    applyRequestForPaymentConditionalFields();
     queueHeightPost();
   }
 
@@ -574,6 +663,7 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   window.addEventListener("load", function () {
     populateNativeSelects();
     hideReferenceFieldsForControlLog();
+    applyRequestForPaymentSupplierOptions();
     applyRequestForPaymentConditionalFields();
     window.parent.postMessage({ type: "vienovo-imported-ready" }, "*");
     queueHeightPost();
@@ -621,14 +711,17 @@ function injectBridgeScript(htmlSource: string, fields: ImportedFieldDefinition[
   return `<!doctype html><html><head><meta charset="utf-8" /></head><body>${htmlSource}${bridgeScript}</body></html>`;
 }
 
-export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitAction }: ImportedFormFrameProps) {
+export function ImportedFormFrame({ slug: _slug, htmlSource, fields, optionSets, submitAction }: ImportedFormFrameProps) {
   const [height, setHeight] = useState(900);
   const [draftSavedAt, setDraftSavedAt] = useState<string>("");
   const heightRef = useRef(900);
   const payloadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const srcDoc = useMemo(() => injectBridgeScript(htmlSource, fields, _slug), [fields, htmlSource, _slug]);
+  const srcDoc = useMemo(
+    () => injectBridgeScript(htmlSource, fields, optionSets, _slug),
+    [fields, htmlSource, optionSets, _slug],
+  );
   const draftKey = `vienovo:imported-draft:${_slug || "unknown"}`;
 
   useEffect(() => {
@@ -694,7 +787,7 @@ export function ImportedFormFrame({ slug: _slug, htmlSource, fields, submitActio
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [draftKey]);
+  }, []);
 
   return (
     <>

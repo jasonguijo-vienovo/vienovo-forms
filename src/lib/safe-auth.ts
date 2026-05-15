@@ -1,6 +1,12 @@
 import { auth } from "@/auth";
+import { getScreenshotBypassSession } from "@/lib/screenshot-bypass";
 
 export async function safeAuth() {
+  const bypassSession = await getScreenshotBypassSession();
+  if (bypassSession) {
+    return bypassSession;
+  }
+
   try {
     return await auth();
   } catch (e) {
