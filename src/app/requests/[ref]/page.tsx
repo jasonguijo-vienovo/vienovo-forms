@@ -243,6 +243,7 @@ export default async function RequestDetailPage({
                       const isCurrent = step.step === doc.currentStep;
                       const roleLabel = humanizeWorkflowRole(step.role) || step.role;
                       const actedAt = step.actedAt ? formatTrackerDateTime(step.actedAt) : "";
+                      const approverChange = findApproverChangeForStep(step.role, changedFields);
                       return (
                         <li
                           key={step.step}
@@ -272,12 +273,22 @@ export default async function RequestDetailPage({
                                 <span className={`status-pill ${STEP_STATUS_TONES[step.status] ?? "border-slate-200 bg-slate-100 text-slate-600"}`}>
                                   {humanizeStatus(step.status)}
                                 </span>
+                                {approverChange ? (
+                                  <span className="status-pill border-amber-200 bg-amber-50 text-amber-800">
+                                    Updated
+                                  </span>
+                                ) : null}
                               </div>
                               <p className="mt-1 text-sm text-slate-700">
                                 {step.approverName || step.approverEmail}
                               </p>
                               {step.approverEmail && step.approverName ? (
                                 <p className="mt-1 text-xs text-surface-muted">{step.approverEmail}</p>
+                              ) : null}
+                              {approverChange?.from ? (
+                                <p className="mt-1 text-xs text-amber-700">
+                                  Previous approver: {formatApproverChangeValue(approverChange.from)}
+                                </p>
                               ) : null}
                               <p className="mt-2 text-xs text-surface-muted">
                                 {step.status === "approved"
@@ -564,4 +575,27 @@ function formatDetailValue(label: string, value: React.ReactNode) {
 function formatDetailString(label: string, value: string) {
   if (!/status/i.test(label)) return value;
   return humanizeStatus(value);
+}
+
+function findApproverChangeForStep(
+  role: string,
+  changedFields: Record<string, { from: string; to: string }>,
+) {
+  const keys =
+    role === "supervisor" || role === "level1"
+      ? ["immediateSuperiorName", "immediateSuperiorEmail"]
+      : role === "head" || role === "level2"
+        ? ["departmentHeadName", "departmentHeadEmail"]
+        : role === "cashAdvanceApprover"
+          ? ["approverName", "approverEmail"]
+          : [];
+
+  for (const key of keys) {
+    if (changedFields[key]) return changedFields[key];
+  }
+  return null;
+}
+
+function formatApproverChangeValue(value: string) {
+  return value || "(blank)";
 }
