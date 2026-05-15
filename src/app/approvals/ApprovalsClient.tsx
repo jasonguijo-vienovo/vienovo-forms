@@ -165,6 +165,7 @@ function openFilterPanel() {
 
   const hasActiveFilters =
     query.trim().length > 0 || formFilter !== "all" || pendingView !== "all" || activeTab !== "all";
+  const isPendingTab = activeTab === "pending";
 
   function toggle(referenceNo: string) {
     setSelected((current) =>
@@ -449,7 +450,7 @@ function openFilterPanel() {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <QueueFilterChip active={activeTab === "all"} onClick={() => setActiveTab("all")} label={`All queues (${filteredPending.length + filteredApproved.length + filteredRejected.length})`} />
-                <QueueFilterChip active={activeTab === "pending"} onClick={() => setActiveTab("pending")} label={`Needs action (${filteredPending.length})`} tone="warn" />
+                <QueueFilterChip active={isPendingTab} onClick={() => setActiveTab("pending")} label={`Needs action (${filteredPending.length})`} tone="warn" />
                 <QueueFilterChip active={activeTab === "approved"} onClick={() => setActiveTab("approved")} label={`Approved (${filteredApproved.length})`} />
                 <QueueFilterChip active={activeTab === "rejected"} onClick={() => setActiveTab("rejected")} label={`Rejected (${filteredRejected.length})`} tone="danger" />
               </div>
