@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckSquare, Clock3, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
@@ -21,6 +21,8 @@ type Props = {
   data: ApprovalQueueData;
 };
 
+type PendingView = "all" | "overdue" | "due-soon" | "normal";
+
 const STATUS_TONES: Record<string, string> = {
   pending: "border-amber-200 bg-amber-50 text-amber-800",
   approved: "border-green-200 bg-green-50 text-green-800",
@@ -31,6 +33,7 @@ const STATUS_TONES: Record<string, string> = {
 
 export function ApprovalsClient({ data }: Props) {
   const [query, setQuery] = useState("");
+  const [pendingView, setPendingView] = useState<PendingView>("all");
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkComment, setBulkComment] = useState("");
 
@@ -50,9 +53,34 @@ export function ApprovalsClient({ data }: Props) {
   const dueSoonPending = filteredPending.filter((item) => item.urgency === "due-soon");
   const normalPending = filteredPending.filter((item) => item.urgency === "normal");
 
-  const visiblePendingRefs = filteredPending.map((item) => item.referenceNo);
+  const pendingGroups = useMemo(
+    () => [
+      { key: "overdue" as const, title: "Overdue", tone: "danger" as const, items: overduePending },
+      { key: "due-soon" as const, title: "Due soon", tone: "warn" as const, items: dueSoonPending },
+      { key: "normal" as const, title: "Normal queue", tone: "neutral" as const, items: normalPending },
+    ],
+    [dueSoonPending, normalPending, overduePending],
+  );
+
+  const visibleGroups = useMemo(
+    () => (pendingView === "all" ? pendingGroups : pendingGroups.filter((group) => group.key === pendingView)),
+    [pendingGroups, pendingView],
+  );
+
+  const visiblePending = useMemo(
+    () => visibleGroups.flatMap((group) => group.items),
+    [visibleGroups],
+  );
+
+  const visiblePendingRefs = visiblePending.map((item) => item.referenceNo);
   const allVisibleSelected =
     visiblePendingRefs.length > 0 && visiblePendingRefs.every((referenceNo) => selected.includes(referenceNo));
+  const hiddenSelectedCount = selected.filter((referenceNo) => !visiblePendingRefs.includes(referenceNo)).length;
+
+  useEffect(() => {
+    const validRefs = new Set(data.pending.map((item) => item.referenceNo));
+    setSelected((current) => current.filter((referenceNo) => validRefs.has(referenceNo)));
+  }, [data.pending]);
 
   function toggle(referenceNo: string) {
     setSelected((current) =>
@@ -72,7 +100,7 @@ export function ApprovalsClient({ data }: Props) {
   }
 
   return (
-    <main className="app-page space-y-6">
+    <main className="app-page app-page--full space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="section-eyebrow">Approver workspace</p>
@@ -81,7 +109,7 @@ export function ApprovalsClient({ data }: Props) {
             Review requests assigned to you, leave notes, and move through approvals faster.
           </p>
         </div>
-        <div className="w-full sm:w-80">
+        <div className="w-full sm:w-[26rem]">
           <label className="mb-1 block text-sm font-semibold text-surface-text">Search</label>
           <input
             value={query}
@@ -151,7 +179,7 @@ export function ApprovalsClient({ data }: Props) {
               Requests currently waiting on your approval decision.
             </p>
           </div>
-          {filteredPending.length > 0 ? (
+          {visiblePending.length > 0 ? (
             <button
               type="button"
               onClick={toggleAllVisible}
@@ -171,6 +199,30 @@ export function ApprovalsClient({ data }: Props) {
             </button>
           ) : null}
         </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <QueueFilterChip
+            active={pendingView === "all"}
+            onClick={() => setPendingView("all")}
+            label={`All (${filteredPending.length})`}
+          />
+          <QueueFilterChip
+            active={pendingView === "overdue"}
+            onClick={() => setPendingView("overdue")}
+            label={`Overdue (${overduePending.length})`}
+            tone="danger"
+          />
+          <QueueFilterChip
+            active={pendingView === "due-soon"}
+            onClick={() => setPendingView("due-soon")}
+            label={`Due soon (${dueSoonPending.length})`}
+            tone="warn"
+          />
+          <QueueFilterChip
+            active={pendingView === "normal"}
+            onClick={() => setPendingView("normal")}
+            label={`Normal (${normalPending.length})`}
+          />
+        </div>
 
         {selected.length > 0 ? (
           <form className="mb-5">
@@ -185,6 +237,7 @@ export function ApprovalsClient({ data }: Props) {
                   </p>
                   <p className="mt-1 text-xs text-surface-muted">
                     Add one shared note if needed, then approve or reject all selected requests.
+                    {hiddenSelectedCount > 0 ? ` ${hiddenSelectedCount} selected request(s) are outside this current view.` : ""}
                   </p>
                 </div>
                 <textarea
@@ -237,13 +290,20 @@ export function ApprovalsClient({ data }: Props) {
           </form>
         ) : null}
 
-        {filteredPending.length === 0 ? (
+        {visiblePending.length === 0 ? (
           <EmptyState message={query ? "No pending approvals match this search." : "No requests are waiting for your action."} />
         ) : (
           <div className="space-y-5">
-            <PendingGroup title="Overdue" items={overduePending} selected={selected} onToggle={toggle} tone="danger" />
-            <PendingGroup title="Due soon" items={dueSoonPending} selected={selected} onToggle={toggle} tone="warn" />
-            <PendingGroup title="Normal queue" items={normalPending} selected={selected} onToggle={toggle} tone="neutral" />
+            {visibleGroups.map((group) => (
+              <PendingGroup
+                key={group.key}
+                title={group.title}
+                items={group.items}
+                selected={selected}
+                onToggle={toggle}
+                tone={group.tone}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -294,7 +354,7 @@ function PendingGroup({
         <span>{title}</span>
         <span className="text-xs font-normal text-surface-muted">({items.length})</span>
       </div>
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
         {items.map((item) => (
           <PendingApprovalCard
             key={item.referenceNo}
@@ -305,6 +365,41 @@ function PendingGroup({
         ))}
       </div>
     </section>
+  );
+}
+
+function QueueFilterChip({
+  active,
+  onClick,
+  label,
+  tone = "neutral",
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  tone?: "neutral" | "warn" | "danger";
+}) {
+  const inactiveClass =
+    tone === "danger"
+      ? "border-red-200 bg-white text-red-700 hover:bg-red-50"
+      : tone === "warn"
+        ? "border-amber-200 bg-white text-amber-700 hover:bg-amber-50"
+        : "border-surface-border bg-white text-surface-text hover:bg-slate-50";
+  const activeClass =
+    tone === "danger"
+      ? "border-red-300 bg-red-50 text-red-800"
+      : tone === "warn"
+        ? "border-amber-300 bg-amber-50 text-amber-800"
+        : "border-brand-200 bg-brand-50 text-brand-700";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded border px-3 py-1.5 text-xs font-semibold transition ${active ? activeClass : inactiveClass}`}
+    >
+      {label}
+    </button>
   );
 }
 
