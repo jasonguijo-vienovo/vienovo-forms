@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: "Vienovo Forms",
   description: "Internal company forms — submit, track, and approve.",
   icons: {
-    icon: [{ url: "/icon", type: "image/png" }],
+    icon: [{ url: "/icon.png", type: "image/png" }],
   },
 };
 
