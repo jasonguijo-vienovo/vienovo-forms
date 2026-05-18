@@ -17,6 +17,7 @@ export const TRAVEL_BOOKING_RESPONSE_HEADERS = [
   "Destination To",
   "Departure Date",
   "Preferred Time of Departure",
+  "Preferred Time of Return",
   "Multi City Departure (Optional)",
   "Multi City Deaprture Date (Optional)",
   "Preferred Time of Departure ",
@@ -173,7 +174,7 @@ export function buildTravelBookingSheetRow(input: {
 
   return [
     formatSheetTimestamp(input.submittedAt ? new Date(input.submittedAt) : new Date()),
-    "pending",
+    "Pending",
     input.keepRefColumnBlank ? "" : input.referenceNo,
     input.submittedByEmail,
     String(formData.fullName || "").trim(),
@@ -182,6 +183,7 @@ export function buildTravelBookingSheetRow(input: {
     String(formData.destination || "").trim(),
     formatDateValue(formData.departureDate),
     formatTimeValue(formData.preferredTime),
+    formatTimeValue(formData.preferredReturnTime),
     buildTravelBookingMultiCityText(formData.multiCity),
     buildTravelBookingMultiCityDates(formData.multiCity),
     buildTravelBookingMultiCityTimes(formData.multiCity),
@@ -236,14 +238,14 @@ export async function resolveTravelBookingSheetTitle(
 
   if (preferred && sheetTitles.includes(preferred)) {
     const preferredHeaders =
-      (await readSpreadsheetMatrix(spreadsheetId, `${preferred}!A1:Z1`))[0] ?? [];
+      (await readSpreadsheetMatrix(spreadsheetId, `${preferred}!A1:AA1`))[0] ?? [];
     if (headersMatchExpected(preferredHeaders, expectedHeaders) || preferredHeaders.length === 0) {
       return preferred;
     }
   }
 
   for (const title of sheetTitles) {
-    const headers = (await readSpreadsheetMatrix(spreadsheetId, `${title}!A1:Z1`))[0] ?? [];
+    const headers = (await readSpreadsheetMatrix(spreadsheetId, `${title}!A1:AA1`))[0] ?? [];
     if (headersMatchExpected(headers, expectedHeaders)) {
       return title;
     }
@@ -263,7 +265,7 @@ export async function loadTravelBookingResponseSheetState(input: {
 
   const resolvedSheetTitle = await resolveTravelBookingSheetTitle(spreadsheetId, input.sheetTitle);
   await ensureSpreadsheetSheet(spreadsheetId, resolvedSheetTitle);
-  const matrix = await readSpreadsheetMatrix(spreadsheetId, `${resolvedSheetTitle}!A1:Z5000`);
+  const matrix = await readSpreadsheetMatrix(spreadsheetId, `${resolvedSheetTitle}!A1:AA5000`);
   const currentHeaders = (matrix[0] ?? []).map((cell) => String(cell ?? "").trim());
   const expectedHeaders = [...TRAVEL_BOOKING_RESPONSE_HEADERS];
   const headersMatch = headersMatchExpected(currentHeaders, expectedHeaders);

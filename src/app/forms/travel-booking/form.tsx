@@ -39,6 +39,7 @@ export type TravelBookingFormProps = {
 
 type TripType = "roundtrip" | "oneway" | "multicity";
 const BRAND_LOGO_SRC = "/brand/vienovo-feed-for-life.png";
+const ADD_AIRLINE_VALUE = "__add_airline__";
 
 export type TravelBookingInitialValues = Partial<{
   landAir: "By Land" | "By Air" | "";
@@ -48,6 +49,7 @@ export type TravelBookingInitialValues = Partial<{
   departureDate: string;
   returnDate: string;
   preferredTime: string;
+  preferredReturnTime: string;
   mc1Origin: string;
   mc1Destination: string;
   mc1Date: string;
@@ -110,6 +112,9 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
   const [departureDate, setDepartureDate] = useState(initial?.departureDate ?? "");
   const [returnDate, setReturnDate] = useState(initial?.returnDate ?? "");
   const [preferredTime, setPreferredTime] = useState(initial?.preferredTime ?? "");
+  const [preferredReturnTime, setPreferredReturnTime] = useState(
+    initial?.preferredReturnTime ?? "",
+  );
 
   // Multi-city
   const [mc1Origin, setMc1Origin] = useState(initial?.mc1Origin ?? "");
@@ -122,7 +127,15 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
   const [mc2Time, setMc2Time] = useState(initial?.mc2Time ?? "");
 
   // Flight
-  const [airline, setAirline] = useState(initial?.airline ?? "");
+  const initialAirline = initial?.airline ?? "";
+  const initialAirlineExists = airlines.includes(initialAirline);
+  const [airline, setAirline] = useState(initialAirlineExists ? initialAirline : "");
+  const [isAddingAirline, setIsAddingAirline] = useState(
+    Boolean(initialAirline && !initialAirlineExists),
+  );
+  const [customAirline, setCustomAirline] = useState(
+    initialAirline && !initialAirlineExists ? initialAirline : "",
+  );
   const [travelPurpose, setTravelPurpose] = useState(initial?.travelPurpose ?? "");
   const [baggage, setBaggage] = useState(initial?.baggage ?? "");
 
@@ -165,6 +178,14 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
       ),
     [airports, multiCityDepartures],
   );
+  const resolvedAirline = isAddingAirline ? customAirline.trim() : airline;
+  const airlineOptions = useMemo(
+    () => [
+      ...airlines.map((value) => ({ value, label: value })),
+      { value: ADD_AIRLINE_VALUE, label: "Add an airline" },
+    ],
+    [airlines],
+  );
 
   function validate(): string[] {
     const errs: string[] = [];
@@ -189,8 +210,11 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
       if (!departureDate) errs.push("Departure Date");
       if (tripType === "roundtrip" && !returnDate) errs.push("Return Date");
       if (!preferredTime) errs.push("Preferred Time of Departure");
+      if (tripType === "roundtrip" && !preferredReturnTime) {
+        errs.push("Preferred Time of Return");
+      }
     }
-    if (!airline) errs.push("Airlines");
+    if (!resolvedAirline) errs.push("Airlines");
     if (!travelPurpose) errs.push("Travel Purpose");
     if (!baggage) errs.push("Baggage");
     if (!hotelAccommodation) errs.push("Hotel Accommodation");
@@ -449,6 +473,18 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
                 className="field-input"
               />
             </Field>
+            {tripType === "roundtrip" ? (
+              <Field label="Preferred Time of Return" required className="mt-4">
+                <input
+                  type="time"
+                  name="preferredReturnTime"
+                  value={preferredReturnTime}
+                  onChange={(e) => setPreferredReturnTime(e.target.value)}
+                  required
+                  className="field-input"
+                />
+              </Field>
+            ) : null}
           </>
         ) : (
           <div className="mt-4 space-y-4">
@@ -495,7 +531,38 @@ export function TravelBookingForm(props: TravelBookingFormProps) {
         <SectionTitle>Flight &amp; Baggage</SectionTitle>
 
         <Field label="Airlines" required>
-          <SearchableSelect name="airline" value={airline} onChange={setAirline} required placeholder="-- Select Airlines --" options={airlines.map((a) => ({ value: a, label: a }))} />
+          <input type="hidden" name="airline" value={resolvedAirline} required />
+          <SearchableSelect
+            value={isAddingAirline ? ADD_AIRLINE_VALUE : airline}
+            onChange={(value) => {
+              if (value === ADD_AIRLINE_VALUE) {
+                setIsAddingAirline(true);
+                setAirline("");
+                return;
+              }
+              setIsAddingAirline(false);
+              setCustomAirline("");
+              setAirline(value);
+            }}
+            required
+            placeholder="-- Select Airlines --"
+            options={airlineOptions}
+          />
+          {isAddingAirline ? (
+            <div className="mt-3 space-y-2">
+              <input
+                type="text"
+                value={customAirline}
+                onChange={(e) => setCustomAirline(e.target.value)}
+                placeholder="Enter airline name"
+                className="field-input"
+              />
+              <p className="text-xs text-gray-500">
+                This airline will be saved to the shared dropdown for future requests. Admins can
+                remove it later from lookup management.
+              </p>
+            </div>
+          ) : null}
         </Field>
 
         <Field label="Travel Purpose" required className="mt-4">

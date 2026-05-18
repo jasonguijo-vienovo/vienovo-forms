@@ -28,6 +28,7 @@ import {
 } from "@/lib/workflow-routing";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
+import { Lookup } from "@/models/Lookup";
 import { RequestModel } from "@/models/Request";
 import {
   buildApprovalChainDetails,
@@ -45,6 +46,49 @@ function s(formData: FormData, key: string) {
 function d(formData: FormData, key: string) {
   const v = s(formData, key);
   return v ? new Date(v) : null;
+}
+
+function normalizeLookupValue(input: string) {
+  return String(input ?? "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+async function ensureAirlineLookup(value: string) {
+  const airline = String(value || "").trim();
+  if (!airline) return;
+
+  const airlineKey = normalizeLookupValue(airline);
+  const existing = await Lookup.find({ category: "airline" })
+    .select({ _id: 1, value: 1, sortOrder: 1, isActive: 1 })
+    .sort({ sortOrder: 1, value: 1 })
+    .lean();
+  const match = existing.find((item) => normalizeLookupValue(String(item.value)) === airlineKey);
+
+  if (match) {
+    if (!match.isActive || String(match.value) !== airline) {
+      await Lookup.updateOne(
+        { _id: match._id },
+        {
+          $set: {
+            value: airline,
+            isActive: true,
+          },
+        },
+      );
+    }
+    return;
+  }
+
+  const nextSortOrder = (existing[existing.length - 1]?.sortOrder ?? -1) + 1;
+  await Lookup.create({
+    category: "airline",
+    value: airline,
+    label: "",
+    sortOrder: nextSortOrder,
+    isActive: true,
+  });
 }
 
 function buildTravelRequestVersionLabel(version: number, updated: boolean) {
@@ -143,6 +187,7 @@ export async function submitTravelBooking(
       departureDate: d(formData, "departureDate"),
       returnDate: tripType === "roundtrip" ? d(formData, "returnDate") : null,
       preferredTime: s(formData, "preferredTime"),
+      preferredReturnTime: tripType === "roundtrip" ? s(formData, "preferredReturnTime") : "",
       multiCity:
         tripType === "multicity"
           ? {
@@ -173,6 +218,8 @@ export async function submitTravelBooking(
       activityScheduleFileName: s(formData, "activityScheduleFileName"),
       activitySchedule,
     };
+
+    await ensureAirlineLookup(formDataObj.airline);
 
     const approvalChain = [
       {
@@ -361,6 +408,7 @@ export async function submitTravelBooking(
         "destination",
         "departureDate",
         "returnDate",
+        "preferredReturnTime",
         "immediateSuperiorName",
         "departmentHeadName",
         "travelPurpose",
@@ -530,6 +578,7 @@ export async function updateTravelBooking(
       departureDate: d(formData, "departureDate"),
       returnDate: tripType === "roundtrip" ? d(formData, "returnDate") : null,
       preferredTime: s(formData, "preferredTime"),
+      preferredReturnTime: tripType === "roundtrip" ? s(formData, "preferredReturnTime") : "",
       multiCity:
         tripType === "multicity"
           ? {
@@ -560,6 +609,8 @@ export async function updateTravelBooking(
       activityScheduleFileName: s(formData, "activityScheduleFileName"),
       activitySchedule,
     };
+
+    await ensureAirlineLookup(formDataObj.airline);
 
     const changedFields = diffFields(
       travelBookingFieldMap((doc as any).formData ?? {}),
@@ -694,6 +745,7 @@ export async function updateTravelBooking(
         "destination",
         "departureDate",
         "returnDate",
+        "preferredReturnTime",
         "immediateSuperiorName",
         "departmentHeadName",
         "travelPurpose",
