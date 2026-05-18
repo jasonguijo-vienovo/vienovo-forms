@@ -5,6 +5,7 @@ import { Navbar } from "@/components/navbar";
 import { getCatalogForms, getFormLaunchHref, isExternalFormLaunch } from "@/lib/form-definitions";
 import type { FormRuntimeState } from "@/lib/forms/runtime-state";
 import { safeAuth } from "@/lib/safe-auth";
+import { getApprovalAccess } from "@/lib/approval-access";
 import { DashboardPanels } from "./DashboardPanels";
 import { fetchMyRequests, fetchPendingApprovals } from "./actions";
 
@@ -13,6 +14,7 @@ export default async function DashboardPage() {
   if (!session?.user?.email) redirect("/sign-in");
   const name = session?.user?.name ?? session?.user?.email ?? "there";
   const userEmail = session.user.email.toLowerCase();
+  const { canAccessApprovals } = await getApprovalAccess(userEmail);
   const forms = await getCatalogForms({
     allowFallback: true,
     includeUnavailable: true,
@@ -49,16 +51,22 @@ export default async function DashboardPage() {
                   <Plus className="h-4 w-4" />
                   Start a request
                 </Link>
-                <Link href="#pending-approvals" className="btn-secondary min-w-[180px] justify-center border-white/20 bg-white/10 text-white hover:bg-white/15">
-                  Review approvals
-                </Link>
+                {canAccessApprovals ? (
+                  <Link href="#pending-approvals" className="btn-secondary min-w-[180px] justify-center border-white/20 bg-white/10 text-white hover:bg-white/15">
+                    Review approvals
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>
-          <div className="grid gap-4 px-5 py-5 sm:grid-cols-3 sm:px-6">
+          <div className={`grid gap-4 px-5 py-5 sm:px-6 ${
+            canAccessApprovals ? "sm:grid-cols-3" : "sm:grid-cols-2"
+          }`}>
             <SummaryStat label="Forms ready now" value={readyFormCount} hint="Catalog entries you can open today" />
             <SummaryStat label="My requests" value={initialRequests.total} hint="Submitted items across all statuses" />
-            <SummaryStat label="Needs my attention" value={initialPending.total} hint="Approvals and tracked items worth checking" />
+            {canAccessApprovals ? (
+              <SummaryStat label="Needs my attention" value={initialPending.total} hint="Approvals and tracked items worth checking" />
+            ) : null}
           </div>
         </section>
 
@@ -88,6 +96,7 @@ export default async function DashboardPage() {
 
         <DashboardPanels
           userEmail={userEmail}
+          showApprovals={canAccessApprovals}
           initialRequests={initialRequests.items}
           initialRequestTotal={initialRequests.total}
           initialPending={initialPending.items}
