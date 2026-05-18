@@ -166,11 +166,12 @@ export async function fetchPendingApprovals(
       },
     ];
   }
+  const largePageSize = 50;
   const [items, total] = await Promise.all([
     RequestModel.find(filter)
       .sort({ status: 1, createdAt: -1, _id: -1 })
-      .skip((page - 1) * PAGE_SIZE)
-      .limit(PAGE_SIZE)
+      .skip((page - 1) * largePageSize)
+      .limit(largePageSize)
       .select(SELECT_FIELDS)
       .lean(),
     RequestModel.countDocuments(filter),
@@ -179,7 +180,7 @@ export async function fetchPendingApprovals(
     items: items.map((d: Record<string, unknown>) => formatRow(d)),
     total,
     page,
-    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    totalPages: Math.max(1, Math.ceil(total / largePageSize)),
   };
 }
 

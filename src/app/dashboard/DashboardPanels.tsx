@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { Clock3, Search } from "lucide-react";
 import type { RequestRowData } from "./actions";
@@ -64,10 +64,11 @@ function Panel({
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ message, children }: { message: string; children?: React.ReactNode }) {
   return (
     <div className="rounded-[0.875rem] border border-dashed border-surface-border bg-slate-50 px-5 py-10 text-center text-sm text-surface-muted">
       {message}
+      {children}
     </div>
   );
 }
@@ -157,7 +158,6 @@ type Props = {
   initialRequests: RequestRowData[];
   initialRequestTotal: number;
   initialPending: RequestRowData[];
-  initialPendingTotal: number;
 };
 
 export function DashboardPanels({
@@ -165,86 +165,52 @@ export function DashboardPanels({
   initialRequests,
   initialRequestTotal,
   initialPending,
-  initialPendingTotal,
 }: Props) {
   const [requests, setRequests] = useState(initialRequests);
   const [requestTotal, setRequestTotal] = useState(initialRequestTotal);
   const [requestPage, setRequestPage] = useState(1);
   const [requestFilter, setRequestFilter] = useState("all");
-  const [requestQuery, setRequestQuery] = useState("");
   const [requestSearch, setRequestSearch] = useState("");
   const [requestLoading, setRequestLoading] = useState(false);
 
   const [pending, setPending] = useState(initialPending);
-  const [pendingTotal, setPendingTotal] = useState(initialPendingTotal);
-  const [pendingPage, setPendingPage] = useState(1);
-  const [pendingQuery, setPendingQuery] = useState("");
-  const [pendingSearch, setPendingSearch] = useState("");
   const [pendingLoading, setPendingLoading] = useState(false);
 
-  const requestAbort = useRef<AbortController | null>(null);
-  const pendingAbort = useRef<AbortController | null>(null);
-
   const requestTotalPages = Math.max(1, Math.ceil(requestTotal / 5));
-  const pendingTotalPages = Math.max(1, Math.ceil(pendingTotal / 5));
 
   const loadRequests = useCallback(
     async (status: string, query: string, page: number) => {
-      requestAbort.current?.abort();
-      const controller = new AbortController();
-      requestAbort.current = controller;
       setRequestLoading(true);
-
       const params = new URLSearchParams({ status, query, page: String(page) });
       try {
-        const res = await fetch(
-          `/dashboard/api/requests?${params}`,
-          { signal: controller.signal },
-        );
+        const res = await fetch(`/dashboard/api/requests?${params}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (!controller.signal.aborted) {
-          setRequests(data.items);
-          setRequestTotal(data.total);
-          setRequestPage(data.page);
-        }
+        setRequests(data.items);
+        setRequestTotal(data.total);
+        setRequestPage(data.page);
       } catch {
-        // ignore aborted requests
+        // ignore
       } finally {
-        if (!controller.signal.aborted) setRequestLoading(false);
+        setRequestLoading(false);
       }
     },
     [],
   );
 
-  const loadPending = useCallback(
-    async (query: string, page: number) => {
-      pendingAbort.current?.abort();
-      const controller = new AbortController();
-      pendingAbort.current = controller;
-      setPendingLoading(true);
-
-      const params = new URLSearchParams({ query, page: String(page) });
-      try {
-        const res = await fetch(
-          `/dashboard/api/pending?${params}`,
-          { signal: controller.signal },
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!controller.signal.aborted) {
-          setPending(data.items);
-          setPendingTotal(data.total);
-          setPendingPage(data.page);
-        }
-      } catch {
-        // ignore aborted requests
-      } finally {
-        if (!controller.signal.aborted) setPendingLoading(false);
-      }
-    },
-    [],
-  );
+  const loadPending = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const res = await fetch("/dashboard/api/pending?page=1");
+      if (!res.ok) return;
+      const data = await res.json();
+      setPending(data.items);
+    } catch {
+      // ignore
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
 
   function handleRequestSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -256,24 +222,17 @@ export function DashboardPanels({
   function handleRequestFilter(status: string) {
     setRequestFilter(status);
     setRequestPage(1);
-    loadRequests(status, requestQuery, 1);
-  }
-
-  function handlePendingSearch(e: React.FormEvent) {
-    e.preventDefault();
-    setPendingPage(1);
-    loadPending(pendingSearch, 1);
+    loadRequests(status, requestSearch, 1);
   }
 
   const STATUSES = ["all", "pending", "approved", "rejected", "returned", "submitted"];
 
-  const sortedPending = [...pending].sort((a, b) => {
-    const aIsAction = a.currentActorEmail?.toLowerCase() === userEmail.toLowerCase();
-    const bIsAction = b.currentActorEmail?.toLowerCase() === userEmail.toLowerCase();
-    if (aIsAction && !bIsAction) return -1;
-    if (!aIsAction && bIsAction) return 1;
-    return 0;
-  });
+  const needsApproval = pending.filter(
+    (r) => r.currentActorEmail?.toLowerCase() === userEmail.toLowerCase(),
+  );
+  const trackedSteps = pending.filter(
+    (r) => r.currentActorEmail?.toLowerCase() !== userEmail.toLowerCase(),
+  );
 
   return (
     <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -342,7 +301,7 @@ export function DashboardPanels({
               onClick={() => {
                 const prev = Math.max(1, requestPage - 1);
                 setRequestPage(prev);
-                loadRequests(requestFilter, requestQuery, prev);
+                loadRequests(requestFilter, requestSearch, prev);
               }}
               className={`btn-secondary ${
                 requestPage <= 1 ? "pointer-events-none opacity-50" : ""
@@ -356,7 +315,7 @@ export function DashboardPanels({
               onClick={() => {
                 const next = Math.min(requestTotalPages, requestPage + 1);
                 setRequestPage(next);
-                loadRequests(requestFilter, requestQuery, next);
+                loadRequests(requestFilter, requestSearch, next);
               }}
               className={`btn-secondary ${
                 requestPage >= requestTotalPages ? "pointer-events-none opacity-50" : ""
@@ -368,39 +327,19 @@ export function DashboardPanels({
         </div>
       </Panel>
 
-      <div id="pending-approvals">
+      <div id="pending-approvals" className="flex flex-col gap-4">
         <Panel
-          eyebrow="Next actions"
-          title="Approvals and tracked steps"
-          description="See approvals assigned to you and requests whose approval progress you may need to follow up on."
+          eyebrow="Needs your approval"
+          title="Approve or reject"
+          description="Requests waiting for your decision."
         >
-          <div className="mb-4 flex flex-col gap-2">
-            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handlePendingSearch}>
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-surface-muted" />
-                <input
-                  type="text"
-                  value={pendingSearch}
-                  onChange={(e) => setPendingSearch(e.target.value)}
-                  placeholder="Search pending approvals"
-                  className="field-input w-full pl-8 sm:max-w-xs"
-                />
-              </div>
-              <button type="submit" className="btn-secondary">
-                Search
-              </button>
-            </form>
-            <span className="text-xs text-surface-muted">
-              Total pending: {pendingTotal}
-            </span>
-          </div>
           {pendingLoading ? (
             <div className="flex items-center justify-center py-10">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
             </div>
-          ) : sortedPending.length > 0 ? (
+          ) : needsApproval.length > 0 ? (
             <div className="divide-y divide-surface-border">
-              {sortedPending.map((request) => (
+              {needsApproval.map((request) => (
                 <RequestRow
                   key={request._id}
                   request={request}
@@ -409,43 +348,36 @@ export function DashboardPanels({
               ))}
             </div>
           ) : (
-            <EmptyState message="No pending approvals." />
+            <EmptyState message="No requests waiting for your approval.">
+              <Link href="/approvals" className="mt-2 inline-block text-sm font-semibold text-brand-700 hover:underline">
+                View all in approvals
+              </Link>
+            </EmptyState>
           )}
-          <div className="mt-4 flex items-center justify-between gap-2">
-            <span className="text-xs text-surface-muted">
-              Page {pendingPage} of {pendingTotalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={pendingPage <= 1}
-                onClick={() => {
-                  const prev = Math.max(1, pendingPage - 1);
-                  setPendingPage(prev);
-                  loadPending(pendingQuery, prev);
-                }}
-                className={`btn-secondary ${
-                  pendingPage <= 1 ? "pointer-events-none opacity-50" : ""
-                }`}
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                disabled={pendingPage >= pendingTotalPages}
-                onClick={() => {
-                  const next = Math.min(pendingTotalPages, pendingPage + 1);
-                  setPendingPage(next);
-                  loadPending(pendingQuery, next);
-                }}
-                className={`btn-secondary ${
-                  pendingPage >= pendingTotalPages ? "pointer-events-none opacity-50" : ""
-                }`}
-              >
-                Next
-              </button>
+        </Panel>
+
+        <Panel
+          eyebrow="Tracked steps"
+          title="Requests you're monitoring"
+          description="Your own requests that are going through approval."
+        >
+          {pendingLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
             </div>
-          </div>
+          ) : trackedSteps.length > 0 ? (
+            <div className="divide-y divide-surface-border">
+              {trackedSteps.map((request) => (
+                <RequestRow
+                  key={request._id}
+                  request={request}
+                  userEmail={userEmail}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="No tracked requests." />
+          )}
         </Panel>
       </div>
     </section>

@@ -91,7 +91,6 @@ export default async function DashboardPage() {
           initialRequests={initialRequests.items}
           initialRequestTotal={initialRequests.total}
           initialPending={initialPending.items}
-          initialPendingTotal={initialPending.total}
         />
       </main>
     </>
