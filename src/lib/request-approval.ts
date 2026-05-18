@@ -222,6 +222,8 @@ export async function applyApprovalDecision({
   const attachmentDetails = buildStoredRequestAttachmentDetails(String(formSlug || ""), (doc as any).formData ?? {});
   const currentRoleLabel = humanizeWorkflowRole(current.role) || current.role || "Approver";
   const nextRoleLabel = humanizeWorkflowRole(nextApprover?.role) || nextApprover?.role || "";
+  const nextApproverEmail = normalizeEmail(nextApprover?.approverEmail);
+  const shouldNotifyNextApprover = Boolean(nextApproverEmail) && nextApproverEmail !== currentApproverEmail;
   const actedByName =
     activeDelegation?.delegateName ||
     normalizedName ||
@@ -241,30 +243,32 @@ export async function applyApprovalDecision({
           referenceNo: normalizedReference,
           role: nextApprover.role || "",
         });
-        await sendFlowNotification({
-          formSlug,
-          formName,
-          event: "next-approver",
-          to: normalizeEmail(nextApprover.approverEmail),
-          primaryRecipientRole: nextApprover.role || "",
-          subject: nextStepCopy.subject,
-          summary: nextStepCopy.summary,
-          details: [
-            { label: "Reference No.", value: normalizedReference },
-            { label: "Requester", value: doc.submittedBy?.name || doc.submittedBy?.email || "" },
-            { label: "Current role", value: humanizeWorkflowRole(nextApprover.role) || nextApprover.role || "" },
-            { label: "Status", value: nextStepCopy.statusLabel },
-            ...summaryDetails,
-            ...attachmentDetails,
-          ].filter((detail) => detail.value),
-          text: nextStepCopy.text,
-          ctaUrl: approvalPageUrl || requestUrl,
-          ctaLabel: nextStepCopy.ctaLabel,
-          approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
-          rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
-          commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
-          viewAllUrl: approvalsUrl || requestUrl,
-        });
+        if (shouldNotifyNextApprover) {
+          await sendFlowNotification({
+            formSlug,
+            formName,
+            event: "next-approver",
+            to: nextApproverEmail,
+            primaryRecipientRole: nextApprover.role || "",
+            subject: nextStepCopy.subject,
+            summary: nextStepCopy.summary,
+            details: [
+              { label: "Reference No.", value: normalizedReference },
+              { label: "Requester", value: doc.submittedBy?.name || doc.submittedBy?.email || "" },
+              { label: "Current role", value: humanizeWorkflowRole(nextApprover.role) || nextApprover.role || "" },
+              { label: "Status", value: nextStepCopy.statusLabel },
+              ...summaryDetails,
+              ...attachmentDetails,
+            ].filter((detail) => detail.value),
+            text: nextStepCopy.text,
+            ctaUrl: approvalPageUrl || requestUrl,
+            ctaLabel: nextStepCopy.ctaLabel,
+            approveUrl: approvalPageUrl ? `${approvalPageUrl}#approve` : requestUrl,
+            rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
+            commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
+            viewAllUrl: approvalsUrl || requestUrl,
+          });
+        }
         if (submittedByEmail) {
           const requesterSummary = nextRoleLabel
             ? `Your ${formName} request was approved by ${currentRoleLabel.toLowerCase()} and is now waiting for ${nextRoleLabel.toLowerCase()}.`

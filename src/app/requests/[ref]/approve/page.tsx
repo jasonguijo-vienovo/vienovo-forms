@@ -5,6 +5,7 @@ import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { findActiveDelegation } from "@/lib/approval-delegations";
 import { connectMongo } from "@/lib/db/mongo";
+import { buildStoredRequestDetailRows } from "@/lib/request-fields";
 import { safeAuth } from "@/lib/safe-auth";
 import { humanizeWorkflowRole } from "@/lib/workflow-routing";
 import { RequestModel } from "@/models/Request";
@@ -47,6 +48,7 @@ export default async function ApproveRequestPage({
 
   const currentRoleLabel = humanizeWorkflowRole(current.role) || current.role;
   const submittedBy = doc.submittedBy?.name || doc.submittedBy?.email || "Requester";
+  const detailRows = buildStoredRequestDetailRows(doc.formType, (doc as any).formData ?? {});
 
   const approveAction = approveCurrentStep.bind(null, decodedRef);
   const rejectAction = rejectCurrentStep.bind(null, decodedRef);
@@ -107,6 +109,29 @@ export default async function ApproveRequestPage({
                   Add a note when it helps the requester or the next approver understand your decision. Use return when the request can continue after corrections, and reject when it should stop entirely.
                 </p>
               </div>
+
+              {detailRows.length > 0 ? (
+                <section className="rounded-[0.875rem] border border-surface-border bg-white p-5">
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-surface-text">Request details</p>
+                    <p className="mt-1 text-sm text-surface-muted">
+                      Review the saved request details before taking action.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {detailRows.map((row) => (
+                      <div key={row.key} className="flex items-start justify-between gap-4">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          {row.label}
+                        </span>
+                        <span className="max-w-[60%] break-words text-right text-sm text-gray-700">
+                          {row.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
               <div className="grid gap-4 lg:grid-cols-3">
                 <ActionCard

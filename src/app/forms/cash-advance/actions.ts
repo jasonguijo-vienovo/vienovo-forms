@@ -314,10 +314,7 @@ export async function submitCashAdvance(
         text:
           `A Cash Advance request has entered the workflow.\n\n` +
           `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
-          `Reference: ${referenceNo}\n` +
-          (requestUrl ? `Link: ${requestUrl}\n` : ""),
-        ctaUrl: requestUrl,
-        ctaLabel: "Open request",
+          `Reference: ${referenceNo}\n`,
       });
     } catch (e) {
       console.error("Email notification failed:", e);
@@ -615,10 +612,7 @@ export async function updateCashAdvance(
         text:
           `A Cash Advance request was updated and restarted from level 1.\n\n` +
           `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
-          `Reference: ${referenceNo}\n` +
-          (requestUrl ? `Link: ${requestUrl}\n` : ""),
-        ctaUrl: requestUrl,
-        ctaLabel: "Open request",
+          `Reference: ${referenceNo}\n`,
       });
     } catch (e) {
       console.error("Email notification failed:", e);
