@@ -12,9 +12,11 @@ import {
   deleteLookup,
   deleteLookupCategory,
   scanRolesLookups,
+  syncLookupCategoryFromUserInfo,
   syncLookupCategoryFromApprovers,
   toggleLookup,
   updateLookup,
+  updateLookupCategoryUserInfoBinding,
 } from "./actions";
 
 export type LookupAdminItem = {
@@ -29,6 +31,11 @@ export type LookupAdminGroup = {
   title: string;
   description: string;
   categories: string[];
+};
+
+type UserInfoFieldOption = {
+  value: string;
+  label: string;
 };
 
 function formatRoleLabel(role: string) {
@@ -128,8 +135,18 @@ export default function LookupsClient(props: {
   itemsByCategory: Record<string, LookupAdminItem[]>;
   approverRoles: string[];
   approverSyncByCategory: Record<string, string>;
+  userInfoBindingByCategory: Record<string, string>;
+  userInfoFieldOptions: UserInfoFieldOption[];
 }) {
-  const { categoryLabels, groups, itemsByCategory, approverRoles, approverSyncByCategory } = props;
+  const {
+    categoryLabels,
+    groups,
+    itemsByCategory,
+    approverRoles,
+    approverSyncByCategory,
+    userInfoBindingByCategory,
+    userInfoFieldOptions,
+  } = props;
   const [selectedGroupKey, setSelectedGroupKey] = useState(groups[0]?.key ?? "");
   const [categoryQuery, setCategoryQuery] = useState("");
   const [openAddPanelByCategory, setOpenAddPanelByCategory] = useState<Record<string, "bulk" | "single">>({});
@@ -178,6 +195,7 @@ export default function LookupsClient(props: {
       <AdminHelpPanel title="What this page does">
         Choose a form on the left, then manage the dropdown lists used by that form. Changing values
         here affects future form filling only; it does not rewrite old requests.
+        You can also connect a dropdown to user info so values can be synced from the employee directory.
       </AdminHelpPanel>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -334,6 +352,63 @@ export default function LookupsClient(props: {
                             idleLabel="Delete dropdown group"
                             pendingLabel="Deleting group..."
                             className="border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                          />
+                        </form>
+                      </div>
+                    </div>
+                    <div className="mb-4 rounded border border-surface-border bg-slate-50 p-3">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-surface-text">User info connection</p>
+                          <p className="text-xs text-surface-muted">
+                            Connect this dropdown to a field from the employee directory, then sync those values into the list.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {userInfoBindingByCategory[cat] ? (
+                            <AdminStatusPill tone="brand">
+                              Connected: {userInfoFieldOptions.find((item) => item.value === userInfoBindingByCategory[cat])?.label ?? userInfoBindingByCategory[cat]}
+                            </AdminStatusPill>
+                          ) : (
+                            <AdminStatusPill tone="neutral">Not connected</AdminStatusPill>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                        <form action={updateLookupCategoryUserInfoBinding} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                          <input type="hidden" name="category" value={cat} />
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                              User info field
+                            </label>
+                            <select
+                              name="userInfoField"
+                              defaultValue={userInfoBindingByCategory[cat] ?? ""}
+                              className="field-input"
+                            >
+                              <option value="">No connection</option>
+                              {userInfoFieldOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Save connection"
+                            pendingLabel="Saving..."
+                            className="btn-secondary"
+                          />
+                        </form>
+                        <form action={syncLookupCategoryFromUserInfo}>
+                          <input type="hidden" name="category" value={cat} />
+                          <PendingSubmitButton
+                            type="submit"
+                            idleLabel="Sync from user info"
+                            pendingLabel="Syncing..."
+                            className="btn-primary"
+                            disabled={!userInfoBindingByCategory[cat]}
                           />
                         </form>
                       </div>

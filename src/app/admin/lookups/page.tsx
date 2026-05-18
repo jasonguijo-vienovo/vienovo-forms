@@ -8,6 +8,13 @@ import LookupsClient, { type LookupAdminGroup } from "./LookupsClient";
 
 const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
 const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
+const LOOKUP_USER_INFO_BINDINGS_KEY = "lookup-user-info-bindings";
+const USER_INFO_FIELD_OPTIONS = [
+  { value: "department", label: "Department" },
+  { value: "jobTitle", label: "Job Title" },
+  { value: "employeeId", label: "Employee ID" },
+  { value: "fullName", label: "Full Name" },
+] as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
   department: "Departments",
@@ -56,17 +63,26 @@ const FORM_GROUPS: Array<{
 
 export default async function LookupsPage() {
   await connectMongo();
-  const [all, imports, dynamicApproverRoles, storedRoleDoc, approverSyncDoc] = await Promise.all([
+  const [all, imports, dynamicApproverRoles, storedRoleDoc, approverSyncDoc, userInfoBindingDoc] = await Promise.all([
     Lookup.find({}).sort({ category: 1, sortOrder: 1 }).lean(),
     FormImport.find({}).select({ slug: 1, name: 1, htmlSource: 1 }).lean(),
     Approver.distinct("roles"),
     SystemSetting.findOne({ key: APPROVER_CUSTOM_ROLES_KEY }).lean(),
     SystemSetting.findOne({ key: LOOKUP_APPROVER_SYNC_KEY }).lean(),
+    SystemSetting.findOne({ key: LOOKUP_USER_INFO_BINDINGS_KEY }).lean(),
   ]);
   const approverSyncByCategory =
     approverSyncDoc?.value && typeof approverSyncDoc.value === "object"
       ? Object.fromEntries(
           Object.entries(approverSyncDoc.value as Record<string, unknown>)
+            .map(([category, value]) => [String(category ?? "").trim(), String(value ?? "").trim()])
+            .filter(([category, value]) => Boolean(category) && Boolean(value)),
+        )
+      : {};
+  const userInfoBindingByCategory =
+    userInfoBindingDoc?.value && typeof userInfoBindingDoc.value === "object"
+      ? Object.fromEntries(
+          Object.entries(userInfoBindingDoc.value as Record<string, unknown>)
             .map(([category, value]) => [String(category ?? "").trim(), String(value ?? "").trim()])
             .filter(([category, value]) => Boolean(category) && Boolean(value)),
         )
@@ -210,6 +226,8 @@ export default async function LookupsPage() {
       itemsByCategory={itemsByCategory}
       approverRoles={knownApproverRoles}
       approverSyncByCategory={approverSyncByCategory}
+      userInfoBindingByCategory={userInfoBindingByCategory}
+      userInfoFieldOptions={USER_INFO_FIELD_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
     />
   );
 }

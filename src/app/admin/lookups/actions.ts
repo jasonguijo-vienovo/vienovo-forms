@@ -10,6 +10,15 @@ import { SystemSetting } from "@/models/SystemSetting";
 
 const APPROVER_CUSTOM_ROLES_KEY = "approver-custom-roles";
 const LOOKUP_APPROVER_SYNC_KEY = "lookup-approver-sync";
+const LOOKUP_USER_INFO_BINDINGS_KEY = "lookup-user-info-bindings";
+
+const USER_INFO_BINDABLE_FIELDS = [
+  { key: "department", label: "Department" },
+  { key: "jobTitle", label: "Job Title" },
+  { key: "employeeId", label: "Employee ID" },
+  { key: "fullName", label: "Full Name" },
+] as const;
+type UserInfoBindableField = (typeof USER_INFO_BINDABLE_FIELDS)[number]["key"];
 
 function parseCategory(value: FormDataEntryValue | null): LookupCategory {
   const v = String(value ?? "");
@@ -23,6 +32,19 @@ function normalizeKey(input: string) {
 
 function normalizeRoleTag(input: string) {
   return String(input ?? "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function parseUserInfoBindings(value: unknown) {
+  if (!value || typeof value !== "object") return {} as Record<string, UserInfoBindableField>;
+  const allowed = new Set<string>(USER_INFO_BINDABLE_FIELDS.map((item) => item.key));
+  const out: Record<string, UserInfoBindableField> = {};
+  for (const [category, field] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedCategory = String(category ?? "").trim();
+    const normalizedField = String(field ?? "").trim();
+    if (!normalizedCategory || !allowed.has(normalizedField)) continue;
+    out[normalizedCategory] = normalizedField as UserInfoBindableField;
+  }
+  return out;
 }
 
 async function getKnownApproverRoles() {
@@ -99,6 +121,11 @@ async function clearLookupCategoriesSynced(categories: string[]) {
   );
 }
 
+async function getLookupUserInfoBindings() {
+  const doc = await SystemSetting.findOne({ key: LOOKUP_USER_INFO_BINDINGS_KEY }).lean();
+  return parseUserInfoBindings(doc?.value);
+}
+
 async function resequenceCategoryAlphabetically(category: string) {
   const docs = await Lookup.find({ category })
     .select({ _id: 1, sortOrder: 1 })
@@ -136,6 +163,88 @@ async function resolveImportedCategoryAlias(category: LookupCategory) {
   });
 
   return exact || category;
+}
+
+async function syncLookupCategoryFromUserInfoField(input: {
+  category: string;
+  field: UserInfoBindableField;
+}) {
+  const { Employee } = await import("@/models/Employee");
+  const rows = await Employee.find({
+    isActive: true,
+    [input.field]: { $exists: true, $nin: [null, ""] },
+  })
+    .select({ [input.field]: 1 })
+    .lean();
+
+  const uniqueIncoming: string[] = [];
+  const seenIncoming = new Set<string>();
+  for (const row of rows) {
+    const value = String((row as Record<string, unknown>)[input.field] ?? "").trim();
+    const key = normalizeKey(value);
+    if (!key || seenIncoming.has(key)) continue;
+    seenIncoming.add(key);
+    uniqueIncoming.push(value);
+  }
+
+  if (uniqueIncoming.length === 0) {
+    return { candidateCount: 0, addedCount: 0, updatedCount: 0, changed: false };
+  }
+
+  const existing = await Lookup.find({ category: input.category }).sort({ sortOrder: 1, value: 1 }).lean();
+  const existingByKey = new Map(existing.map((item) => [normalizeKey(String(item.value ?? "")), item]));
+  const toInsert: string[] = [];
+  const ops: Array<Record<string, unknown>> = [];
+  let updatedCount = 0;
+
+  for (const value of uniqueIncoming) {
+    const key = normalizeKey(value);
+    const existingItem = existingByKey.get(key);
+    if (!existingItem) {
+      toInsert.push(value);
+      continue;
+    }
+
+    if (!existingItem.isActive || (existingItem.label ?? "") !== "") {
+      ops.push({
+        updateOne: {
+          filter: { _id: existingItem._id },
+          update: { $set: { label: "", isActive: true } },
+        },
+      });
+      updatedCount += 1;
+    }
+  }
+
+  if (toInsert.length > 0) {
+    const last = existing[existing.length - 1];
+    const startOrder = (last?.sortOrder ?? -1) + 1;
+    for (const [idx, value] of toInsert.entries()) {
+      ops.push({
+        insertOne: {
+          document: {
+            category: input.category,
+            value,
+            label: "",
+            sortOrder: startOrder + idx,
+            isActive: true,
+          },
+        },
+      });
+    }
+  }
+
+  if (ops.length > 0) {
+    await Lookup.bulkWrite(ops as Parameters<typeof Lookup.bulkWrite>[0], { ordered: false });
+    await resequenceCategoryAlphabetically(String(input.category));
+  }
+
+  return {
+    candidateCount: uniqueIncoming.length,
+    addedCount: toInsert.length,
+    updatedCount,
+    changed: ops.length > 0,
+  };
 }
 
 type ApproverSyncRow = {
@@ -447,6 +556,83 @@ export async function syncLookupCategoryFromApprovers(formData: FormData) {
     await setFlashToast({
       tone: "error",
       message: error instanceof Error ? error.message : "Failed to sync dropdown category from approvers.",
+    });
+    revalidatePath("/admin/lookups");
+  }
+}
+
+export async function updateLookupCategoryUserInfoBinding(formData: FormData) {
+  try {
+    await requireAdmin();
+    await connectMongo();
+    const rawCategory = parseCategory(formData.get("category"));
+    const category = await resolveImportedCategoryAlias(rawCategory);
+    const selectedField = String(formData.get("userInfoField") ?? "").trim();
+    const allowed = new Set<string>(USER_INFO_BINDABLE_FIELDS.map((item) => item.key));
+    if (selectedField && !allowed.has(selectedField)) {
+      throw new Error("Choose a valid user info field.");
+    }
+
+    const current = await getLookupUserInfoBindings();
+    if (!selectedField) {
+      delete current[String(category)];
+    } else {
+      current[String(category)] = selectedField as UserInfoBindableField;
+    }
+
+    await SystemSetting.updateOne(
+      { key: LOOKUP_USER_INFO_BINDINGS_KEY },
+      { $set: { key: LOOKUP_USER_INFO_BINDINGS_KEY, value: current } },
+      { upsert: true },
+    );
+
+    await setFlashToast({
+      tone: "success",
+      message: selectedField
+        ? "Dropdown connected to user info."
+        : "User info connection removed from dropdown.",
+    });
+    revalidatePath("/admin/lookups");
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message: error instanceof Error ? error.message : "Failed to update user info connection.",
+    });
+    revalidatePath("/admin/lookups");
+  }
+}
+
+export async function syncLookupCategoryFromUserInfo(formData: FormData) {
+  try {
+    await requireAdmin();
+    await connectMongo();
+    const rawCategory = parseCategory(formData.get("category"));
+    const category = await resolveImportedCategoryAlias(rawCategory);
+    const bindings = await getLookupUserInfoBindings();
+    const field = bindings[String(category)];
+    if (!field) {
+      throw new Error("Connect this dropdown to a user info field first.");
+    }
+
+    const result = await syncLookupCategoryFromUserInfoField({
+      category: String(category),
+      field,
+    });
+
+    await setFlashToast({
+      tone: "success",
+      message:
+        result.candidateCount === 0
+          ? "No user info values were found for this field."
+          : result.changed
+            ? `User info sync complete: ${result.addedCount} added, ${result.updatedCount} refreshed.`
+            : "No user info dropdown changes were needed.",
+    });
+    revalidatePath("/admin/lookups");
+  } catch (error) {
+    await setFlashToast({
+      tone: "error",
+      message: error instanceof Error ? error.message : "Failed to sync dropdown from user info.",
     });
     revalidatePath("/admin/lookups");
   }
