@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckSquare, ChevronLeft, ChevronRight, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp } from "lucide-react";
+import { AlertTriangle, BellRing, CheckSquare, ChevronLeft, ChevronRight, Clock3, Filter, MessageSquare, RotateCcw, Square, ThumbsDown, ThumbsUp } from "lucide-react";
 import { PendingFormState } from "@/components/pending-form-state";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import {
@@ -195,6 +195,39 @@ function openFilterPanel() {
           </p>
         </div>
       </div>
+
+      {(activeTab === "all" || activeTab === "pending") ? (
+        <div className={`rounded-lg border px-4 py-3 ${
+          filteredPending.length > 0
+            ? "border-amber-200 bg-amber-50/70"
+            : "border-surface-border bg-white"
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-full ${
+              filteredPending.length > 0
+                ? "bg-amber-100 text-amber-700"
+                : "bg-slate-100 text-slate-600"
+            }`}>
+              <BellRing className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-surface-muted">
+                Needs action notification
+              </p>
+              <p className="mt-1 text-sm font-semibold text-surface-text">
+                {filteredPending.length > 0
+                  ? `${filteredPending.length} request(s) currently waiting for your decision.`
+                  : "No requests are currently waiting for your decision."}
+              </p>
+              {(overduePending.length > 0 || dueSoonPending.length > 0) ? (
+                <p className="mt-1 text-xs text-surface-muted">
+                  Overdue: {overduePending.length} - Due soon: {dueSoonPending.length}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Waiting for me" value={data.metrics.pending} tone="warn" />
