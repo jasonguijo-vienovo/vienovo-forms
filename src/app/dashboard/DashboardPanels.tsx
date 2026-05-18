@@ -30,19 +30,7 @@ function requestFormLabel(request: RequestRowData) {
 function formatDatePH(value: string) {
   if (!value) return "";
   const date = new Date(value);
-  const now = new Date();
-  const phOffset = 8 * 60;
-  const phNow = new Date(now.getTime() + (now.getTimezoneOffset() + phOffset) * 60000);
-  const phDate = new Date(date.getTime() + (date.getTimezoneOffset() + phOffset) * 60000);
-  const diffMs = phNow.getTime() - phDate.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const relative =
-    diffHours < 1
-      ? "just now"
-      : diffHours < 24
-        ? `${diffHours}h ago`
-        : `${Math.floor(diffHours / 24)}d ago`;
-  const formatted = phDate.toLocaleString("en-PH", {
+  return date.toLocaleString("en-PH", {
     timeZone: "Asia/Manila",
     month: "short",
     day: "numeric",
@@ -51,7 +39,6 @@ function formatDatePH(value: string) {
     minute: "2-digit",
     hour12: true,
   });
-  return `${relative} • ${formatted}`;
 }
 
 function Panel({
