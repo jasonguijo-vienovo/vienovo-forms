@@ -275,6 +275,13 @@ export function DashboardPanels({
     return 0;
   });
 
+  const needsApproval = sortedPending.filter(
+    (r) => r.currentActorEmail?.toLowerCase() === userEmail.toLowerCase(),
+  );
+  const trackedSteps = sortedPending.filter(
+    (r) => r.currentActorEmail?.toLowerCase() !== userEmail.toLowerCase(),
+  );
+
   return (
     <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Panel
@@ -368,39 +375,19 @@ export function DashboardPanels({
         </div>
       </Panel>
 
-      <div id="pending-approvals">
+      <div id="pending-approvals" className="flex flex-col gap-4">
         <Panel
-          eyebrow="Next actions"
-          title="Approvals and tracked steps"
-          description="See approvals assigned to you and requests whose approval progress you may need to follow up on."
+          eyebrow="Needs your approval"
+          title="Approve or reject"
+          description="Requests waiting for your decision."
         >
-          <div className="mb-4 flex flex-col gap-2">
-            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handlePendingSearch}>
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-surface-muted" />
-                <input
-                  type="text"
-                  value={pendingSearch}
-                  onChange={(e) => setPendingSearch(e.target.value)}
-                  placeholder="Search pending approvals"
-                  className="field-input w-full pl-8 sm:max-w-xs"
-                />
-              </div>
-              <button type="submit" className="btn-secondary">
-                Search
-              </button>
-            </form>
-            <span className="text-xs text-surface-muted">
-              Total pending: {pendingTotal}
-            </span>
-          </div>
           {pendingLoading ? (
             <div className="flex items-center justify-center py-10">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
             </div>
-          ) : sortedPending.length > 0 ? (
+          ) : needsApproval.length > 0 ? (
             <div className="divide-y divide-surface-border">
-              {sortedPending.map((request) => (
+              {needsApproval.map((request) => (
                 <RequestRow
                   key={request._id}
                   request={request}
@@ -409,7 +396,31 @@ export function DashboardPanels({
               ))}
             </div>
           ) : (
-            <EmptyState message="No pending approvals." />
+            <EmptyState message="No requests waiting for your approval." />
+          )}
+        </Panel>
+
+        <Panel
+          eyebrow="Tracked steps"
+          title="Requests you're monitoring"
+          description="Your own requests that are going through approval."
+        >
+          {pendingLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+            </div>
+          ) : trackedSteps.length > 0 ? (
+            <div className="divide-y divide-surface-border">
+              {trackedSteps.map((request) => (
+                <RequestRow
+                  key={request._id}
+                  request={request}
+                  userEmail={userEmail}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="No tracked requests." />
           )}
           <div className="mt-4 flex items-center justify-between gap-2">
             <span className="text-xs text-surface-muted">
