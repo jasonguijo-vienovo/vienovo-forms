@@ -6,6 +6,11 @@ export type FieldDiff = {
 };
 
 export type FieldMap = Record<string, string>;
+export type FieldDisplayRow = {
+  key: string;
+  label: string;
+  value: string;
+};
 export type NotificationDetailRow = {
   label: string;
   value: string;
@@ -55,8 +60,8 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   destination: "Destination",
   departureDate: "Departure date",
   returnDate: "Return date",
-  preferredTime: "Preferred time of departure",
-  preferredReturnTime: "Preferred time of return",
+  preferredTime: "Preferred Time of Departure",
+  preferredReturnTime: "Preferred Time of Return",
   mc1Time: "Multi-city trip 1 preferred time of departure",
   mc2Time: "Multi-city trip 2 preferred time of departure",
   airline: "Airline",
@@ -90,7 +95,7 @@ function isHttpUrl(input: string) {
   return /^https?:\/\//i.test(String(input ?? "").trim());
 }
 
-function humanizeFieldKey(key: string) {
+export function humanizeFieldKey(key: string) {
   const mapped = NOTIFICATION_LABELS[key];
   if (mapped) return mapped;
   return String(key || "")
@@ -100,25 +105,26 @@ function humanizeFieldKey(key: string) {
     .trim();
 }
 
-export function buildNotificationDetailsFromFieldMap(
+export function buildFieldDisplayRows(
   fieldMap: FieldMap,
   options?: {
     preferredKeys?: string[];
     omitKeys?: string[];
     maxRows?: number;
-  },
-): NotificationDetailRow[] {
+  }
+): FieldDisplayRow[] {
   const preferredKeys = options?.preferredKeys ?? [];
   const omitKeys = new Set(options?.omitKeys ?? []);
   const maxRows = Math.max(1, options?.maxRows ?? 12);
   const seen = new Set<string>();
-  const rows: NotificationDetailRow[] = [];
+  const rows: FieldDisplayRow[] = [];
 
   const pushRow = (key: string, value: string) => {
     const normalizedValue = String(value ?? "").trim();
     if (!normalizedValue || omitKeys.has(key) || seen.has(key)) return;
     seen.add(key);
     rows.push({
+      key,
       label: humanizeFieldKey(key),
       value: normalizedValue,
     });
@@ -134,6 +140,17 @@ export function buildNotificationDetailsFromFieldMap(
   }
 
   return rows.slice(0, maxRows);
+}
+
+export function buildNotificationDetailsFromFieldMap(
+  fieldMap: FieldMap,
+  options?: {
+    preferredKeys?: string[];
+    omitKeys?: string[];
+    maxRows?: number;
+  },
+): NotificationDetailRow[] {
+  return buildFieldDisplayRows(fieldMap, options).map(({ label, value }) => ({ label, value }));
 }
 
 export function buildAttachmentDetails(items: NotificationAttachmentInput[]): NotificationDetailRow[] {
@@ -314,6 +331,92 @@ export function buildStoredRequestSummaryDetails(formSlug: string, formData: any
   }
   if (formData?.values && formData?.fieldLabels) {
     return buildNotificationDetailsFromFieldMap(importedFieldMap(formData), { maxRows: 12 });
+  }
+  return [];
+}
+
+export function buildStoredRequestDetailRows(formSlug: string, formData: any): FieldDisplayRow[] {
+  if (formSlug === "cash-advance") {
+    return buildFieldDisplayRows(cashAdvanceFieldMap(formData), {
+      preferredKeys: [
+        "firstName",
+        "lastName",
+        "payablesTo",
+        "payeeName",
+        "amount",
+        "reason",
+        "forApprovalNote",
+        "approverName",
+        "supportingFileName",
+        "agreedToAuthorization",
+      ],
+      maxRows: 99,
+    });
+  }
+  if (formSlug === "reimbursement") {
+    return buildFieldDisplayRows(reimbursementFieldMap(formData), {
+      preferredKeys: [
+        "firstName",
+        "lastName",
+        "department",
+        "costCenter",
+        "location",
+        "dateFrom",
+        "dateTo",
+        "formType",
+        "cashAdvanceReferenceNo",
+        "totalExpenses",
+        "reason",
+        "immediateSuperiorName",
+        "departmentHeadName",
+        "supportingFileName",
+        "agreedToCertification",
+      ],
+      maxRows: 99,
+    });
+  }
+  if (formSlug === "travel-booking") {
+    return buildFieldDisplayRows(travelBookingFieldMap(formData), {
+      preferredKeys: [
+        "employeeId",
+        "fullName",
+        "department",
+        "birthday",
+        "contactNumber",
+        "landAir",
+        "tripType",
+        "origin",
+        "destination",
+        "departureDate",
+        "preferredTime",
+        "returnDate",
+        "preferredReturnTime",
+        "mc1Origin",
+        "mc1Destination",
+        "mc1Date",
+        "mc1Time",
+        "mc2Origin",
+        "mc2Destination",
+        "mc2Date",
+        "mc2Time",
+        "airline",
+        "travelPurpose",
+        "baggage",
+        "hotelAccommodation",
+        "hotelOther",
+        "servicePickup",
+        "activityScheduleFileName",
+        "activityDriveLink",
+        "immediateSuperiorName",
+        "immediateSuperiorEmail",
+        "departmentHeadName",
+        "departmentHeadEmail",
+      ],
+      maxRows: 99,
+    });
+  }
+  if (formData?.values && formData?.fieldLabels) {
+    return buildFieldDisplayRows(importedFieldMap(formData), { maxRows: 200 });
   }
   return [];
 }

@@ -4,6 +4,7 @@ import { Navbar } from "@/components/navbar";
 import { isAdminUser } from "@/lib/admin";
 import { connectMongo } from "@/lib/db/mongo";
 import {
+  buildStoredRequestDetailRows,
   cashAdvanceFieldMap,
   importedFieldMap,
   reimbursementFieldMap,
@@ -90,6 +91,7 @@ export default async function RequestDetailPage({
           : doc.formType === "imported"
             ? importedFieldMap((doc as any).formData ?? {})
             : {};
+  const detailRows = buildStoredRequestDetailRows(doc.formType, (doc as any).formData ?? {});
 
   const formLabel = doc.formName
     ? String(doc.formName)
@@ -351,7 +353,7 @@ export default async function RequestDetailPage({
                 </section>
               ) : null}
 
-              {Object.keys(fieldMap).length > 0 ? (
+              {detailRows.length > 0 ? (
                 <section className="space-y-3">
                   <SectionHeading
                     title="Request details"
@@ -359,14 +361,14 @@ export default async function RequestDetailPage({
                   />
                   <div className="rounded-[0.875rem] border border-surface-border bg-white p-5">
                     <div className="space-y-3">
-                      {Object.entries(fieldMap)
-                        .filter(([key, value]) => Boolean(value) || Boolean(changedFields[key]))
-                        .map(([key, value]) => (
+                      {detailRows
+                        .filter((row) => Boolean(row.value) || Boolean(changedFields[row.key]))
+                        .map((row) => (
                           <DetailRow
-                            key={key}
-                            label={humanizeKey(key)}
-                            value={value}
-                            changed={changedFields[key]}
+                            key={row.key}
+                            label={row.label}
+                            value={row.value}
+                            changed={changedFields[row.key]}
                           />
                         ))}
                     </div>
@@ -526,13 +528,6 @@ function ActionBanner({
       </div>
     </div>
   );
-}
-
-function humanizeKey(key: string) {
-  return key
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function DetailRow({
