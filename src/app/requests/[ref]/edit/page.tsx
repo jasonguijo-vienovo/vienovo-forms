@@ -106,6 +106,7 @@ export default async function EditRequestPage({
       departureDate: isoDate(fd.departureDate),
       returnDate: isoDate(fd.returnDate),
       preferredTime: fd.preferredTime ?? "",
+      preferredReturnTime: fd.preferredReturnTime ?? "",
       mc1Origin: fd.multiCity?.trip1?.origin ?? "",
       mc1Destination: fd.multiCity?.trip1?.destination ?? "",
       mc1Date: isoDate(fd.multiCity?.trip1?.date),
