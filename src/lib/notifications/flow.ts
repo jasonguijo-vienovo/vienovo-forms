@@ -401,8 +401,8 @@ export async function sendFlowNotification(opts: {
       formSlug: opts.formSlug,
     });
     const resolvedHtml = opts.html && looksLikeFullHtmlDocument(opts.html)
-      ? opts.html
-      : buildNotificationBodyHtml({
+        ? opts.html
+        : buildNotificationBodyHtml({
           title: opts.subject,
           summary: opts.summary,
           bodyHtml: opts.html || (!recipientDetails.length ? messageTextToHtml(baseText) : ""),

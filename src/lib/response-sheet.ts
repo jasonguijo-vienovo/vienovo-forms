@@ -69,6 +69,13 @@ function titleCaseFromKey(value: string) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function humanizeSheetStatus(value: string) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function flattenValue(value: unknown): string {
   if (value == null) return "";
   if (value instanceof Date) return value.toISOString();
@@ -124,7 +131,7 @@ export function buildResponseSheetRows(opts: {
     "Form Name": opts.formName,
     "Submitted By Email": opts.submittedByEmail,
     "Submitted By Name": opts.submittedByName,
-    Status: opts.status || "submitted",
+    Status: humanizeSheetStatus(opts.status || "submitted"),
     "Request Version": opts.requestVersion ? `Version ${opts.requestVersion}` : "",
     "Request Revision Status": opts.requestRevisionStatus || "",
     "Request Revision Note": opts.requestRevisionNote || "",
@@ -265,7 +272,7 @@ export async function updateResponseSheetStatusByReference(opts: {
     await writeSpreadsheetRow({
       spreadsheetId,
       range: `${sheetTitle}!${colLetters}${rowNumber}`,
-      values: [opts.status],
+      values: [humanizeSheetStatus(opts.status)],
     });
     if (lastUpdatedCol >= 0) {
       const lastUpdatedLetters = toColumnLetters(lastUpdatedCol + 1);
