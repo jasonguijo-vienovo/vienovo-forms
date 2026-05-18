@@ -328,7 +328,7 @@ export default async function DashboardPage({
               {visiblePendingApprovals.length > 0 ? (
                 <div className="divide-y divide-surface-border">
                   {visiblePendingApprovals.map((request) => (
-                    <RequestRow key={String(request._id)} request={request} />
+                    <RequestRow key={String(request._id)} request={request} userEmail={userEmail} />
                   ))}
                 </div>
               ) : (
@@ -517,37 +517,71 @@ function formatDate(value: unknown) {
   return `${relative} • ${date.toLocaleString()}`;
 }
 
-function RequestRow({ request }: { request: any }) {
-  const nextStep = request.currentActorName
-    ? `Waiting with ${request.currentActorName}`
-    : request.currentRole
-      ? `Current stage: ${request.currentRole}`
-      : "Open request";
+function RequestRow({ request, userEmail }: { request: any; userEmail?: string }) {
+  const isPending = request.status === "pending" || request.status === "submitted";
+  const isCurrentActor = !!(
+    userEmail &&
+    request.currentActorEmail &&
+    request.currentActorEmail.toLowerCase() === userEmail.toLowerCase()
+  );
+  const showActions = isPending && isCurrentActor;
+  const showWaiting = isPending && request.currentActorName;
 
   return (
-    <div className="py-2 first:pt-0 last:pb-0">
-      <Link href={`/requests/${request.referenceNo}`} className="group block min-w-0 rounded-xl px-1 py-2 transition hover:bg-slate-50">
-        <div className="flex items-start justify-between gap-3">
-          <p className="truncate text-sm font-semibold text-surface-text">{requestFormLabel(request)}</p>
-          <span
-            className={`status-pill shrink-0 uppercase ${
-              STATUS_TONES[request.status] ?? "border-surface-border bg-slate-50 text-slate-700"
-            }`}
+    <div className="py-1.5 first:pt-0 last:pb-0">
+      <div className="flex items-start gap-2">
+        <Link href={`/requests/${request.referenceNo}`} className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-surface-text">{requestFormLabel(request)}</p>
+            <span
+              className={`status-pill shrink-0 uppercase text-[10px] leading-tight ${
+                STATUS_TONES[request.status] ?? "border-surface-border bg-slate-50 text-slate-700"
+              }`}
+            >
+              {request.status}
+            </span>
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-surface-muted">
+            <span className="font-mono">{request.referenceNo}</span>
+            <span>&bull;</span>
+            <Clock3 className="h-3 w-3" />
+            <span>{formatDate(request.createdAt)}</span>
+            {showWaiting && (
+              <>
+                <span>&bull;</span>
+                <span>
+                  Waiting with{" "}
+                  <span className="font-medium text-surface-text">{request.currentActorName}</span>
+                </span>
+              </>
+            )}
+          </div>
+        </Link>
+        <div className="flex shrink-0 items-center gap-1">
+          <Link
+            href={`/requests/${request.referenceNo}`}
+            className="text-[11px] font-semibold text-brand-700 hover:underline"
           >
-            {request.status}
-          </span>
+            Open details
+          </Link>
+          {showActions && (
+            <>
+              <Link
+                href={`/requests/${request.referenceNo}/approve`}
+                className="rounded border border-green-300 bg-white px-2 py-0.5 text-[11px] font-bold text-green-700 transition hover:bg-green-50"
+              >
+                Approve
+              </Link>
+              <Link
+                href={`/requests/${request.referenceNo}/approve`}
+                className="rounded border border-red-300 bg-white px-2 py-0.5 text-[11px] font-bold text-red-700 transition hover:bg-red-50"
+              >
+                Reject
+              </Link>
+            </>
+          )}
         </div>
-        <p className="mt-1 flex items-center gap-1 text-xs text-surface-muted">
-          <Clock3 className="h-3.5 w-3.5" />
-          <span className="font-mono">{request.referenceNo}</span>
-          {" - "}
-          {formatDate(request.createdAt)}
-        </p>
-        <p className="mt-1 text-xs text-surface-muted">{nextStep}</p>
-        <p className="mt-2 text-xs font-semibold text-brand-700 transition group-hover:translate-x-0.5">
-          Open details
-        </p>
-      </Link>
+      </div>
     </div>
   );
 }
