@@ -39,7 +39,6 @@ import {
   diffFields,
   travelBookingFieldMap,
 } from "@/lib/request-fields";
-import { Lookup } from "@/models/Lookup";
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
