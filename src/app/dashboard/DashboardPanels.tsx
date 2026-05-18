@@ -155,6 +155,7 @@ function RequestRow({
 
 type Props = {
   userEmail: string;
+  showApprovals: boolean;
   initialRequests: RequestRowData[];
   initialRequestTotal: number;
   initialPending: RequestRowData[];
@@ -162,6 +163,7 @@ type Props = {
 
 export function DashboardPanels({
   userEmail,
+  showApprovals,
   initialRequests,
   initialRequestTotal,
   initialPending,
@@ -328,33 +330,35 @@ export function DashboardPanels({
       </Panel>
 
       <div id="pending-approvals" className="flex flex-col gap-4">
-        <Panel
-          eyebrow="Needs your approval"
-          title="Approve or reject"
-          description="Requests waiting for your decision."
-        >
-          {pendingLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
-            </div>
-          ) : needsApproval.length > 0 ? (
-            <div className="divide-y divide-surface-border">
-              {needsApproval.map((request) => (
-                <RequestRow
-                  key={request._id}
-                  request={request}
-                  userEmail={userEmail}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="No requests waiting for your approval.">
-              <Link href="/approvals" className="mt-2 inline-block text-sm font-semibold text-brand-700 hover:underline">
-                View all in approvals
-              </Link>
-            </EmptyState>
-          )}
-        </Panel>
+        {showApprovals ? (
+          <Panel
+            eyebrow="Needs your approval"
+            title="Approve or reject"
+            description="Requests waiting for your decision."
+          >
+            {pendingLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+              </div>
+            ) : needsApproval.length > 0 ? (
+              <div className="divide-y divide-surface-border">
+                {needsApproval.map((request) => (
+                  <RequestRow
+                    key={request._id}
+                    request={request}
+                    userEmail={userEmail}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState message="No requests waiting for your approval.">
+                <Link href="/approvals" className="mt-2 inline-block text-sm font-semibold text-brand-700 hover:underline">
+                  View all in approvals
+                </Link>
+              </EmptyState>
+            )}
+          </Panel>
+        ) : null}
 
         <Panel
           eyebrow="Tracked steps"

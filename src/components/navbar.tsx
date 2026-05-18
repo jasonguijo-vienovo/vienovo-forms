@@ -87,7 +87,7 @@ export async function Navbar({
                   <MobileNavLink href="/dashboard" label="Dashboard" />
                   <MobileNavLink href="/forms" label="Browse forms" />
                   {showApprovals ? <MobileNavLink href="/approvals" label="Approvals" /> : null}
-                  <MobileExternalNavLink href={HELP_DESK_URL} label="Helpdesk" />
+                  {showApprovals ? <MobileExternalNavLink href={HELP_DESK_URL} label="Helpdesk" /> : null}
                   {showAdmin && adminShortcut ? (
                     <MobileNavLink href={adminShortcut.href} label={adminShortcut.label} />
                   ) : null}
@@ -128,7 +128,7 @@ export async function Navbar({
               subtitle: form.description,
             }))}
           />
-          <ExternalNavLink href={HELP_DESK_URL}>Helpdesk</ExternalNavLink>
+          {showApprovals ? <ExternalNavLink href={HELP_DESK_URL}>Helpdesk</ExternalNavLink> : null}
         </nav>
 
         {session?.user ? (
