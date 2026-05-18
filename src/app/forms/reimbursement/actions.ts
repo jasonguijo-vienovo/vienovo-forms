@@ -17,7 +17,11 @@ import { generateReferenceNo } from "@/lib/reference-number";
 import { syncRequestMirror } from "@/lib/request-mirror";
 import { appendResponseSheetRow, buildResponseSheetRows } from "@/lib/response-sheet";
 import { uploadAttachment } from "@/lib/storage/attachments";
-import { buildPendingStepNotificationCopy, resolveAssignedProcessor } from "@/lib/workflow-routing";
+import {
+  buildPendingStepNotificationCopy,
+  humanizeWorkflowRole,
+  resolveAssignedProcessor,
+} from "@/lib/workflow-routing";
 import { Approver } from "@/models/Approver";
 import { Employee } from "@/models/Employee";
 import { RequestModel } from "@/models/Request";
@@ -360,6 +364,7 @@ export async function submitReimbursement(
         formName: "Reimbursement",
         event: "submitted",
         to: [submitterEmail],
+        primaryRecipientRole: "requester",
         subject: `Reimbursement request submitted (${referenceNo})`,
         summary: "A Reimbursement request has been submitted and is waiting in the approval workflow.",
         details: [
@@ -382,6 +387,7 @@ export async function submitReimbursement(
         formName: "Reimbursement",
         event: "next-approver",
         to: supervisor.email,
+        primaryRecipientRole: "supervisor",
         subject: nextStepCopy.subject,
         summary: nextStepCopy.summary,
         details: [
@@ -402,6 +408,31 @@ export async function submitReimbursement(
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
         viewAllUrl: approvalsUrl || requestUrl,
+      });
+      await sendFlowNotification({
+        formSlug: "reimbursement",
+        formName: "Reimbursement",
+        event: "submitted",
+        to: processor.email,
+        primaryRecipientRole: "processor",
+        subject: `Reimbursement request submitted for processing awareness (${referenceNo})`,
+        summary:
+          "A Reimbursement request has entered the workflow. You are the assigned Processor and will receive another notification when it reaches your step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current workflow step", value: humanizeWorkflowRole("supervisor") || "Immediate Superior" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Reimbursement request has entered the workflow.\n\n` +
+          `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
       });
     } catch (e) {
       console.error("Email notification failed:", e);
@@ -676,6 +707,7 @@ export async function updateReimbursement(
         formName: "Reimbursement",
         event: "resubmitted",
         to: [submitterEmail],
+        primaryRecipientRole: "requester",
         subject: `Reimbursement request updated (${referenceNo})`,
         summary:
           "Your Reimbursement request was updated. Approval restarted from level 1, and the latest approvers are shown below.",
@@ -700,6 +732,7 @@ export async function updateReimbursement(
         formName: "Reimbursement",
         event: "next-approver",
         to: supervisor.email,
+        primaryRecipientRole: "supervisor",
         subject: nextStepCopy.subject,
         summary: nextStepCopy.summary,
         details: [
@@ -720,6 +753,33 @@ export async function updateReimbursement(
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
         viewAllUrl: approvalsUrl || requestUrl,
+      });
+      await sendFlowNotification({
+        formSlug: "reimbursement",
+        formName: "Reimbursement",
+        event: "resubmitted",
+        to: processor.email,
+        primaryRecipientRole: "processor",
+        subject: `Reimbursement request updated for processing awareness (${referenceNo})`,
+        summary:
+          "A Reimbursement request was updated and restarted from level 1. You are the assigned Processor and will receive another notification when it reaches your step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current workflow step", value: humanizeWorkflowRole("supervisor") || "Immediate Superior" },
+          { label: "Status", value: "Pending approval" },
+          ...approvalRoutingDetails,
+          ...changedFieldDetails,
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Reimbursement request was updated and restarted from level 1.\n\n` +
+          `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
       });
     } catch (e) {
       console.error("Email notification failed:", e);

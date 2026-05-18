@@ -22,6 +22,7 @@ import {
 } from "@/lib/travel-booking-sheet";
 import {
   buildPendingStepNotificationCopy,
+  humanizeWorkflowRole,
   resolveAssignedProcessor,
   resolveConfiguredApprover,
   resolveDefaultCeoApprover,
@@ -407,6 +408,7 @@ export async function submitTravelBooking(
         "origin",
         "destination",
         "departureDate",
+        "preferredTime",
         "returnDate",
         "preferredReturnTime",
         "immediateSuperiorName",
@@ -414,7 +416,7 @@ export async function submitTravelBooking(
         "travelPurpose",
       ],
       omitKeys: ["birthday", "contactNumber"],
-      maxRows: 10,
+      maxRows: 14,
     });
     const attachmentDetails = buildAttachmentDetails([
       {
@@ -437,6 +439,7 @@ export async function submitTravelBooking(
         formName: "Travel Booking",
         event: "submitted",
         to: [submitterEmail],
+        primaryRecipientRole: "requester",
         subject: `Travel Booking request submitted (${referenceNo})`,
         summary: "A Travel Booking request has been submitted and routed for review.",
         details: [
@@ -459,6 +462,7 @@ export async function submitTravelBooking(
         formName: "Travel Booking",
         event: "next-approver",
         to: resolvedLevelOne!.email,
+        primaryRecipientRole: approvalChain[0]?.role || "supervisor",
         subject: nextStepCopy.subject,
         summary: nextStepCopy.summary,
         details: [
@@ -479,6 +483,31 @@ export async function submitTravelBooking(
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
         viewAllUrl: approvalsUrl || requestUrl,
+      });
+      await sendFlowNotification({
+        formSlug: "travel-booking",
+        formName: "Travel Booking",
+        event: "submitted",
+        to: processor.email,
+        primaryRecipientRole: "processor",
+        subject: `Travel Booking request submitted for processing awareness (${referenceNo})`,
+        summary:
+          "A Travel Booking request has entered the workflow. You are the assigned Processor and will receive another notification when it reaches your step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current workflow step", value: humanizeWorkflowRole(approvalChain[0]?.role || "supervisor") || "Immediate Superior" },
+          { label: "Status", value: "Pending approval" },
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Travel Booking request has entered the workflow.\n\n` +
+          `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
       });
     } catch (e) {
       console.error("Email notification failed:", e);
@@ -744,6 +773,7 @@ export async function updateTravelBooking(
         "origin",
         "destination",
         "departureDate",
+        "preferredTime",
         "returnDate",
         "preferredReturnTime",
         "immediateSuperiorName",
@@ -751,7 +781,7 @@ export async function updateTravelBooking(
         "travelPurpose",
       ],
       omitKeys: ["birthday", "contactNumber"],
-      maxRows: 10,
+      maxRows: 14,
     });
     const attachmentDetails = buildAttachmentDetails([
       {
@@ -839,6 +869,7 @@ export async function updateTravelBooking(
         formName: "Travel Booking",
         event: "resubmitted",
         to: [submitterEmail],
+        primaryRecipientRole: "requester",
         subject: `Travel Booking request updated (${referenceNo})`,
         summary:
           "Your Travel Booking request was updated. Approval restarted from level 1, and the latest approvers are shown below.",
@@ -863,6 +894,7 @@ export async function updateTravelBooking(
         formName: "Travel Booking",
         event: "next-approver",
         to: resolvedLevelOne!.email,
+        primaryRecipientRole: nextApprovalChain[0]?.role || "supervisor",
         subject: nextStepCopy.subject,
         summary: nextStepCopy.summary,
         details: [
@@ -883,6 +915,33 @@ export async function updateTravelBooking(
         rejectUrl: approvalPageUrl ? `${approvalPageUrl}#reject` : requestUrl,
         commentUrl: approvalPageUrl ? `${approvalPageUrl}#comment` : requestUrl,
         viewAllUrl: approvalsUrl || requestUrl,
+      });
+      await sendFlowNotification({
+        formSlug: "travel-booking",
+        formName: "Travel Booking",
+        event: "resubmitted",
+        to: processor.email,
+        primaryRecipientRole: "processor",
+        subject: `Travel Booking request updated for processing awareness (${referenceNo})`,
+        summary:
+          "A Travel Booking request was updated and restarted from level 1. You are the assigned Processor and will receive another notification when it reaches your step.",
+        details: [
+          { label: "Reference No.", value: referenceNo },
+          { label: "Requester", value: submitterName || submitterEmail },
+          { label: "Current workflow step", value: humanizeWorkflowRole(nextApprovalChain[0]?.role || "supervisor") || "Immediate Superior" },
+          { label: "Status", value: "Pending approval" },
+          ...approvalRoutingDetails,
+          ...changedFieldDetails,
+          ...notificationDetails,
+          ...attachmentDetails,
+        ],
+        text:
+          `A Travel Booking request was updated and restarted from level 1.\n\n` +
+          `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
+          `Reference: ${referenceNo}\n` +
+          (requestUrl ? `Link: ${requestUrl}\n` : ""),
+        ctaUrl: requestUrl,
+        ctaLabel: "Open request",
       });
     } catch (e) {
       console.error("Email notification failed:", e);
