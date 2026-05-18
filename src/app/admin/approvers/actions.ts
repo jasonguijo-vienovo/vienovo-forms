@@ -89,6 +89,80 @@ function parseRoles(formData: FormData): string[] {
   return Array.from(out);
 }
 
+function parseSelectedApproverIds(formData: FormData): string[] {
+  return Array.from(
+    new Set(
+      formData
+        .getAll("selectedApproverId")
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function parseAssignedProcessorFormSlugs(formData: FormData): string[] {
+  const out = new Set<string>();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("assignedProcessorForm_")) continue;
+    if (String(value) !== "on") continue;
+    const slug = key.slice("assignedProcessorForm_".length).trim();
+    if (slug) out.add(slug);
+  }
+  return [...out];
+}
+
+async function clearProcessorAssignmentsForApproverIds(approverIds: string[]) {
+  const uniqueIds = Array.from(new Set(approverIds.map((value) => String(value ?? "").trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return 0;
+  const result = await FormDefinition.updateMany(
+    { processorApproverId: { $in: uniqueIds } },
+    {
+      $set: {
+        processorApproverId: "",
+        processorApproverName: "",
+        processorApproverEmail: "",
+      },
+    },
+  );
+  return Number(result.modifiedCount ?? result.matchedCount ?? 0);
+}
+
+async function replaceProcessorAssignmentsForApprover(
+  approver: {
+    _id: unknown;
+    name: string;
+    email: string;
+    roles: string[];
+    isActive: boolean;
+  },
+  assignedProcessorFormSlugs: Iterable<string>,
+) {
+  await clearProcessorAssignmentsForApproverIds([String(approver._id)]);
+
+  const slugs = Array.from(
+    new Set(Array.from(assignedProcessorFormSlugs).map((value) => String(value ?? "").trim()).filter(Boolean)),
+  );
+  const canHoldProcessorAssignments =
+    Array.isArray(approver.roles) &&
+    approver.roles.includes("processor") &&
+    approver.isActive &&
+    Boolean(String(approver.email ?? "").trim());
+
+  if (!canHoldProcessorAssignments || slugs.length === 0) return 0;
+
+  const result = await FormDefinition.updateMany(
+    { slug: { $in: slugs } },
+    {
+      $set: {
+        processorApproverId: String(approver._id),
+        processorApproverName: approver.name,
+        processorApproverEmail: approver.email,
+      },
+    },
+  );
+  return Number(result.modifiedCount ?? result.matchedCount ?? 0);
+}
+
 const AUTO_SYNC_ROLE_TO_CATEGORY: Array<{ role: ApproverRole; category: string }> = [
   { role: "sla", category: "cashAdvancePayableTo" },
 ];
@@ -589,6 +663,13 @@ export async function editApproverRole(formData: FormData) {
     return;
   }
 
+  if (previousRoleKey === "processor" && nextRole !== "processor") {
+    const affectedApproverIds = (
+      await Approver.find({ roles: previousRole }).select({ _id: 1 }).lean()
+    ).map((item) => String(item._id));
+    await clearProcessorAssignmentsForApproverIds(affectedApproverIds);
+  }
+
   await Approver.updateMany(
     { roles: previousRole },
     { $addToSet: { roles: nextRole }, $pull: { roles: previousRole } },
@@ -602,6 +683,7 @@ export async function editApproverRole(formData: FormData) {
     message: `Role tag updated from "${previousRole}" to "${nextRole}".`,
   });
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
   revalidatePath("/admin/lookups");
   redirect("/admin/approvers");
 }
@@ -616,12 +698,20 @@ export async function deleteApproverRole(formData: FormData) {
     return;
   }
 
+  if (normalizeRoleTag(role) === "processor") {
+    const affectedApproverIds = (
+      await Approver.find({ roles: role }).select({ _id: 1 }).lean()
+    ).map((item) => String(item._id));
+    await clearProcessorAssignmentsForApproverIds(affectedApproverIds);
+  }
+
   await Approver.updateMany({ roles: role }, { $pull: { roles: role } });
   const stored = await getStoredCustomRoles();
   await saveStoredCustomRoles(stored.filter((item) => item !== role));
   await syncAutoLookupRoles();
   await setFlashToast({ tone: "success", message: `Role "${role}" removed from all approvers.` });
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
   revalidatePath("/admin/lookups");
   redirect("/admin/approvers");
 }
@@ -646,37 +736,6 @@ export async function updateApprover(formData: FormData) {
   doc.roles = roles;
   doc.emailNeedsReview = !profile.email;
   await doc.save();
-  const assignedProcessorFormSlugs = new Set<string>();
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith("assignedProcessorForm_")) continue;
-    if (String(value) !== "on") continue;
-    const slug = key.slice("assignedProcessorForm_".length).trim();
-    if (slug) assignedProcessorFormSlugs.add(slug);
-  }
-
-  const canHoldProcessorAssignments = doc.roles.includes("processor") && doc.isActive && Boolean(doc.email);
-  await FormDefinition.updateMany(
-    { processorApproverId: String(doc._id) },
-    {
-      $set: {
-        processorApproverId: "",
-        processorApproverName: "",
-        processorApproverEmail: "",
-      },
-    },
-  );
-  if (canHoldProcessorAssignments && assignedProcessorFormSlugs.size > 0) {
-    await FormDefinition.updateMany(
-      { slug: { $in: [...assignedProcessorFormSlugs] } },
-      {
-        $set: {
-          processorApproverId: String(doc._id),
-          processorApproverName: doc.name,
-          processorApproverEmail: doc.email,
-        },
-      },
-    );
-  }
   await syncAutoLookupRoles();
   await setFlashToast({
     tone: "success",
@@ -685,6 +744,115 @@ export async function updateApprover(formData: FormData) {
       : `${doc.name} was updated.`,
   });
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
+  revalidatePath("/admin/lookups");
+}
+
+export async function updateProcessorAssignments(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+
+  const id = String(formData.get("id") ?? "").trim();
+  const doc = await Approver.findById(id);
+  if (!doc) {
+    await setFlashToast({ tone: "error", message: "Approver not found." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  if (!doc.roles.includes("processor")) {
+    await setFlashToast({
+      tone: "error",
+      message: `${doc.name} must have the processor role before processor routing can be assigned.`,
+    });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  const assignedProcessorFormSlugs = parseAssignedProcessorFormSlugs(formData);
+  await replaceProcessorAssignmentsForApprover(doc, assignedProcessorFormSlugs);
+  await syncAutoLookupRoles();
+
+  const canHoldProcessorAssignments = doc.isActive && Boolean(String(doc.email ?? "").trim());
+  await setFlashToast({
+    tone: "success",
+    message: canHoldProcessorAssignments
+      ? `${doc.name}'s processor routing was updated.`
+      : `${doc.name}'s processor routing was cleared because they must be active and have an email address to hold processor routing.`,
+  });
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
+  revalidatePath("/admin/lookups");
+}
+
+export async function applyApproverBatchAction(formData: FormData) {
+  await requireAdmin();
+  await connectMongo();
+
+  const selectedApproverIds = parseSelectedApproverIds(formData);
+  const batchAction = String(formData.get("batchAction") ?? "").trim();
+  const batchRole = normalizeRoleTag(String(formData.get("batchRole") ?? ""));
+
+  if (selectedApproverIds.length === 0) {
+    await setFlashToast({ tone: "error", message: "Select at least one approver first." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  const approvers = await Approver.find({ _id: { $in: selectedApproverIds } }).lean();
+  if (approvers.length === 0) {
+    await setFlashToast({ tone: "error", message: "No matching approvers were found." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  const processorApproverIds = approvers
+    .filter((approver) => Array.isArray(approver.roles) && approver.roles.includes("processor"))
+    .map((approver) => String(approver._id));
+
+  let clearedProcessorAssignments = 0;
+  let message = "";
+
+  if (batchAction === "add_role") {
+    if (!batchRole) {
+      await setFlashToast({ tone: "error", message: "Choose a role before using Add role." });
+      revalidatePath("/admin/approvers");
+      return;
+    }
+    await Approver.updateMany({ _id: { $in: selectedApproverIds } }, { $addToSet: { roles: batchRole } });
+    message = `Added role "${batchRole}" to ${approvers.length} approver(s).`;
+  } else if (batchAction === "remove_role") {
+    if (!batchRole) {
+      await setFlashToast({ tone: "error", message: "Choose a role before using Remove role." });
+      revalidatePath("/admin/approvers");
+      return;
+    }
+    if (batchRole === "processor") {
+      clearedProcessorAssignments = await clearProcessorAssignmentsForApproverIds(processorApproverIds);
+    }
+    await Approver.updateMany({ _id: { $in: selectedApproverIds } }, { $pull: { roles: batchRole } });
+    message = `Removed role "${batchRole}" from ${approvers.length} approver(s).`;
+  } else if (batchAction === "activate") {
+    await Approver.updateMany({ _id: { $in: selectedApproverIds } }, { $set: { isActive: true } });
+    message = `Activated ${approvers.length} approver(s).`;
+  } else if (batchAction === "deactivate") {
+    clearedProcessorAssignments = await clearProcessorAssignmentsForApproverIds(processorApproverIds);
+    await Approver.updateMany({ _id: { $in: selectedApproverIds } }, { $set: { isActive: false } });
+    message = `Deactivated ${approvers.length} approver(s).`;
+  } else {
+    await setFlashToast({ tone: "error", message: "Unknown batch action." });
+    revalidatePath("/admin/approvers");
+    return;
+  }
+
+  if (clearedProcessorAssignments > 0) {
+    message += ` Cleared processor routing on ${clearedProcessorAssignments} form(s).`;
+  }
+
+  await syncAutoLookupRoles();
+  await setFlashToast({ tone: "success", message });
+  revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
   revalidatePath("/admin/lookups");
 }
 
@@ -694,14 +862,22 @@ export async function toggleApprover(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const doc = await Approver.findById(id);
   if (!doc) return;
+  const wasActive = doc.isActive;
   doc.isActive = !doc.isActive;
   await doc.save();
+  const clearedProcessorAssignments =
+    wasActive && !doc.isActive && doc.roles.includes("processor")
+      ? await clearProcessorAssignmentsForApproverIds([String(doc._id)])
+      : 0;
   await syncAutoLookupRoles();
   await setFlashToast({
     tone: "success",
-    message: `${doc.name} is now ${doc.isActive ? "active" : "inactive"}.`,
+    message:
+      `${doc.name} is now ${doc.isActive ? "active" : "inactive"}.` +
+      (clearedProcessorAssignments > 0 ? ` Cleared processor routing on ${clearedProcessorAssignments} form(s).` : ""),
   });
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
   revalidatePath("/admin/lookups");
 }
 
@@ -709,13 +885,17 @@ export async function deleteApprover(formData: FormData) {
   await requireAdmin();
   await connectMongo();
   const id = String(formData.get("id") ?? "");
+  const clearedProcessorAssignments = await clearProcessorAssignmentsForApproverIds([id]);
   const doc = await Approver.findByIdAndDelete(id);
   await syncAutoLookupRoles();
   await setFlashToast({
     tone: "success",
-    message: doc ? `${doc.name} was removed.` : "Approver removed.",
+    message:
+      (doc ? `${doc.name} was removed.` : "Approver removed.") +
+      (clearedProcessorAssignments > 0 ? ` Cleared processor routing on ${clearedProcessorAssignments} form(s).` : ""),
   });
   revalidatePath("/admin/approvers");
+  revalidatePath("/admin/forms");
   revalidatePath("/admin/lookups");
 }
 

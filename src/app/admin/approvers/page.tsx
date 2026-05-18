@@ -65,12 +65,14 @@ export default async function ApproversPage() {
       graphReady={isEmployeeDirectorySyncConfigured()}
       syncEnabled={isEmployeeDirectorySyncEnabled()}
       lastLookupDropdownSyncAt={lastLookupDropdownSyncAt}
-      assignableForms={forms
+      processorForms={forms
         .filter((form) => form.status !== "archived")
         .map((form) => ({
           slug: form.slug,
           name: form.name,
           processorApproverId: form.processorApproverId || "",
+          processorApproverName: form.processorApproverName || "",
+          processorApproverEmail: form.processorApproverEmail || "",
         }))}
     />
   );
