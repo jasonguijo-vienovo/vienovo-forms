@@ -7,7 +7,7 @@ import { setFlashToast } from "@/lib/flash";
 import { safeAuth } from "@/lib/safe-auth";
 import { RequestModel } from "@/models/Request";
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 function s(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -166,7 +166,7 @@ export async function fetchPendingApprovals(
       },
     ];
   }
-  const largePageSize = 50;
+  const largePageSize = 20;
   const [items, total] = await Promise.all([
     RequestModel.find(filter)
       .sort({ status: 1, createdAt: -1, _id: -1 })

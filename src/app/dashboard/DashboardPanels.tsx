@@ -232,9 +232,9 @@ export function DashboardPanels({
   const needsApproval = pending.filter(
     (r) => r.currentActorEmail?.toLowerCase() === userEmail.toLowerCase(),
   );
-  const trackedSteps = pending.filter(
-    (r) => r.currentActorEmail?.toLowerCase() !== userEmail.toLowerCase(),
-  );
+  const trackedSteps = pending
+    .filter((r) => r.currentActorEmail?.toLowerCase() !== userEmail.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -252,8 +252,17 @@ export function DashboardPanels({
                 value={requestSearch}
                 onChange={(e) => setRequestSearch(e.target.value)}
                 placeholder="Search reference or form"
-                className="field-input w-full pl-8 sm:max-w-xs"
+                className="field-input w-full pl-8 pr-8 sm:max-w-xs"
               />
+              {requestSearch ? (
+                <button
+                  type="button"
+                  onClick={() => { setRequestSearch(""); loadRequests(requestFilter, "", requestPage); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-surface-muted hover:text-surface-text transition"
+                >
+                  ✕
+                </button>
+              ) : null}
             </div>
             <button type="submit" className="btn-secondary">
               Search
@@ -330,6 +339,19 @@ export function DashboardPanels({
       </Panel>
 
       <div id="pending-approvals" className="flex flex-col gap-4">
+        <div className="flex items-center justify-end gap-2">
+          {pendingLoading ? (
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+          ) : null}
+          <button
+            type="button"
+            onClick={loadPending}
+            title="Refresh"
+            className="text-xs text-surface-muted hover:text-brand-700 transition"
+          >
+            ↻ Refresh
+          </button>
+        </div>
         {showApprovals ? (
           <Panel
             eyebrow="Needs your approval"
@@ -342,7 +364,7 @@ export function DashboardPanels({
               </div>
             ) : needsApproval.length > 0 ? (
               <div className="divide-y divide-surface-border">
-                {needsApproval.map((request) => (
+                {needsApproval.slice(0, 10).map((request) => (
                   <RequestRow
                     key={request._id}
                     request={request}
@@ -371,7 +393,7 @@ export function DashboardPanels({
             </div>
           ) : trackedSteps.length > 0 ? (
             <div className="divide-y divide-surface-border">
-              {trackedSteps.map((request) => (
+              {trackedSteps.slice(0, 10).map((request) => (
                 <RequestRow
                   key={request._id}
                   request={request}
