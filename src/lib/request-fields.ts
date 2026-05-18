@@ -301,6 +301,7 @@ export function buildStoredRequestSummaryDetails(formSlug: string, formData: any
         "origin",
         "destination",
         "departureDate",
+        "preferredTime",
         "returnDate",
         "preferredReturnTime",
         "immediateSuperiorName",
@@ -308,7 +309,7 @@ export function buildStoredRequestSummaryDetails(formSlug: string, formData: any
         "travelPurpose",
       ],
       omitKeys: ["birthday", "contactNumber"],
-      maxRows: 10,
+      maxRows: 14,
     });
   }
   if (formData?.values && formData?.fieldLabels) {

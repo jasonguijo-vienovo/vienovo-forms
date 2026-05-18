@@ -1529,6 +1529,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
             formName: imported.name,
             event: "submitted",
             to: [email],
+            primaryRecipientRole: "requester",
             subject: emailSubject,
             text: submitterText,
             html: submitterHtml,
@@ -1618,6 +1619,7 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               formName: imported.name,
               event: "next-approver",
               to: approverRecipients,
+              primaryRecipientRole: currentRole,
               subject: nextStepCopy.subject,
               summary: nextStepCopy.summary,
               details: [
@@ -1639,6 +1641,44 @@ export async function submitImportedForm(slug: string, formData: FormData) {
               viewAllUrl: approvalsUrl || requestUrl,
             }),
           );
+          const processorQueueStep = importedApprovalChain.find(
+            (step) => isProcessorRole(String(step.role || "")) && String(step.approverEmail || "").trim(),
+          );
+          if (
+            processorQueueStep?.approverEmail &&
+            String(processorQueueStep.approverEmail).trim().toLowerCase() !==
+              String(firstSlaApprover?.approverEmail || "").trim().toLowerCase()
+          ) {
+            notificationJobs.push(
+              sendFlowNotification({
+                formSlug: slug,
+                formName: imported.name,
+                event: "submitted",
+                to: String(processorQueueStep.approverEmail).trim().toLowerCase(),
+                primaryRecipientRole: "processor",
+                subject: `${imported.name} request submitted for processing awareness (${referenceNo})`,
+                summary:
+                  "A new request has entered the workflow. You are the assigned Processor and will receive another notification when it reaches your step.",
+                details: [
+                  { label: "Reference No.", value: referenceNo },
+                  { label: "Requester", value: detailsName },
+                  { label: "Email", value: detailsEmail },
+                  { label: "Current workflow step", value: currentRole || "Approver" },
+                  { label: "Status", value: "Pending approval" },
+                  ...approvalContactDetails,
+                  ...importedNotificationDetails,
+                  ...attachmentDetails,
+                ],
+                text:
+                  `A new ${imported.name} request has entered the workflow.\n\n` +
+                  `You are the assigned Processor for this request and will receive another notification when it reaches your step.\n\n` +
+                  `Reference: ${referenceNo}\n` +
+                  (requestUrl ? `Link: ${requestUrl}\n` : ""),
+                ctaUrl: requestUrl,
+                ctaLabel: "Open request",
+              }),
+            );
+          }
         }
       }
       void Promise.allSettled(notificationJobs).then((results) => {

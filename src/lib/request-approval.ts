@@ -246,6 +246,7 @@ export async function applyApprovalDecision({
           formName,
           event: "next-approver",
           to: normalizeEmail(nextApprover.approverEmail),
+          primaryRecipientRole: nextApprover.role || "",
           subject: nextStepCopy.subject,
           summary: nextStepCopy.summary,
           details: [
@@ -276,6 +277,7 @@ export async function applyApprovalDecision({
             formName,
             event: "approved",
             to: submittedByEmail,
+            primaryRecipientRole: "requester",
             subject: `${formName} request update: approved by ${currentRoleLabel} (${normalizedReference})`,
             summary: requesterSummary,
             details: [
@@ -297,6 +299,7 @@ export async function applyApprovalDecision({
           formName,
           event: "approved",
           to: submittedByEmail,
+          primaryRecipientRole: "requester",
           subject: `${formName} request approved (${normalizedReference})`,
           summary: `Your ${formName} request has been fully approved.`,
           details: [
@@ -319,6 +322,7 @@ export async function applyApprovalDecision({
         formName,
         event: "returned",
         to: submittedByEmail,
+        primaryRecipientRole: "requester",
         subject: `${formName} request returned for correction (${normalizedReference})`,
         summary: `Your ${formName} request was returned for correction.`,
         details: [
@@ -343,6 +347,7 @@ export async function applyApprovalDecision({
         formName,
         event: "rejected",
         to: submittedByEmail,
+        primaryRecipientRole: "requester",
         subject: `${formName} request rejected (${normalizedReference})`,
         summary: `Your ${formName} request was rejected.`,
         details: [

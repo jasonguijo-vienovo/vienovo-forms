@@ -100,16 +100,18 @@ function extractLastName(name: string) {
 
 function prependGreeting(opts: {
   body: string;
-  roleHint?: string;
+  roleLabel?: string;
   lastName?: string;
   formName: string;
   formSlug: string;
 }) {
   const ln = opts.lastName ? ` ${opts.lastName}` : "";
-  const normalizedRole = humanizeWorkflowRole(opts.roleHint);
+  const normalizedRole = String(opts.roleLabel || "").trim();
   const greeting =
-    opts.roleHint === "hr"
+    normalizedRole === "HR"
       ? `Dear, HR${ln}`
+      : normalizedRole === "Requester"
+        ? (ln ? `Dear,${ln}` : "Dear, Requester")
       : normalizedRole
         ? `Dear, ${normalizedRole}${ln}`
         : `Dear,${ln}`;
@@ -314,6 +316,7 @@ export async function sendFlowNotification(opts: {
   formName: string;
   event: NotificationEvent;
   to: string | string[];
+  primaryRecipientRole?: string;
   subject: string;
   text?: string;
   html?: string;
@@ -341,7 +344,8 @@ export async function sendFlowNotification(opts: {
     return false;
   }
 
-  const recipients = normalizeRecipients([...normalizeRecipients(opts.to), ...flow.extraRecipients]).filter(
+  const primaryRecipients = normalizeRecipients(opts.to);
+  const recipients = normalizeRecipients([...primaryRecipients, ...flow.extraRecipients]).filter(
     isValidEmail
   );
   if (recipients.length === 0) {
@@ -368,18 +372,30 @@ export async function sendFlowNotification(opts: {
 
   for (const recipient of recipients) {
     const profile = approverByEmail.get(recipient);
-    const roleHint = profile?.roles?.includes("hr") ? "hr" : profile?.roles?.[0] || "";
+    const explicitRoleLabel =
+      primaryRecipients.length === 1 &&
+      primaryRecipients[0] === recipient &&
+      String(opts.primaryRecipientRole || "").trim()
+        ? humanizeWorkflowRole(opts.primaryRecipientRole) || String(opts.primaryRecipientRole || "").trim()
+        : "";
+    const profileRoleLabel = profile?.roles?.includes("hr")
+      ? "HR"
+      : humanizeWorkflowRole(profile?.roles?.[0]) || String(profile?.roles?.[0] || "").trim();
+    const recipientRoleLabel = explicitRoleLabel || profileRoleLabel;
     const lastName = extractLastName(String(profile?.name || ""));
+    const recipientDetails = recipientRoleLabel
+      ? [{ label: "Notification For", value: recipientRoleLabel }, ...(opts.details ?? [])]
+      : opts.details ?? [];
     const baseText = opts.text || "";
-    const detailsText = opts.details?.length
-      ? `${opts.details.map((detail) => `${detail.label}: ${detail.value}`).join("\n")}\n`
+    const detailsText = recipientDetails.length
+      ? `${recipientDetails.map((detail) => `${detail.label}: ${detail.value}`).join("\n")}\n`
       : "";
     const composedText = opts.summary
       ? `${opts.summary}\n\n${detailsText}${baseText}`.trim()
       : `${detailsText}${baseText}`.trim();
     const finalText = prependGreeting({
       body: composedText,
-      roleHint,
+      roleLabel: recipientRoleLabel,
       lastName,
       formName: opts.formName,
       formSlug: opts.formSlug,
@@ -389,8 +405,8 @@ export async function sendFlowNotification(opts: {
       : buildNotificationBodyHtml({
           title: opts.subject,
           summary: opts.summary,
-          bodyHtml: opts.html || (!opts.details?.length ? messageTextToHtml(baseText) : ""),
-          details: opts.details,
+          bodyHtml: opts.html || (!recipientDetails.length ? messageTextToHtml(baseText) : ""),
+          details: recipientDetails,
           ctaUrl: opts.ctaUrl,
           ctaLabel: opts.ctaLabel,
           approveUrl: opts.approveUrl,

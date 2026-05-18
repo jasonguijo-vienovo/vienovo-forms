@@ -27,6 +27,7 @@ export function isProcessorRole(role: string | null | undefined) {
 export function humanizeWorkflowRole(role: string | null | undefined) {
   const key = normalizeKey(String(role ?? ""));
   if (!key) return "";
+  if (key === "requester" || key === "submitter") return "Requester";
   if (key === "processor") return "Processor";
   if (key === "supervisor") return "Immediate Superior";
   if (key === "head") return "Department Head";
